@@ -4,7 +4,7 @@
   "Interface to P. Heslin's Diogenes"
   :group 'tools)
 
-(defcustom diogenes-cli-cmd "/usr/local/diogenes/server/diogenes-cli.pl"
+(defcustom diogenes-cli-cmd "C:\Program Files (x86)\Diogenes\server\diogenes-cli.pl"
   "Path to diogenes-cli.pl"
   :type 'string
   :group 'diogenes)
