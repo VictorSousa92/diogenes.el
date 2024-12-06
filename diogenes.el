@@ -64,7 +64,7 @@
   :type 'string
   :group 'diogenes)
 
-(defcustom diogenes-path nil
+(defcustom diogenes-path "/usr/local/diogenes/"
   "Path to the Diogenes installation."
   :type 'directory
   :group 'diogenes)
