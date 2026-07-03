@@ -10,6 +10,10 @@
 ;; This file contains functions for browsing the Corpora that Diogenes can read
 
 ;;; Code:
+(require 'cl-lib)
+(require 'seq)
+(require 'diogenes-lisp-utils)
+(require 'diogenes-perl-interface)
 
 ;;;; --------------------------------------------------------------------
 ;;;; BROWSER
@@ -27,16 +31,20 @@
   (diogenes--send-cmd-to-browser (number-to-string height)))
 
 (defun diogenes-browser-forward ()
-  (interactive)
+  "Load the next page from the Diogenes browser."
+  (interactive "p")
   (setq diogenes--browser-backwards nil)
+  (goto-char (point-max))
   (diogenes--send-cmd-to-browser
    (concat (number-to-string (- (floor (window-screen-lines))
 				next-screen-context-lines))
 	   "n")))
 
 (defun diogenes-browser-backward ()
-  (interactive)
+  "Load the previous page from the Diogenes browser."
+  (interactive "p")
   (setq diogenes--browser-backwards t)
+  (goto-char (point-min))
   (diogenes--send-cmd-to-browser
    (concat (number-to-string (- (floor (window-screen-lines))
 				next-screen-context-lines))
@@ -55,6 +63,18 @@
   (interactive "p")
   (forward-line (- N))
   (when (bobp) (diogenes-browser-backward)))
+
+(defun diogenes-browser-beginning-of-buffer (&optional N)
+  (interactive "^P")
+  (when (and (not N) (bobp))
+    (diogenes-browser-backward))
+  (beginning-of-buffer N))
+
+(defun diogenes-browser-end-of-buffer (&optional N)
+  (interactive "^P")
+  (when (and (not N) (eobp))
+    (diogenes-browser-forward))
+  (end-of-buffer N))
 
 
 
@@ -90,9 +110,8 @@
   (with-undo-amalgamate
    (save-excursion
      (goto-char (point-min))
-     (let (part-a)
-       (while (setq pos-a (and (re-search-forward "\\([^ <]+\\)-\\s-*$"
-						  (point-max) t)
+     (let (pos-a)
+       (while (setq pos-a (and (re-search-forward "\\([^ <-]+\\)-\\s-*$" nil t)
 			       (cons (match-beginning 1)
 				     (match-end 1))))
 	 (when-let* ((line-a (text-property-search-backward 'cit))
@@ -116,7 +135,8 @@
 	   (goto-char (cdr pos-a))
 	   (delete-char 1)
 	   (when mark-with-vertical-bar (insert-and-inherit "|"))
-	   (insert-and-inherit word-b)))))))
+	   (insert-and-inherit word-b))
+	 (goto-char (cdr pos-a)))))))
 
 (defun diogenes-browser-reinsert-hyphenation ()
   (interactive)
@@ -150,23 +170,40 @@
 	      (insert (apply #'propertize "-"
 			     prop-a)))))))))
 
+(defun diogenes-browser-lookup ()
+  "Lookup word at point."
+  (interactive)
+  (funcall (intern (concat "diogenes-parse-and-lookup-"
+			   diogenes--browser-language))
+	   (replace-regexp-in-string "[^[:alpha:]]" ""
+				     (thing-at-point 'word))))
+
 ;;; Browser Mode
 (defvar diogenes-browser-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
-    (keymap-set map "<down>" #'diogenes-browser-forward-line)
-    (keymap-set map "C-n" #'diogenes-browser-forward-line)
-    (keymap-set map "<up>" #'diogenes-browser-backward-line)
-    (keymap-set map "C-p" #'diogenes-browser-backward-line)
-    (keymap-set map "C-c C-c" #'diogenes-browser-quit)
+    ;; Overrides of movement keys
+    (keymap-set map "<remap> <previous-line>"       #'diogenes-browser-backward-line)
+    (keymap-set map "<remap> <next-line>"           #'diogenes-browser-forward-line)
+    (keymap-set map "<remap> <beginning-of-buffer>" #'diogenes-browser-beginning-of-buffer)
+    (keymap-set map "<remap> <end-of-buffer>"       #'diogenes-browser-end-of-buffer)
+    (keymap-set map "q" #'quit-window)
+    (keymap-set map "C-c C-n"  #'diogenes-browser-forward)
+    (keymap-set map "C-c C-p"  #'diogenes-browser-backward)
+    ;; Actions
+    (keymap-set map "C-c C-c" #'diogenes-browser-lookup)
+    (keymap-set map "C-c C-q" #'diogenes-browser-quit)
+    ;; Utilities
     (keymap-set map "C-c C--" #'diogenes-browser-remove-hyphenation)
     (keymap-set map "C-c C-+" #'diogenes-browser-reinsert-hyphenation)
-    (keymap-set map "C-c C-n" #'diogenes-browser-toggle-citations)
+    (keymap-set map "C-c C-t" #'diogenes-browser-toggle-citations)
     map)
   "Basic mode map for the Diogenes Browser.")
 
 (define-derived-mode diogenes-browser-mode text-mode "Diogenes Browser"
   "Major mode to browse Diogenes' databases."
-  (make-local-variable 'diogenes--browser-backwards))
+  (make-local-variable 'diogenes--browser-backwards)
+  (make-local-variable 'diogenes--browser-language)
+  (make-local-variable 'diogenes--browser-first-insertion))
 
 
 
@@ -221,15 +258,32 @@ If it is incomplete, buffer it and prepend it when called again."
 			     (goto-char (point-min))))))
 	       (t (goto-char (point-max))))
 	 (when header (insert (diogenes--browser-format-header header)))
-	 (dolist (alist lines)
-	   (when diogenes-browser-show-citations
-	     (insert (diogenes--browser-format-citation (car alist))))
-	   (insert (propertize (format "%s\n" (cdr alist))
-			       'cit (car alist))))
-	 (set-marker (process-mark proc) (point-max))
-	 (recenter -1 t))))))
+	 (let ((pos (point)))
+	   (dolist (alist lines)
+	     (when diogenes-browser-show-citations
+	       (insert (diogenes--browser-format-citation (car alist))))
+	     (insert (propertize (format "%s\n" (cdr alist))
+				 'cit (car alist))))
+	  (set-marker (process-mark proc) (point-max))
+	  (cond (diogenes-browser-first-insertion
+		 (setq diogenes-browser-first-insertion nil)
+		 (goto-char pos))
+		(t (recenter -1 t)))))))))
 
+(defun diogenes--browse-work (options passage)
+  "Function that browses a work from the Diogenes Databases.
 
+Passage has to be a list of strings containing the four digit
+number of the author and the number of the work."
+  (diogenes--start-perl "browser"
+			(diogenes--browse-interactively-script options passage)
+			#'diogenes--browser-filter)
+  (diogenes-browser-mode)
+  (setq diogenes-browser-first-insertion t)
+  (setq diogenes--browser-language
+	(pcase (plist-get options :type)
+	  ("tlg" "greek")
+	  ("phi" "latin"))))
 
 (defun diogenes--browse-database (type &optional author work)
   "Select a specific passage in a work from a diogenes database for browsing.
@@ -251,6 +305,30 @@ Uses the Diogenes Perl module."
 ;;;; DUMPER
 ;;;; --------------------------------------------------------------------
 
+(defun diogenes--dump-from-database-sentinel (process event)
+ "Sentinel for the Diogenes Dumper. Its main function is to
+initialize post-processing after termination."
+ (with-current-buffer (process-buffer process)
+   (pcase event
+     ("finished\n"
+      (goto-char (point-max))
+      (set-mark (point))
+      (re-search-backward "^[[:alpha:]]+")
+      (beginning-of-line)))))
+
+(defun diogenes--dump-work (options passage)
+  "Function that dumps a work from the Diogenes Databases.
+
+Passage has to be a list of strings containing the four digit
+number of the author and the number of the work."
+  (diogenes--start-perl "dump"
+			(diogenes--browser-script
+			 (append options '(:browse-lines 100000000))
+			 passage)
+			nil
+			#'diogenes--dump-from-database-sentinel))
+;; $query->{browser_multiple} = 100000000
+
 (defun diogenes--dump-from-database (type &optional author work)
   "Dump a work from a Diogenes database in its entirety.
 Uses the Diogenes Perl module."
@@ -260,7 +338,6 @@ Uses the Diogenes Perl module."
 		   (diogenes--select-work-num `(:type ,type)
 					      author))))
     (diogenes--dump-work `(:type ,type) (list author work))))
-
 
 (provide 'diogenes-browser)
 

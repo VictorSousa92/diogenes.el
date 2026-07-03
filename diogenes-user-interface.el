@@ -10,39 +10,21 @@
 ;; This file contains functions that provide the user interface of diogenes.el
 
 ;;; Code:
-
-;;; Runners
-(defun diogenes--do-search (options &optional authors)
-  "Function that executes a search query in the Diogenes Databases."
-  (diogenes--start-perl "search"
-			(diogenes--search-script options authors)))
-
-(defun diogenes--dump-work (options passage)
-  "Function that dumps a work from the Diogenes Databases.
-
-Passage has to be a list of strings containing the four digit
-number of the author and the number of the work."
-  (diogenes--start-perl "dump"
-			(diogenes--browser-script
-			 (append options '(:browse-lines 1000000))
-			 passage)))
-
-(defun diogenes--browse-work (options passage)
-  "Function that browses a work from the Diogenes Databases.
-
-Passage has to be a list of strings containing the four digit
-number of the author and the number of the work."
-  ;; (diogenes--make-comint 'diogenes-browser-mode
-  ;; 			 (diogenes--browse-interactivly-script options
-  ;; 							       passage))
-  (diogenes--start-perl "browser"
-			(diogenes--browse-interactively-script options passage)
-			#'diogenes--browser-filter)
-  (diogenes-browser-mode))
-
-
+(require 'cl-lib)
+(require 'seq)
+(require 'diogenes-lisp-utils)
 
 ;;; Selectors
+(defun diogenes--select-database ()
+  "Select a Diogenes database using a prompt."
+  (let ((completion-extra-properties
+	 '(:annotation-function
+	   (lambda (s)
+	     (concat "\t"
+		     (cdr (assoc s minibuffer-completion-table)))))))
+    (completing-read "Please choose search corpus: "
+		     diogenes--corpora)))
+
 (defun diogenes--select-author-num (options &optional author-regex)
   "Select one author from a diogenes database using a prompt."
   (let ((author-list (diogenes--get-author-list options author-regex)))
@@ -74,9 +56,9 @@ number of the author and the number of the work."
 ;;; TODO: Selection with multiple regexes
 (defun diogenes--select-author-nums (options &optional author-regex)
   "Select a list of authors from a diogenes database using a prompt.
-Returns a list."
-  (cl-loop collect (diogenes--select-author-num options author-regex)
-	   while (y-or-n-p "Add another author?")))
+Returns an array."
+  (vconcat (cl-loop collect (diogenes--select-author-num options author-regex)
+		    while (y-or-n-p "Add another author?"))))
 
 ;;; TODO: Selection with transient
 (defun diogenes--select-authors-and-works (options &optional author-regex)

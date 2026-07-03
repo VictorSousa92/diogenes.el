@@ -10,6 +10,10 @@
 ;; This file contains conversions from and to beta code, and some other minor utilities
 
 ;;; Code:
+(require 'cl-lib)
+(require 'seq)
+(require 'diogenes-lisp-utils)
+(require 'ucs-normalize)
 
 ;;; Conversion from and to greek beta code
 (defconst diogenes--beta-to-utf8-map
@@ -104,7 +108,8 @@
     ("r".?ρ)("s".?σ)("t".?τ)("u".?υ)("f".?φ)("x".?χ)("y".?ψ)("w".?ω)
     ("s".?ς)
     ;; interpunction
-					;("'".?᾿)
+    ;; ("!".?.)
+    ;; ("'".?᾿)
     )
   "Mapping of greek beta code to utf-8 greek.")
 
@@ -138,14 +143,13 @@
   "Convert a string from Perseus greek beta code to utf-8.
 In addition to diogenes--beta-to-utf8, it handles also macron and
 breve signs."
-  (diogenes--beta-to-utf8
-   (diogenes--replace-regexes-in-string
-    str
-    ("_\\([=/\\|+()]+\\)" "\\1\N{COMBINING MACRON}")	
-    ;;("\\([[:multibyte:]]\\)_" "\\1\N{COMBINING MACRON}")
-    ("\\^\\([=/\\|+()]+\\)" "\\1\N{COMBINING BREVE}")
-    ;;("\\([[:multibyte:]]\\)\\^" "\\1\N{COMBINING BREVE}")
-    )))
+  (when str
+    (diogenes--beta-to-utf8
+     (diogenes--replace-regexes-in-string str
+       ("\\(.\\)_\\([=/\\|+()]+\\)" "\N{COMBINING MACRON}\\1\\2")	
+       ("_" "\N{COMBINING MACRON}")
+       ("\\(.\\)\\^\\([=/\\|+()]+\\)" "\N{COMBINING BREVE}\\1\\2")
+       ("\\^" "\N{COMBINING BREVE}")))))
 
 (defun diogenes--utf8-to-beta (str)
   "Convert utf-8 greek in a string to greek beta code."
@@ -160,15 +164,112 @@ breve signs."
   (save-match-data
     (let ((latin (string-match "\\cr" str))
 	  (greek (string-match "\\cg" str)))
-      (when (and latin greek)
-	(error "\"%s\" contains both Latin and Greek characters!" str))
+      ;; (when (and latin greek)
+      ;; 	(error "\"%s\" contains both Latin and Greek characters!" str))
       (if greek (diogenes--utf8-to-beta str)
 	str))))
 
+;;; Iota subscript and adscript
+(defconst diogenes--iota-adscript-map
+  '((?ᾇ . "ἇι") (?ᾗ . "ἧι") (?ᾧ . "ὧι")
+    (?ᾆ . "ἆι") (?ᾖ . "ἦι") (?ᾦ . "ὦι")
+    (?ᾷ . "ᾶι") (?ῇ . "ῆι") (?ῷ . "ῶι")
+    (?ᾅ . "ἅι") (?ᾕ . "ἥι") (?ᾥ . "ὥι")
+    (?ᾄ . "ἄι") (?ᾔ . "ἤι") (?ᾤ . "ὤι")
+    (?ᾴ . "άι") (?ῄ . "ήι") (?ῴ . "ώι")
+    (?ᾃ . "ἃι") (?ᾓ . "ἣι") (?ᾣ . "ὣι")
+    (?ᾂ . "ἂι") (?ᾒ . "ἢι") (?ᾢ . "ὢι")
+    (?ᾲ . "ὰι") (?ῂ . "ὴι") (?ῲ . "ὼι")
+    (?ᾁ . "ἁι") (?ᾑ . "ἡι") (?ᾡ . "ὡι")
+    (?ᾀ . "ἀι") (?ᾐ . "ἠι") (?ᾠ . "ὠι")
+    (?ᾳ . "αι") (?ῃ . "ηι") (?ῳ . "ωι")))
+
+(defconst diogenes--iota-adscript-table
+  (make-translation-table-from-alist
+   (mapcar (lambda (cons)
+	     (cons (car cons)
+		   (string-to-vector (cdr cons))))
+	   diogenes--iota-adscript-map)))
+
+;;;###autoload
+(defun diogenes-iota-subscript-to-adscript (begin end)
+  "Convert all subscript iota into adscript ones in the current
+buffer, or in the active region."
+  (interactive "r")
+  (unless (region-active-p)
+    (setq begin (point-min)
+	  end (point-max)))
+  (translate-region begin end
+		    diogenes--iota-adscript-table))
+
+
+;;; Other utilities
 (defun diogenes--beta-normalize-gravis (str)
   (replace-regexp-in-string "\\\\" "/" str))
 
+(defsubst diogenes--unicode-non-spacing-mark-p (c)
+  "Test for the category non-spacing-mark"
+  (= 6 (aref unicode-category-table c)))
 
+(defun diogenes--strip-diacritics (str)
+  "Remove all diacritics in a string."
+  (cl-remove-if #'diogenes--unicode-non-spacing-mark-p
+		(string-glyph-decompose str)))
+
+(defsubst diogenes--sort-alphabetically-no-diacritics (a b)
+  (string-lessp (diogenes--strip-diacritics a)
+		(diogenes--strip-diacritics b)))
+
+;;; Post-processing of raw output
+;;;###autoload
+(defun diogenes-remove-hyphenation (&optional start end)
+  "Delete hyphenation in the active region, or until EOBP."
+  (interactive "r")
+  (save-excursion
+    (save-restriction
+      (when (region-active-p)
+	(narrow-to-region (progn (goto-char start)
+				 (beginning-of-line)
+				 (point))
+			  (progn (goto-char end)
+				 (end-of-line)
+				 (point)))
+	(goto-char (point-min)))
+      (cl-loop for pos-a =
+	       (and (re-search-forward "\\([^ <-]+\\)-\\s-*$" (point-max) t)
+		    (cons (match-beginning 1)
+			  (match-end 1)))
+	       while pos-a
+	       for pos-b =
+	       (when-let ((next-line (and (zerop (forward-line))
+					  (thing-at-point 'line))))
+		 (when (cl-find-if (lambda (regexp) (string-match regexp next-line))
+				   '("^\\S-+\\s-\\{3,\\}\\(\\S-+\\)"
+				     "^\\s-\\{3,\\}\\(\\S-+\\)"
+				     "^\\(\\S-+\\)"))
+		   (cons (+ (point) (match-beginning 1))
+			 (+ (point) (match-end 1)))))
+	       while pos-b
+	       do (let ((word-rest (buffer-substring (car pos-b)
+						     (cdr pos-b))))
+		    (delete-region (car pos-b) (1+ (cdr pos-b)))
+		    (delete-blank-lines)
+		    (goto-char (cdr pos-a))
+		    (delete-char 1)
+		    (insert-and-inherit word-rest))))))
+
+;;;###autoload
+(defun diogenes-apostrophe (&optional start end)
+  "Replace all greek apostrophes with the typographical correct ῾."
+  (interactive "r")
+  (save-excursion
+    (save-restriction
+      (when (use-region-p)
+        (progn (narrow-to-region start end)
+               (goto-char (point-min))))
+      (replace-regexp "\\([[:nonascii:]]+\\)['’]" "\\1᾿"))))
+
+;;; Remove line-numbers
 
 ;;; Conversion between A.D. and Ol.
 (defun diogenes--ol-to-ad (ol)
