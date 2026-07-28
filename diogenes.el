@@ -337,7 +337,7 @@ Accepts both Unicode and Beta Code as input."
 ;;;###autoload
 (defun diogenes-parse-and-lookup-latin (word)
   "Try to parse a latin word and look it up."
-  (interactive (list (read-from-minibuffer "Parse greek word: "
+  (interactive (list (read-from-minibuffer "Parse latin word: "
 					   (thing-at-point 'word t))))
   (diogenes--parse-and-lookup word "latin"))
 
