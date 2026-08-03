@@ -531,7 +531,6 @@ user interface."
   ["CUSTOM CORPORA"
    ("c" "Manage custom search corpora" diogenes-manage-user-corpora)])
 
-;;   (set-face-attribute 'transient-key-recurse nil :foreground "#cba6f7")
 (provide 'diogenes)
 
 ;;; diogenes.el ends here
