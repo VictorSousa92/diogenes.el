@@ -36,6 +36,16 @@
 (require 'cl-lib)
 (require 'thingatpt)
 (require 'transient)
+(defun diogenes--theme-transient-keys (&rest _)
+  "Keep the transient recurse key visible, following the current theme."
+  (when (internal-lisp-face-p 'transient-key-recurse)
+    (set-face-attribute 'transient-key-recurse nil
+                        :foreground 'unspecified
+                        :inherit 'font-lock-keyword-face)))
+
+(with-eval-after-load 'transient (diogenes--theme-transient-keys))
+(advice-add 'enable-theme :after #'diogenes--theme-transient-keys)
+(advice-add 'diogenes :before #'diogenes--theme-transient-keys)
 (require 'seq)
 
 (require 'diogenes-lisp-utils)
@@ -50,6 +60,11 @@
 (defgroup diogenes nil
   "Interface to P. Heslin's Diogenes."
   :group 'tools)
+
+(defcustom diogenes-cli-cmd "/usr/local/diogenes/server/diogenes-cli.pl"
+  "Path to diogenes-cli.pl"
+  :type 'string
+  :group 'diogenes)
 
 (defcustom diogenes-perl-executable "perl"
   "Path to perl executable."
@@ -516,6 +531,7 @@ user interface."
   ["CUSTOM CORPORA"
    ("c" "Manage custom search corpora" diogenes-manage-user-corpora)])
 
+;;   (set-face-attribute 'transient-key-recurse nil :foreground "#cba6f7")
 (provide 'diogenes)
 
 ;;; diogenes.el ends here
