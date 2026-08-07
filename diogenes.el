@@ -57,6 +57,9 @@
 (require 'diogenes-perseus)
 (require 'diogenes-old)
 (require 'diogenes-tll)
+(require 'diogenes-montanari)
+(require 'diogenes-cambridge)
+(require 'diogenes-bdag)
 (require 'diogenes-legacy)
 
 (defgroup diogenes nil
