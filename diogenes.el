@@ -55,11 +55,17 @@
 (require 'diogenes-browser)
 (require 'diogenes-search)
 (require 'diogenes-perseus)
+(require 'diogenes-old)
 (require 'diogenes-legacy)
 
 (defgroup diogenes nil
   "Interface to P. Heslin's Diogenes."
   :group 'tools)
+
+(defcustom diogenes-cli-cmd "/usr/local/diogenes/server/diogenes-cli.pl"
+  "Path to diogenes-cli.pl"
+  :type 'string
+  :group 'diogenes)
 
 (defcustom diogenes-perl-executable "perl"
   "Path to perl executable."
