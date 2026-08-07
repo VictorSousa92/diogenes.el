@@ -282,7 +282,25 @@ the nearest entry and its offsets are returned."
   "Try to parse a string containing the XML of a dictionary entry."
   (let ((parsed (with-temp-buffer (insert (diogenes--try-correct-xml str))
 				  (ignore-errors (car (xml-parse-region))))))
-    (when parsed (diogenes--dict-process-elt parsed (list 'begin begin 'end end)))))
+    (when parsed
+      ;; The enclosing entry element carries a `key' attribute holding
+      ;; the canonical, hyphen-free lemma (e.g. "tamquam" for the entry
+      ;; displayed as "tam-quam").  Seed it into the properties so the
+      ;; `head' handler can prefer it as the headword for OLD/TLL.
+      (let ((entry-key (cdr (assq 'key (cadr parsed)))))
+	(diogenes--dict-process-elt
+	 parsed (list 'begin begin 'end end 'entry-key entry-key))))))
+
+(defun diogenes--element-text (elt)
+  "Return the concatenated text of a parsed XML element ELT.
+ELT is a node as produced by `xml-parse-region': a string, or a
+list (TAG ATTRS . CHILDREN).  All descendant text is joined in
+document order; markup is ignored.  Used to recover a full
+headword such as \"tam-quam\" that is split across child nodes."
+  (cl-typecase elt
+    (string elt)
+    (list (mapconcat #'diogenes--element-text (cddr elt) ""))
+    (t "")))
 
 (defun diogenes--dict-process-elt (elt properties)
   "Process a parsed XML element of a dictionary entry recursively.
@@ -290,7 +308,7 @@ The properties list is an accumulator that holds all properties
 of the active element."
   (cl-typecase elt
     (string (apply #'propertize elt properties))
-    (list (let ((p (append (diogenes--dict-handle-elt elt)
+    (list (let ((p (append (diogenes--dict-handle-elt elt properties)
 			   properties)))
 	    (mapconcat (lambda (e) (diogenes--dict-process-elt e p))
 		       (cddr elt))))))
@@ -308,7 +326,7 @@ of the active element."
     (b . (font-lock-face bold)))
   "An alist of property lists to be applied to a simple tag in a dictionary.")
 
-(defun diogenes--dict-handle-elt (elt)
+(defun diogenes--dict-handle-elt (elt &optional properties)
   "Handle the more complicated tags of a Diogenes dictionary file.
 Each element is a list whose car is the element, whose cadr is an
 a-list containing all the properties, and whose cddr is the
@@ -317,21 +335,33 @@ handler based on the car and returns a property list that
 represents the properties of the element. It may also manipulate
 the contents of the element (cddr). Elements that only require
 special formatting are handled by th
-diogenes--dict-xml-handlers-extra variable."
+diogenes--dict-xml-handlers-extra variable.
+PROPERTIES is the accumulator from `diogenes--dict-process-elt';
+it may carry an `entry-key' (the canonical lemma of the entry)."
   (let ((tag (car elt))
 	(lang (or (alist-get 'lang (cadr elt))
 		  "english")))
     (nconc
      (list 'lang lang)
      (cl-case tag
-       (head (let* ((orth-orig (cdr (assoc 'orth_orig (cadr elt))))
-		    (hw (or orth-orig
-			    (and (stringp (caddr elt)) (caddr elt)))))
+       (head (let* ((entry-key (plist-get properties 'entry-key))
+		    (orth-orig (cdr (assoc 'orth_orig (cadr elt))))
+		    ;; The headword shown as "tam-quam" is the compound
+		    ;; "tamquam"; a lookup must use the whole word.  Prefer
+		    ;; the entry's canonical `key' (hyphen-free, exactly
+		    ;; what the dictionary sorts on), then the full head
+		    ;; text, then orth_orig, then the first child.
+		    (full (string-trim (diogenes--element-text elt)))
+		    (hw (cond ((and entry-key (> (length entry-key) 0)) entry-key)
+			      ((> (length full) 0) full)
+			      (orth-orig orth-orig)
+			      ((stringp (caddr elt)) (caddr elt)))))
 	       (when orth-orig
 		 (setf (cddr elt) (list orth-orig)))
 	       ;; Tag the head text with an `orth' property carrying this
-	       ;; entry's headword, so `diogenes-lookup-open-old' can find
-	       ;; the right OLD page from any point inside the entry.
+	       ;; entry's headword, so `diogenes-lookup-open-old' /
+	       ;; `diogenes-lookup-open-tll' can find the right page from
+	       ;; any point inside the entry.
 	       (list 'font-lock-face 'shr-h1
 		     'orth hw)))
        (sense (push (concat "\n\n"
@@ -1155,4 +1185,3 @@ if nil, query interactively for their values"
 (provide 'diogenes-perseus)
 
 ;;; diogenes-perseus.el ends here
-
