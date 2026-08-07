@@ -17,6 +17,7 @@
 (require 'diogenes-perl-interface)
 
 (declare-function diogenes-perseus-action nil)
+(declare-function diogenes-lookup-open-old "diogenes-old" (&optional word))
 
 ;;;; --------------------------------------------------------------------
 ;;;; UTILITIES
@@ -37,6 +38,11 @@
     map)
   "Keymap that calls the perseus-action-command on certain
 words.")
+
+(defvar-local diogenes--lookup-headword nil
+  "Headword of the entry currently shown in a lookup buffer.
+Used by `diogenes-lookup-open-old' to find the corresponding page
+of the Oxford Latin Dictionary PDF.")
 
 
 ;;;; --------------------------------------------------------------------
@@ -314,9 +320,16 @@ diogenes--dict-xml-handlers-extra variable."
     (nconc 
      (list 'lang lang)
      (cl-case tag
-       (head (when-let ((orth-orig (cdr (assoc 'orth_orig (cadr elt)))))
-	       (setf (cddr elt) (list orth-orig)))
-	     '(font-lock-face shr-h1))
+       (head (let* ((orth-orig (cdr (assoc 'orth_orig (cadr elt))))
+		    (hw (or orth-orig
+			    (and (stringp (caddr elt)) (caddr elt)))))
+	       (when orth-orig
+		 (setf (cddr elt) (list orth-orig)))
+	       ;; Tag the head text with an `orth' property carrying this
+	       ;; entry's headword, so `diogenes-lookup-open-old' can find
+	       ;; the right OLD page from any point inside the entry.
+	       (list 'font-lock-face 'shr-h1
+		     'orth hw)))
        (sense (push (concat "\n\n"
 			    (propertize (or (cdr (assoc 'n (cadr elt))) "")
 					'font-lock-face 'success)
@@ -475,7 +488,42 @@ while KEY-FN must return the key."
 	    diogenes--lookup-bufend end
 	    diogenes--lookup-lang lang)
       (cond (formatted (diogenes--lookup-insert-and-format formatted))
-	    (t (diogenes--lookup-insert-xml xml start end lookup-buffer))))))
+	    (t (diogenes--lookup-insert-xml xml start end lookup-buffer)))
+      ;; Record the headword of the entry we just looked up, for the
+      ;; benefit of `diogenes-lookup-open-old', and (for Latin) show a
+      ;; clickable link to the OLD PDF at the top of the buffer.
+      (setq diogenes--lookup-headword
+	    (diogenes--lookup-first-headword))
+      (when (and (string= lang "latin")
+		 diogenes--lookup-headword)
+	(diogenes--lookup-insert-old-link diogenes--lookup-headword)))))
+
+(defun diogenes--lookup-insert-old-link (headword)
+  "Insert a clickable [OLD] link for HEADWORD at the top of the buffer.
+Clicking it (or pressing RET on it) opens the Oxford Latin
+Dictionary PDF at the page containing HEADWORD.  The link is only
+useful when `diogenes-old-pdf-file' is set."
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (goto-char (point-min))
+      (insert (propertize "[OLD]"
+			  'font-lock-face 'link
+			  'keymap diogenes-perseus-action-map
+			  'action 'old
+			  'headword headword
+			  'help-echo (format "Open the OLD at \"%s\"" headword)
+			  'rear-nonsticky t)
+	      "  "))))
+
+(defun diogenes--lookup-first-headword ()
+  "Return the first entry headword in the current lookup buffer.
+Reads the `orth' text property placed on head elements by
+`diogenes--dict-handle-elt'.  Returns nil if none is found."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((match (text-property-search-forward 'orth nil
+						(lambda (_ v) (and v t)))))
+      (and match (prop-match-value match)))))
 
 (defun diogenes--lookup-dict (word lang)
   "Search for a word in a Diogenes dictionary. Dispatcher function."
@@ -589,6 +637,7 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "C-c C-n"                       #'diogenes-lookup-next)
     (keymap-set map "C-c C-p"                       #'diogenes-lookup-previous)
     (keymap-set map "C-c C-c"                       #'diogenes-perseus-action)
+    (keymap-set map "o"                             #'diogenes-lookup-open-old)
     (keymap-set map "q"                             #'diogenes--quit)
     map)
   "Basic mode map for the Diogenes Lookup Mode.")
@@ -599,6 +648,7 @@ Returns a list that diogenes--browse-work can be applied to."
   (make-local-variable 'diogenes--lookup-bufstart)
   (make-local-variable 'diogenes--lookup-bufend)
   (make-local-variable 'diogenes--lookup-lang)
+  (make-local-variable 'diogenes--lookup-headword)
   (setq buffer-read-only t))
 
 
@@ -1072,6 +1122,7 @@ if nil, query interactively for their values"
     (cl-case action
       (bibl (apply #'diogenes--browse-work (diogenes--lookup-parse-bibl-string
 					    (get-text-property char 'bibl))))
+      (old (diogenes-lookup-open-old (get-text-property char 'headword)))
       (lookup (diogenes--lookup-dict (get-text-property char 'lemma)
 				     (get-text-property char 'lang)))
       (forms (diogenes--show-all-forms (get-text-property char 'lemma)
