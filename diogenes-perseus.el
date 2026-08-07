@@ -12,12 +12,14 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'seq)
+(require 'shr)                          ; for the shr-h1/h2/h3 faces used below
 (require 'diogenes-lisp-utils)
 (require 'diogenes-utils)
 (require 'diogenes-perl-interface)
 
 (declare-function diogenes-perseus-action nil)
 (declare-function diogenes-lookup-open-old "diogenes-old" (&optional word))
+(declare-function diogenes-lookup-open-tll "diogenes-tll" (&optional word))
 
 ;;;; --------------------------------------------------------------------
 ;;;; UTILITIES
@@ -44,7 +46,8 @@ words.")
 Used by `diogenes-lookup-open-old' to find the corresponding page
 of the Oxford Latin Dictionary PDF.")
 
-
+
+
 ;;;; --------------------------------------------------------------------
 ;;;; Low LEVEL INTERFACE
 ;;;; --------------------------------------------------------------------
@@ -88,7 +91,7 @@ If file-length is not supplied, it will be determined."
 	(buf-start 0)
 	(line-start 1)
 	line-end)
-    (with-temp-buffer 
+    (with-temp-buffer
       (unless (zerop pos)
 	(seq-setq (line-start buf-start)
 		  (diogenes--read-backward-until-newline file pos bufsize))
@@ -154,7 +157,7 @@ If file-length is not supplied, it will be determined."
 
 ;; The actual search function
 (defun diogenes--binary-search (dict-file comp-fn key-fn word &optional start stop)
-  "A binary search for finding entries in the lexicographical files. 
+  "A binary search for finding entries in the lexicographical files.
 Upon success, it returns a list containing the entry, its start
 and end offsets, and the symbol t to indicate success. Otherwise,
 the nearest entry and its offsets are returned."
@@ -253,7 +256,8 @@ the nearest entry and its offsets are returned."
        (buffer-string)))))
 
 
-
+
+
 ;;;; --------------------------------------------------------------------
 ;;;; PERSEUS DICTIONARY LOOKUP
 ;;;; --------------------------------------------------------------------
@@ -317,7 +321,7 @@ diogenes--dict-xml-handlers-extra variable."
   (let ((tag (car elt))
 	(lang (or (alist-get 'lang (cadr elt))
 		  "english")))
-    (nconc 
+    (nconc
      (list 'lang lang)
      (cl-case tag
        (head (let* ((orth-orig (cdr (assoc 'orth_orig (cadr elt))))
@@ -395,7 +399,7 @@ diogenes--dict-xml-handlers-extra variable."
 			  'end line-end)))))
 
 (defun diogenes--fontify-nxml (str)
-  "Use nxml-mode to fontify a string. 
+  "Use nxml-mode to fontify a string.
 All overlays added by rng-validate-mode are converted to text
 properties."
   (with-temp-buffer
@@ -490,19 +494,21 @@ while KEY-FN must return the key."
       (cond (formatted (diogenes--lookup-insert-and-format formatted))
 	    (t (diogenes--lookup-insert-xml xml start end lookup-buffer)))
       ;; Record the headword of the entry we just looked up, for the
-      ;; benefit of `diogenes-lookup-open-old', and (for Latin) show a
-      ;; clickable link to the OLD PDF at the top of the buffer.
+      ;; benefit of `diogenes-lookup-open-old' /
+      ;; `diogenes-lookup-open-tll', and (for Latin) show clickable
+      ;; links to the OLD and TLL PDFs at the top of the buffer.
       (setq diogenes--lookup-headword
 	    (diogenes--lookup-first-headword))
       (when (and (string= lang "latin")
 		 diogenes--lookup-headword)
-	(diogenes--lookup-insert-old-link diogenes--lookup-headword)))))
+	(diogenes--lookup-insert-dict-links diogenes--lookup-headword)))))
 
-(defun diogenes--lookup-insert-old-link (headword)
-  "Insert a clickable [OLD] link for HEADWORD at the top of the buffer.
-Clicking it (or pressing RET on it) opens the Oxford Latin
-Dictionary PDF at the page containing HEADWORD.  The link is only
-useful when `diogenes-old-pdf-file' is set."
+(defun diogenes--lookup-insert-dict-links (headword)
+  "Insert clickable [OLD] and [TLL] links for HEADWORD atop the buffer.
+Clicking a link (or pressing RET on it) opens the corresponding
+print dictionary PDF at the page containing HEADWORD.  The OLD
+link is useful only when `diogenes-old-pdf-file' is set, and the
+TLL link only when `diogenes-tll-pdf-directory' is set."
   (let ((inhibit-read-only t))
     (save-excursion
       (goto-char (point-min))
@@ -512,6 +518,14 @@ useful when `diogenes-old-pdf-file' is set."
 			  'action 'old
 			  'headword headword
 			  'help-echo (format "Open the OLD at \"%s\"" headword)
+			  'rear-nonsticky t)
+	      "  "
+	      (propertize "[TLL]"
+			  'font-lock-face 'link
+			  'keymap diogenes-perseus-action-map
+			  'action 'tll
+			  'headword headword
+			  'help-echo (format "Open the TLL at \"%s\"" headword)
 			  'rear-nonsticky t)
 	      "  "))))
 
@@ -578,7 +592,7 @@ When called with a numerical prefix, show the previous N entries."
       (if formatted
 	  (diogenes--lookup-insert-and-format formatted)
 	(diogenes--lookup-insert-xml xml start end (current-buffer)))
-      
+
       (goto-char (point-min))
       (when (and n (> n 1)) (diogenes-lookup-previous (1- n))))))
 
@@ -638,6 +652,7 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "C-c C-p"                       #'diogenes-lookup-previous)
     (keymap-set map "C-c C-c"                       #'diogenes-perseus-action)
     (keymap-set map "o"                             #'diogenes-lookup-open-old)
+    (keymap-set map "t"                             #'diogenes-lookup-open-tll)
     (keymap-set map "q"                             #'diogenes--quit)
     map)
   "Basic mode map for the Diogenes Lookup Mode.")
@@ -651,7 +666,8 @@ Returns a list that diogenes--browse-work can be applied to."
   (make-local-variable 'diogenes--lookup-headword)
   (setq buffer-read-only t))
 
-
+
+
 ;;;; --------------------------------------------------------------------
 ;;;; PERSEUS PARSING
 ;;;; --------------------------------------------------------------------
@@ -675,7 +691,7 @@ the file only at the first call."
     (or (gethash (cons lang 'index) cache)
 	(setf (gethash (cons lang 'index) cache)
 	      (diogenes--read-analyses-index lang))))
-  
+
   (defun diogenes--get-all-lemmata (lang)
     "Returns the entirety of a lemmata file as a hash table.
  This function is cached, so that it actually reads and parses
@@ -793,7 +809,7 @@ Additionally, letter case and diacritics can be ignored."
 				 (lambda (x) (downcase (diogenes--ascii-alpha-only x))))
 				(ignore-case #'downcase)
 				(no-diacritics #'diogenes--ascii-alpha-only)))
-	  (query (if (not (or ignore-case no-diacritics)) 
+	  (query (if (not (or ignore-case no-diacritics))
 		     query
 		   (funcall transformation query)))
 	  (hash (if (not (or ignore-case no-diacritics))
@@ -961,7 +977,7 @@ and the list on ANALYSES."
    finally return lemmata))
 
 (defun diogenes--format-parse-results (query lang results)
-  "Process and format the results of `diogenes--process-parse-result'. 
+  "Process and format the results of `diogenes--process-parse-result'.
 Besides the fontification, it also checks for duplicate lemma
 entries and orders them accordingly."
   (let ((lemmata (diogenes--assign-parse-result-to-lemmata results)))
@@ -1001,7 +1017,7 @@ entries and orders them accordingly."
 
 (defun diogenes--parse-and-show (query lang &optional filter ignore-case no-diacritics)
   "Display all possible morphological analyses for query, with FILTER applied.
- Dispatcher function. IGNORE-CASE and NO-DIACRITICS should be either t or 'ignore; 
+ Dispatcher function. IGNORE-CASE and NO-DIACRITICS should be either t or 'ignore;
 if nil, query interactively for their values"
   (seq-let (filter ignore-case no-diacritics)
       (diogenes--parse-and-show-choose-filter filter ignore-case no-diacritics)
@@ -1083,7 +1099,7 @@ if nil, query interactively for their values"
 ;;; Show all lemmata that match query
 (defun diogenes--show-all-lemmata (query lang &optional filter ignore-case no-diacritics)
   "Show all lemmata that match QUERY in lang, with FILTER applied.
-IGNORE-CASE and NO-DIACRITICS should be either t or 'ignore; 
+IGNORE-CASE and NO-DIACRITICS should be either t or 'ignore;
 if nil, query interactively for their values"
  (seq-let (filter ignore-case no-diacritics)
       (diogenes--parse-and-show-choose-filter filter ignore-case no-diacritics)
@@ -1123,6 +1139,7 @@ if nil, query interactively for their values"
       (bibl (apply #'diogenes--browse-work (diogenes--lookup-parse-bibl-string
 					    (get-text-property char 'bibl))))
       (old (diogenes-lookup-open-old (get-text-property char 'headword)))
+      (tll (diogenes-lookup-open-tll (get-text-property char 'headword)))
       (lookup (diogenes--lookup-dict (get-text-property char 'lemma)
 				     (get-text-property char 'lang)))
       (forms (diogenes--show-all-forms (get-text-property char 'lemma)
