@@ -1,5 +1,10 @@
 ;;; diogenes-old.el --- Open the Oxford Latin Dictionary PDF from lookup -*- lexical-binding: t -*-
 
+;; Copyright (C) 2024 Michael Neidhart
+;;
+;; Author: Michael Neidhart <mayhoth@gmail.com>
+;; Keywords: classics, tools, philology, humanities
+
 ;;; Commentary:
 
 ;; This module lets you jump from a Diogenes dictionary entry (the
@@ -146,7 +151,8 @@ outline."
   (unless (require 'pdf-info nil t)
     (user-error "pdf-tools is not installed; cannot read the OLD outline.  \
 Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-install"))
-  (let* ((outline (condition-case err
+  (let* ((large-file-warning-threshold nil)
+         (outline (condition-case err
                       (pdf-info-outline file)
                     (error
                      (user-error "Could not read the outline of %s: %s"
@@ -255,6 +261,9 @@ Prefers `pdf-tools'; falls back to `doc-view' if pdf-tools is not
 available.  Honours `diogenes-old-display-in-other-window'."
   (let* ((file (or file diogenes-old-pdf-file))
          (already (find-buffer-visiting file))
+         ;; TLL fascicles and OLD scans are hundreds of MB; opening one
+         ;; is deliberate here, so don't prompt about its size.
+         (large-file-warning-threshold nil)
          (buffer (or already (find-file-noselect file)))
          (display (if diogenes-old-display-in-other-window
                       #'display-buffer
