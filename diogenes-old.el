@@ -9,9 +9,11 @@
 ;; with `pdf-tools' (or, as a fallback, `doc-view').
 ;;
 ;; It works with any OLD PDF that carries an outline / table of contents
-;; whose bookmarks are the last printed running heads of each
-;; page  (the last guide word for each page) -- which is exactly what the OLD's first edition has, and what
-;; the upstream Diogenes build tools rely on.
+;; whose bookmarks are the printed running heads (guide words) of each
+;; page -- which is exactly what the OLD's first edition has, and what
+;; the upstream Diogenes build tools rely on.  No pre-built data file and
+;; no Perl round-trip are needed: the page index is read directly from
+;; the PDF's own outline via `pdf-info-outline'.
 ;;
 ;; Setup:
 ;;
@@ -45,8 +47,8 @@
   "Path to a PDF of the Oxford Latin Dictionary.
 For the page-lookup to work, this PDF must contain an outline
 \(a.k.a. bookmarks or table of contents) in which every entry
-corresponds to a page and is labelled with that page's last running
-head (last guide word).  The first edition of the OLD, as used by the
+corresponds to a page and is labelled with that page's running
+head (guide word).  The first edition of the OLD, as used by the
 upstream Diogenes build tools, is such a PDF."
   :type '(choice (const :tag "Not set" nil) file)
   :group 'diogenes)
