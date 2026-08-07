@@ -58,7 +58,7 @@ upstream Diogenes build tools, is such a PDF."
   :type '(choice (const :tag "Not set" nil) file)
   :group 'diogenes)
 
-(defcustom diogenes-old-page-offset 0
+(defcustom diogenes-old-page-offset 1
   "Integer added to every page number derived from the OLD outline.
 Normally you should leave this at 0: the destinations stored in a
 PDF outline are physical page indices, so they already point at
@@ -131,16 +131,42 @@ the result is downcased."
     (cons true
           (file-attribute-modification-time (file-attributes true)))))
 
+(defcustom diogenes-old-bookmark-exclude
+  '("title" "tittle" "preface" "editors" "abbr" "aut" "contents"
+    "bibliography" "addenda" "corrigenda")
+  "Single-word OLD bookmark guide words to exclude from the index.
+These label front matter (title page, preface, author and
+abbreviation lists) rather than dictionary entries.  Multi-word
+guide words are excluded automatically; this list covers the
+single-word ones.  Compared case-insensitively."
+  :type '(repeat string)
+  :group 'diogenes)
+
+(defcustom diogenes-old-bookmark-title-regexp
+  "\\`[0-9]*[[:space:]]*\\(.*?\\)\\.tif\\'"
+  "Regexp extracting the guide word from an OLD outline TITLE.
+The OLD PDF's bookmarks are scan file names of the form
+\"1922 tam.tif\" -- a sequence number, the page's guide word, and a
+\".tif\" extension.  Group 1 must capture the guide word (here
+\"tam\").  If a title does not match, it is used as-is after
+stripping a leading number."
+  :type 'regexp
+  :group 'diogenes)
+
 (defun diogenes-old--clean-bookmark-title (title)
   "Extract the guide word from an outline TITLE string.
-In the target OLD PDF each bookmark carries a single running head:
-the last headword on that page.  We strip any leading page number
-and surrounding whitespace and keep the word as-is (normalization
-happens later in `diogenes-old--sort-key')."
-  (let* ((s (string-trim (or title "")))
-         ;; A leading "123 " page number, if the extractor prepended one.
-         (s (replace-regexp-in-string "\\`[0-9]+[[:space:]]+" "" s)))
-    s))
+The OLD bookmarks are scan file names like \"1922 tam.tif\"; we
+pull out the guide word (\"tam\") via
+`diogenes-old-bookmark-title-regexp', discarding the leading
+sequence number and the \".tif\" extension.  Without this, the
+extension would fuse into the sort key (\"tam.tif\" -> \"tamtif\")
+and corrupt both matching and ordering.  Final normalization
+happens in `diogenes-old--sort-key'."
+  (let ((s (string-trim (or title ""))))
+    (if (string-match diogenes-old-bookmark-title-regexp s)
+        (string-trim (match-string 1 s))
+      ;; Fallback: no ".tif"; just drop a leading sequence number.
+      (replace-regexp-in-string "\\`[0-9]+[[:space:]]+" "" s))))
 
 (defun diogenes-old--build-index (file)
   "Read FILE's outline and return a sorted running-head index.
@@ -160,19 +186,26 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
          (index
           (cl-loop for entry in outline
                    for page = (alist-get 'page entry)
-                   for title = (diogenes-old--clean-bookmark-title
+                   for guide = (diogenes-old--clean-bookmark-title
                                 (alist-get 'title entry))
-                   for key = (diogenes-old--sort-key title)
+                   for key = (diogenes-old--sort-key guide)
                    when (and (integerp page) (> page 0)
-                             (> (length key) 0))
+                             (> (length key) 0)
+                             ;; Skip front-matter scans (title page,
+                             ;; preface, author/abbreviation lists): their
+                             ;; guide words contain whitespace ("aut cic",
+                             ;; "abbr ger") or are known non-lemmata.
+                             (not (string-match-p "[[:space:]]" guide))
+                             (not (member (downcase guide)
+                                          diogenes-old-bookmark-exclude)))
                    collect (cons key page))))
     (when (null index)
       (user-error "The PDF %s has no usable outline / running-head bookmarks.  \
 This feature needs an OLD PDF whose bookmarks are the page guide words"
                   file))
     ;; Sort ascending by key; break ties by earlier page.  Each key is
-    ;; the last headword on its page, so if two pages share a guide word
-    ;; the earlier one is the page that word actually ends on.
+    ;; the first headword on its page, so if two consecutive pages share
+    ;; a guide word the earlier one is where that word starts.
     (sort index (lambda (a b)
                   (or (string< (car a) (car b))
                       (and (string= (car a) (car b))
@@ -197,21 +230,22 @@ Uses and populates `diogenes-old--index-cache'."
 
 (defun diogenes-old--page-for-word (word &optional file)
   "Return the OLD page number containing the entry for WORD.
-Each bookmark in the index is the *last* headword on its page, so
-WORD's entry is on the first page whose guide word sorts at or
-after WORD.  Returns an integer page (with
-`diogenes-old-page-offset' applied), or the final page if WORD
-sorts after every guide word."
+Each bookmark in the index is the *first* headword on its page (the
+scans are named for the lemma that opens the page), so WORD's
+entry is on the last page whose guide word sorts at or before WORD
+-- exactly how one uses a printed dictionary's guide words.
+Returns an integer page (with `diogenes-old-page-offset' applied),
+or the first page if WORD precedes every guide word."
   (let* ((index (diogenes-old--index file))
          (key (diogenes-old--sort-key word))
-         (hit nil))
-    ;; INDEX is sorted ascending; the first page whose last-word key is
-    ;; >= WORD's key is the page WORD falls on.
+         (best nil))
+    ;; INDEX is sorted ascending; walk while guide-key <= word-key,
+    ;; keeping the last page that still qualifies.
     (cl-loop for (gkey . page) in index
-             when (or (string< key gkey) (string= key gkey))
-             do (setq hit page) and return nil)
-    ;; If WORD sorts after every guide word, use the last page.
-    (let ((page (or hit (cdr (car (last index))))))
+             while (or (string< gkey key) (string= gkey key))
+             do (setq best page))
+    ;; If WORD precedes the first guide word, use the first page.
+    (let ((page (or best (cdr (car index)))))
       (when page
         (+ page diogenes-old-page-offset)))))
 
