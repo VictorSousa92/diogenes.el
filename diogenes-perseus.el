@@ -20,6 +20,9 @@
 (declare-function diogenes-perseus-action nil)
 (declare-function diogenes-lookup-open-old "diogenes-old" (&optional word))
 (declare-function diogenes-lookup-open-tll "diogenes-tll" (&optional word))
+(declare-function diogenes-lookup-open-montanari "diogenes-montanari" (&optional word))
+(declare-function diogenes-lookup-open-cambridge "diogenes-cambridge" (&optional word))
+(declare-function diogenes-lookup-open-bdag "diogenes-bdag" (&optional word))
 
 ;;;; --------------------------------------------------------------------
 ;;;; UTILITIES
@@ -524,40 +527,68 @@ while KEY-FN must return the key."
       (cond (formatted (diogenes--lookup-insert-and-format formatted))
 	    (t (diogenes--lookup-insert-xml xml start end lookup-buffer)))
       ;; Record the headword of the entry we just looked up, for the
-      ;; benefit of `diogenes-lookup-open-old' /
-      ;; `diogenes-lookup-open-tll', and (for Latin) show clickable
-      ;; links to the OLD and TLL PDFs at the top of the buffer.
+      ;; benefit of the print-dictionary openers, and show clickable
+      ;; links at the top of the buffer: OLD and TLL for Latin,
+      ;; Montanari for Greek.
       (setq diogenes--lookup-headword
 	    (diogenes--lookup-first-headword))
-      (when (and (string= lang "latin")
-		 diogenes--lookup-headword)
-	(diogenes--lookup-insert-dict-links diogenes--lookup-headword)))))
+      (when diogenes--lookup-headword
+	(diogenes--lookup-insert-dict-links diogenes--lookup-headword lang)))))
 
-(defun diogenes--lookup-insert-dict-links (headword)
-  "Insert clickable [OLD] and [TLL] links for HEADWORD atop the buffer.
-Clicking a link (or pressing RET on it) opens the corresponding
-print dictionary PDF at the page containing HEADWORD.  The OLD
-link is useful only when `diogenes-old-pdf-file' is set, and the
-TLL link only when `diogenes-tll-pdf-directory' is set."
+(defun diogenes--lookup-insert-dict-links (headword lang)
+  "Insert clickable print-dictionary links for HEADWORD atop the buffer.
+For Latin (LANG \"latin\") this inserts [OLD] and [TLL]; for Greek
+it inserts [Montanari].  Clicking a link (or pressing RET on it)
+opens the corresponding PDF at the page containing HEADWORD.  Each
+link is only useful when its dictionary's path variable is set
+\(`diogenes-old-pdf-file', `diogenes-tll-pdf-directory',
+`diogenes-montanari-pdf-file')."
   (let ((inhibit-read-only t))
     (save-excursion
       (goto-char (point-min))
-      (insert (propertize "[OLD]"
-			  'font-lock-face 'link
-			  'keymap diogenes-perseus-action-map
-			  'action 'old
-			  'headword headword
-			  'help-echo (format "Open the OLD at \"%s\"" headword)
-			  'rear-nonsticky t)
-	      "  "
-	      (propertize "[TLL]"
-			  'font-lock-face 'link
-			  'keymap diogenes-perseus-action-map
-			  'action 'tll
-			  'headword headword
-			  'help-echo (format "Open the TLL at \"%s\"" headword)
-			  'rear-nonsticky t)
-	      "  "))))
+      (pcase lang
+	("latin"
+	 (insert (propertize "[OLD]"
+			     'font-lock-face 'link
+			     'keymap diogenes-perseus-action-map
+			     'action 'old
+			     'headword headword
+			     'help-echo (format "Open the OLD at \"%s\"" headword)
+			     'rear-nonsticky t)
+		 "  "
+		 (propertize "[TLL]"
+			     'font-lock-face 'link
+			     'keymap diogenes-perseus-action-map
+			     'action 'tll
+			     'headword headword
+			     'help-echo (format "Open the TLL at \"%s\"" headword)
+			     'rear-nonsticky t)
+		 "  "))
+	("greek"
+	 (insert (propertize "[Montanari]"
+			     'font-lock-face 'link
+			     'keymap diogenes-perseus-action-map
+			     'action 'montanari
+			     'headword headword
+			     'help-echo (format "Open Montanari at \"%s\"" headword)
+			     'rear-nonsticky t)
+		 "  "
+		 (propertize "[CGL]"
+			     'font-lock-face 'link
+			     'keymap diogenes-perseus-action-map
+			     'action 'cambridge
+			     'headword headword
+			     'help-echo (format "Open the Cambridge Greek Lexicon at \"%s\"" headword)
+			     'rear-nonsticky t)
+		 "  "
+		 (propertize "[BDAG]"
+			     'font-lock-face 'link
+			     'keymap diogenes-perseus-action-map
+			     'action 'bdag
+			     'headword headword
+			     'help-echo (format "Open BDAG (Bauer) at \"%s\"" headword)
+			     'rear-nonsticky t)
+		 "  "))))))
 
 (defun diogenes--lookup-first-headword ()
   "Return the first entry headword in the current lookup buffer.
@@ -683,6 +714,9 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "C-c C-c"                       #'diogenes-perseus-action)
     (keymap-set map "o"                             #'diogenes-lookup-open-old)
     (keymap-set map "t"                             #'diogenes-lookup-open-tll)
+    (keymap-set map "m"                             #'diogenes-lookup-open-montanari)
+    (keymap-set map "c"                             #'diogenes-lookup-open-cambridge)
+    (keymap-set map "b"                             #'diogenes-lookup-open-bdag)
     (keymap-set map "q"                             #'diogenes--quit)
     map)
   "Basic mode map for the Diogenes Lookup Mode.")
@@ -1170,6 +1204,9 @@ if nil, query interactively for their values"
 					    (get-text-property char 'bibl))))
       (old (diogenes-lookup-open-old (get-text-property char 'headword)))
       (tll (diogenes-lookup-open-tll (get-text-property char 'headword)))
+      (montanari (diogenes-lookup-open-montanari (get-text-property char 'headword)))
+      (cambridge (diogenes-lookup-open-cambridge (get-text-property char 'headword)))
+      (bdag (diogenes-lookup-open-bdag (get-text-property char 'headword)))
       (lookup (diogenes--lookup-dict (get-text-property char 'lemma)
 				     (get-text-property char 'lang)))
       (forms (diogenes--show-all-forms (get-text-property char 'lemma)
