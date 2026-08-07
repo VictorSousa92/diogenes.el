@@ -56,6 +56,7 @@
 (require 'diogenes-search)
 (require 'diogenes-perseus)
 (require 'diogenes-old)
+(require 'diogenes-tll)
 (require 'diogenes-legacy)
 
 (defgroup diogenes nil
@@ -94,7 +95,7 @@
 (defun diogenes--path ()
   (if diogenes-path
       (expand-file-name diogenes-path)
-    (error "diogenes-path is not set! 
+    (error "diogenes-path is not set!
 Please set it to the root directory of your Diogenes installation!")))
 
 (defun diogenes--include-server ()
@@ -220,7 +221,8 @@ Uses the Diogenes Perl module."
   (diogenes--search-database "cop" options-or-pattern author-plist prefix))
 
 
-
+
+
 ;;; DUMP
 ;;;###autoload
 (defun diogenes-dump-tlg (&optional author work)
@@ -272,7 +274,8 @@ Uses the Diogenes Perl module."
   (diogenes--dump-from-database "cop" author work))
 
 
-
+
+
 ;;; BROWSE
 ;;;###autoload
 (defun diogenes-browse-tlg (&optional author work)
@@ -324,7 +327,8 @@ Uses the Diogenes Perl module."
   (diogenes--browse-database "cop" author work))
 
 
-
+
+
 ;;; DICTIONARY LOOKUP
 ;;;###autoload
 (defun diogenes-lookup-greek (word)
@@ -398,12 +402,13 @@ QUERY is interpreted as a regular expression which must match the forms."
   (interactive "sShow all lemmata and their form matching: ")
   (diogenes--show-all-lemmata query "latin"))
 
-
+
+
 ;;; UTILITIES
 ;;;###autoload
 (defun diogenes-utf8-to-beta (str)
-  "Convert greek beta code to utf-8. 
-If a region is active, convert the contents of the region in place; 
+  "Convert greek beta code to utf-8.
+If a region is active, convert the contents of the region in place;
 otherwise, prompt the user for input."
   (interactive "i")
   (cond (str (diogenes--uft8-to-beta str))
@@ -417,7 +422,7 @@ otherwise, prompt the user for input."
 ;;;###autoload
 (defun diogenes-beta-to-utf8 (str)
   "Convert greek unicode to beta code.
-If a region is active, convert the contents of the region in place; 
+If a region is active, convert the contents of the region in place;
 otherwise, prompt the user for input."
   (interactive "i")
   (cond (str (diogenes--beta-to-utf8 str))
@@ -460,7 +465,8 @@ otherwise, prompt the user for input."
     (message "Ol. %d/%d" (/ year 4)
 	     (1+ (mod year 4)))))
 
-
+
+
 ;;; DISPATCHER
 (transient-define-prefix diogenes-morphology-greek ()
   "Dispatcher for the Diogenes' Greek morphology tool collection."
