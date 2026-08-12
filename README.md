@@ -497,7 +497,7 @@ files are needed.
 
 Passow and the TGL are different: each is a folder with one
 sub-directory per volume, and **every volume sub-directory must contain
-two files — the volume's PDF and a separate plain-text OCR file (a
+two files: the volume's PDF and a separate plain-text OCR file (a
 `.txt`) of that same volume.** These two dictionaries do their lookups
 against the `.txt`, not against the PDF's embedded text, so the `.txt`
 is required, not optional. Within each volume folder the first file
@@ -508,7 +508,7 @@ variables). The OCR text must have its pages delimited by lines of the
 form `----- N / TOTAL -----` (where N is the page number); this is how a
 located entry is mapped to a physical PDF page. For the TGL, the volume
 sub-directories must additionally be **named with the volume's Roman
-numeral** — `I`, `II`, `III`, `IIII`, `V` — because the folder name is
+numeral** (`I`, `II`, `III`, `IIII`, `V`) because the folder name is
 taken as the tomus number and the index's "t.<n>" pointers map onto it;
 volume V's `.txt` supplies the comprehensive index that is the TGL's
 primary lookup path. (Passow's four folders correspond to Passow 1.1,
@@ -519,7 +519,7 @@ All of these features use pdf-tools when it is available, and fall back
 to the built-in doc-view otherwise.
 
 There are three ways to use them. First, every entry shown in Diogenes
-Lookup Mode is now preceded by a line of clickable links — `[OLD]` and
+Lookup Mode is now preceded by a line of clickable links: `[OLD]` and
 `[TLL]` for Latin entries, `[Montanari]`, `[CGL]`, `[BDAG]`, `[Passow]`
 and `[TGL]` for Greek ones. Clicking a link (or typing RETURN on it)
 opens that dictionary at the page for that entry. This works for every
@@ -545,7 +545,7 @@ OCR'd volumes in the DAFO dataset, which can be requested from the
 Bavarian State Library's Münchener Digitalisierungszentrum (MDZ) at
 <https://www.digitale-sammlungen.de/en/> (see
 <https://digitizedmedievalmanuscripts.org/munchener-digitalisierungszentrum-mdz>);
-this is also where the per-volume OCR text comes from — for these two
+this is also where the per-volume OCR text comes from. For these two
 dictionaries you place both the volume PDF and its OCR `.txt` in each
 volume folder, as described above. For BDAG (4th ed.), I used the copy
 available at
@@ -559,8 +559,8 @@ with a constant shift.)
 ### A caveat on OCR and bookmarks
 
 These are scans of print books, and their machine-readable layers are
-imperfect. In many respects the OCR text is defective — dropped or
-garbled letters, misread diacritics, columns read out of order — and
+imperfect. In many respects the OCR text is defective: dropped or
+garbled letters, misread diacritics, columns read out of order; and
 the PDF bookmarks (part of what the page index is built from) are
 frequently wrong or incomplete as well. As a result a lookup can land a
 page or two off, or occasionally on the wrong entry. This is especially
@@ -580,15 +580,14 @@ built from the column numbers printed in the OCR itself, mapping a
 word's column to a physical page; because those numbers are part of the
 text, this is more robust than the outline (which is why
 `diogenes-tgl-page-offset` normally stays 0). When an exact index
-lookup misses — the OCR often drops or garbles a single letter of an
-index headword — `diogenes-tgl-fuzzy-lookup` retries against index keys
+lookup misses, `diogenes-tgl-fuzzy-lookup` retries against index keys
 that share the word's first two letters and differ from it by at most
 one inserted, deleted or substituted letter. Entries printed only as
 "vide …" pointers are followed to their target. And some derived
 compounds that are printed under their root, with neither a column nor
 a "vide" reference, can still be placed by
 `diogenes-tgl-morph-fallback`, which strips a single Greek prefix and
-resolves the root — but only as a last resort, only when an exact hit
+resolves the root, but only as a last resort, only when an exact hit
 on the root is found, and only when both the root and the residue are
 long enough (`diogenes-tgl-morph-min-root`, default 4) that a short tail
 is not mistaken for an unrelated real lemma. For any dictionary, if
@@ -606,11 +605,11 @@ quickest way to see why a lookup went where it did.
 
 ## Searching inside an open PDF
 
-The third and most practical way to use the print dictionaries — and
-the best remedy for the OCR and bookmark problems just described — is to
+The third and most practical way to use the print dictionaries (and
+the best remedy for the OCR and bookmark problems just described) is to
 search inside the PDF you already have open. The command
-`diogenes-pdf-lookup-entry` — bound to `L` in pdf-view-mode and
-doc-view-mode — lets you type a headword in the minibuffer and jumps the
+`diogenes-pdf-lookup-entry` (bound to `L` in pdf-view-mode and
+doc-view-mode) lets you type a headword in the minibuffer and jumps the
 current PDF to that entry's page. It is the in-PDF counterpart of
 `diogenes-lookup-greek` and `diogenes-lookup-latin`: the same minibuffer
 workflow, but it drives the print dictionary you are already reading.
@@ -641,7 +640,7 @@ init file.)
 
 I have also extended `diogenes-perseus-action` (`C-c C-c`) in Diogenes
 Lookup Mode. Beyond activating the links and the words explicitly marked
-as Latin or Greek in the XML — which is Nitardus's original behaviour —
+as Latin or Greek in the XML (which is Nitardus's original behaviour)
 it now parses and looks up the Greek or Latin word at point wherever it
 occurs in an entry. It recognises the word's language in three ways: a
 word explicitly marked as Latin or Greek in the XML is parsed as such;
