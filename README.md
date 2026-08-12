@@ -185,7 +185,7 @@ displayed in Diogenes Lookup Mode. While only a subset of the TEI XML
 tags is currently recognized and handled, this mode can display the
 most prominent markup of the files and, most importantly, the embedded
 citations that can be used to browse the texts in Browser Mode
-(activate them by either typing RETURN when they have the point or by
+(activate them by either typing RETURN when they have the cursor on it or by
 double-clicking. The command `diogenes-perseus-action` (bound to
 `C-c C-c`) can also activate these links, but additionally tries to
 parse and lookup every word that is marked either as Latin or Greek in
@@ -302,8 +302,8 @@ and not for the one the buffer was originally opened on.
 Second, the same openers are bound to single keys in Diogenes Lookup
 Mode: `o` (OLD), `t` (TLL for a Latin entry, TGL for a Greek one), `m`
 (Montanari), `c` (CGL), `b` (BDAG) and `p` (Passow). These keys act on
-whichever entry the point is currently in, wherever within it the point
-sits, and they recompute this on every keypress, so moving the point
+whichever entry the cursor is currently in, wherever within it the cursor
+sits, and they recompute this on every keypress, so moving the cursor
 into a different entry (including entries loaded with next or previous)
 simply opens the right one. With a prefix argument, the opener prompts
 for a word instead.
@@ -421,7 +421,7 @@ an LSJ (Greek) entry, a word in Latin script that is not explicitly
 marked is taken to be an English gloss and left alone, so `C-c C-c`
 there does nothing rather than attempt a spurious parse.
 
-So, in short: put the point on any Greek word and press `C-c C-c` to
+So, in short: put the cursor position on any Greek word and press `C-c C-c` to
 parse it as Greek; do the same on any word in a Lewis & Short entry to
 parse it as Latin. On a link, `C-c C-c` still performs the link's
 action, exactly as before.
