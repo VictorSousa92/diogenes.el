@@ -1,4 +1,4 @@
-[https://github.com/user-attachments/assets/4b0297ae-f6ca-4064-b90b-f8dc320cf83a
+https://github.com/user-attachments/assets/4b0297ae-f6ca-4064-b90b-f8dc320cf83a
 
 Diogenes.el strives to be a complete interface to P. Heslin's
 Diogenes, allowing its users to browse and search the TLG and PHI
@@ -480,21 +480,42 @@ which diogenes.el can jump to the page for a given entry. The following
 are supported, each with its own path variable that must be set before
 use:
 
-| Abbreviation | Full Name | Language | Path variable |
-| --- | --- | --- | --- |
-| OLD | Oxford Latin Dictionary | Latin | `diogenes-old-pdf-file` |
-| TLL | Thesaurus Linguae Latinae | Latin | `diogenes-tll-pdf-directory` |
-| Montanari | Brill Dictionary of Ancient Greek | Greek | `diogenes-montanari-pdf-file` |
-| CGL | Cambridge Greek Lexicon | Greek | `diogenes-cambridge-pdf-file` |
-| BDAG | Bauer/Danker Greek NT lexicon | Greek | `diogenes-bdag-pdf-file` |
-| Passow | Passow's Handwörterbuch | Greek | `diogenes-passow-directory` |
-| TGL | Estienne, Thesaurus Graecae Linguae | Greek | `diogenes-tgl-directory` |
+| Abbreviation | Full Name | Language | Path variable | Layout |
+| --- | --- | --- | --- | --- |
+| OLD | Oxford Latin Dictionary | Latin | `diogenes-old-pdf-file` | single PDF |
+| TLL | Thesaurus Linguae Latinae | Latin | `diogenes-tll-pdf-directory` | folder of fascicle PDFs |
+| Montanari | Brill Dictionary of Ancient Greek | Greek | `diogenes-montanari-pdf-file` | single PDF |
+| CGL | Cambridge Greek Lexicon | Greek | `diogenes-cambridge-pdf-file` | single PDF |
+| BDAG | Bauer/Danker Greek NT lexicon | Greek | `diogenes-bdag-pdf-file` | single PDF |
+| Passow | Passow's Handwörterbuch | Greek | `diogenes-passow-directory` | one folder per volume; **each needs a PDF + an OCR `.txt`** |
+| TGL | Estienne, Thesaurus Graecae Linguae | Greek | `diogenes-tgl-directory` | one folder per volume (named I, II, III, IIII, V); **each needs a PDF + an OCR `.txt`** |
 
-The OLD, Montanari, CGL and BDAG are single PDFs; the TLL is a folder of
-fascicle PDFs, and Passow and the TGL are folders with one
-sub-directory per volume. The page index is read from each PDF's own
-outline (bookmarks) and OCR text layer, so no extra data files are
-needed. The features use pdf-tools when it is available, and fall back
+The OLD, Montanari, CGL and BDAG are single PDFs; the TLL is a folder
+of fascicle PDFs. For these, the page index is read from each PDF's own
+outline (bookmarks) and its embedded OCR text layer, so no extra data
+files are needed.
+
+Passow and the TGL are different: each is a folder with one
+sub-directory per volume, and **every volume sub-directory must contain
+two files — the volume's PDF and a separate plain-text OCR file (a
+`.txt`) of that same volume.** These two dictionaries do their lookups
+against the `.txt`, not against the PDF's embedded text, so the `.txt`
+is required, not optional. Within each volume folder the first file
+matching `*.pdf` is taken as the PDF and the first matching `*.txt` as
+the OCR text (configurable via `diogenes-passow-pdf-regexp` /
+`diogenes-passow-text-regexp` and the corresponding `diogenes-tgl-*`
+variables). The OCR text must have its pages delimited by lines of the
+form `----- N / TOTAL -----` (where N is the page number); this is how a
+located entry is mapped to a physical PDF page. For the TGL, the volume
+sub-directories must additionally be **named with the volume's Roman
+numeral** — `I`, `II`, `III`, `IIII`, `V` — because the folder name is
+taken as the tomus number and the index's "t.<n>" pointers map onto it;
+volume V's `.txt` supplies the comprehensive index that is the TGL's
+primary lookup path. (Passow's four folders correspond to Passow 1.1,
+1.2, 2.1 and 2.2, and their letter ranges are detected automatically
+from the OCR, so their names do not matter.)
+
+All of these features use pdf-tools when it is available, and fall back
 to the built-in doc-view otherwise.
 
 There are three ways to use them. First, every entry shown in Diogenes
@@ -524,7 +545,10 @@ OCR'd volumes in the DAFO dataset, which can be requested from the
 Bavarian State Library's Münchener Digitalisierungszentrum (MDZ) at
 <https://www.digitale-sammlungen.de/en/> (see
 <https://digitizedmedievalmanuscripts.org/munchener-digitalisierungszentrum-mdz>);
-for BDAG (4th ed.), the copy available at
+this is also where the per-volume OCR text comes from — for these two
+dictionaries you place both the volume PDF and its OCR `.txt` in each
+volume folder, as described above. For BDAG (4th ed.), I used the copy
+available at
 <https://isidore.co/CalibreLibrary/Bauer,%20Walter/A%20Greek-English%20Lexicon%20of%20the%20New%20Testament%20and%20Other%20Early%20Christian%20Literature%20(BDAG%204th%20ed%20(10226)/>;
 and for Montanari and the CGL, personal copies I made and cannot share.
 If your copy of a dictionary is paginated differently from mine, the
@@ -632,4 +656,3 @@ So, in short: put the point on any Greek word and press `C-c C-c` to
 parse it as Greek; do the same on any word in a Lewis & Short entry to
 parse it as Latin. On a link, `C-c C-c` still performs the link's
 action, exactly as before.
-)
