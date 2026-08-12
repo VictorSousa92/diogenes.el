@@ -99,9 +99,15 @@ decomposition, letters are lower-cased, final sigma is folded to
 medial sigma, and every non-Greek character (stray punctuation,
 OCR artefacts such as a leading guillemet, Latin letters) is
 dropped.  This lets a properly accented lemma match the unreliable
-accentuation of the OCR'd bookmark text."
-  (if (or (null word) (string-empty-p word))
-      ""
+accentuation of the OCR'd bookmark text.
+
+This function does its own regexp matching and Unicode
+normalisation, so it wraps the work in `save-match-data' to avoid
+clobbering the match data of callers (e.g. a `parse-title' that
+reads several `match-string' groups around a call to this)."
+  (save-match-data
+   (if (or (null word) (string-empty-p word))
+       ""
     ;; The LSJ headword captured from the dictionary XML is often in
     ;; Perseus beta code (e.g. "le/gw"), not Unicode Greek.  Montanari's
     ;; bookmarks are Unicode, so convert beta -> Unicode first.  We
@@ -128,7 +134,7 @@ accentuation of the OCR'd bookmark text."
                 (let ((o (if (characterp c) c 0)))
                   (or (<= #x0391 o #x03a9)    ; Greek capital letters
                       (<= #x03b1 o #x03c9)))) ; Greek small letters
-              folded)))))
+              folded))))))
 
 (defun diogenes-montanari--key< (a b)
   "Non-nil if Greek collation key A sorts before B."
@@ -147,26 +153,41 @@ Recognises both the \"<n>: A – B\" interval form and the single
 \"<n>: A\" form (returning A as both bounds)."
   (cond
    ((string-match diogenes-montanari-interval-regexp title)
-    (let ((lo (diogenes-montanari--greek-key (match-string 1 title)))
-          (hi (diogenes-montanari--greek-key (match-string 2 title))))
+    ;; Capture BOTH groups first; `diogenes-montanari--greek-key' runs its
+    ;; own regexp matching, which would clobber this match data before we
+    ;; read group 2 (this made the HIGH bound come out empty, breaking
+    ;; straddle detection for multi-page entries).
+    (let* ((raw-lo (match-string 1 title))
+           (raw-hi (match-string 2 title))
+           (lo (diogenes-montanari--greek-key raw-lo))
+           (hi (diogenes-montanari--greek-key raw-hi)))
       ;; Only the LOW bound (the first headword on the page) is
       ;; reliable; the HIGH bound is frequently OCR-mangled (dropped
       ;; leading letters, stray glyphs).  We therefore key on LOW and do
       ;; NOT reorder the pair -- an earlier version swapped bounds when
       ;; hi<lo, which turned garbled titles into enormous spurious
-      ;; intervals that captured unrelated words.  HI is retained only
-      ;; for reference and is not used for routing.
+      ;; intervals that captured unrelated words.  HI is used only for
+      ;; detecting a straddle (HIGH = next page's LOW).
       (when (> (length lo) 0)
         (cons lo (if (> (length hi) 0) hi lo)))))
    ((string-match diogenes-montanari-single-regexp title)
-    (let ((w (diogenes-montanari--greek-key (match-string 1 title))))
+    (let* ((raw (match-string 1 title))
+           (w (diogenes-montanari--greek-key raw)))
       (when (> (length w) 0) (cons w w))))))
 
 (defun diogenes-montanari--build-index (file)
-  "Read FILE's outline and return a sorted page-interval index.
-Each element is (LOW-KEY HIGH-KEY . PAGE), sorted ascending by
-LOW-KEY then PAGE.  Depth-0 letter headers and unparseable titles
-are skipped.  Signals a user-error if nothing usable is found."
+  "Read FILE's outline and return the Montanari page index.
+The return value is a plist:
+  :low    a list of (LOW-KEY . PAGE), sorted ascending by LOW-KEY
+          then PAGE -- the reliable low-bound guide for each page;
+  :straddle  a hash mapping a KEY to the EARLIER page P of a
+          consecutive pair whose last word equals the next page's
+          first word (HIGH(P) = LOW(P+1) = KEY): the signature of an
+          entry that ends page P and continues on P+1.  Such an
+          entry BEGINS on P, so a low-bound match landing on P+1 is
+          stepped back to P.
+Depth-0 letter headers and unparseable titles are skipped.
+Signals a user-error if nothing usable is found."
   (unless (require 'pdf-info nil t)
     (user-error "pdf-tools is not installed; cannot read the Montanari outline.  \
 Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-install"))
@@ -176,7 +197,7 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
                     (error
                      (user-error "Could not read the outline of %s: %s"
                                  file (error-message-string err)))))
-         (index
+         (rows
           (cl-loop for entry in outline
                    for page = (alist-get 'page entry)
                    for title = (or (alist-get 'title entry) "")
@@ -188,13 +209,31 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
                                      (diogenes-montanari--parse-title title))
                    when parsed
                    collect (list (car parsed) (cdr parsed) page))))
-    (when (null index)
+    (when (null rows)
       (user-error "The PDF %s has no usable Montanari page intervals in its outline"
                   file))
-    (sort index (lambda (a b)
-                  (or (string< (car a) (car b))
-                      (and (string= (car a) (car b))
-                           (< (caddr a) (caddr b))))))))
+    ;; Page (reading) order, to detect straddles between consecutive pages.
+    (let* ((by-page (sort (copy-sequence rows)
+                          (lambda (a b) (< (caddr a) (caddr b)))))
+           (straddle (make-hash-table :test 'equal)))
+      (cl-loop for (a b) on by-page
+               while b
+               for hi-a = (cadr a)
+               for lo-b = (car b)
+               for pa = (caddr a)
+               when (and hi-a lo-b (> (length hi-a) 0) (string= hi-a lo-b))
+               ;; The straddling headword begins on the earlier page PA.
+               ;; Keep the earliest such page if a key straddles twice.
+               do (let ((prev (gethash hi-a straddle)))
+                    (when (or (null prev) (< pa prev))
+                      (puthash hi-a pa straddle))))
+      ;; Low-bound guide, sorted by low-key then page for the search.
+      (let ((low (sort (mapcar (lambda (r) (cons (car r) (caddr r))) rows)
+                       (lambda (a b)
+                         (or (string< (car a) (car b))
+                             (and (string= (car a) (car b))
+                                  (< (cdr a) (cdr b))))))))
+        (list :low low :straddle straddle)))))
 
 (defun diogenes-montanari--cache-key (file)
   "Return a cache key for FILE combining its truename and mtime."
@@ -233,16 +272,27 @@ Because the bookmark text is OCR'd, an occasional page whose first
 word is itself garbled can be off by a page or two; adjust
 `diogenes-montanari-page-offset' only for a constant shift."
   (let* ((index (diogenes-montanari--index file))
+         (low (plist-get index :low))
+         (straddle (plist-get index :straddle))
          (key (diogenes-montanari--greek-key word))
          (best nil))
     (when (> (length key) 0)
-      ;; INDEX is sorted ascending by low-key (then page).  Walk while
-      ;; the page's first-word key is <= WORD, keeping the last page.
-      (cl-loop for (lo _hi page) in index
+      ;; Low-bound guide: last page whose first-word key sorts <= KEY.
+      ;; This is the page whose running head has reached WORD -- how one
+      ;; uses the guide words of a printed dictionary.  The high bound is
+      ;; ignored because Montanari's OCR corrupts it.
+      (cl-loop for (lo . page) in low
                while (or (string< lo key) (string= lo key))
-               do (setq best page)))
-    ;; If WORD precedes every first-word key, fall back to the first page.
-    (let ((page (or best (caddr (car index)))))
+               do (setq best page))
+      ;; If WORD is exactly a page's first word AND that headword also ends
+      ;; the previous page (a straddling multi-page entry), the entry began
+      ;; on that earlier page -- jump there.  Restricting the step-back to
+      ;; the straddle signature keeps ordinary entries (and homographs like
+      ;; Δία vs διά, where no straddle holds) on their low-bound page.
+      (let ((start (gethash key straddle)))
+        (when (and start (or (null best) (< start best)))
+          (setq best start))))
+    (let ((page (or best (cdr (car low)))))
       (when page
         (+ page diogenes-montanari-page-offset)))))
 
@@ -253,10 +303,18 @@ word is itself garbled can be off by a page or two; adjust
 (defvar diogenes--lookup-headword)      ; from diogenes-perseus.el
 (defvar diogenes--lookup-lang)          ; from diogenes-perseus.el
 
+(declare-function diogenes--lookup-headword-at-point "diogenes-perseus" (&optional pos))
+
 (defun diogenes-montanari--current-headword ()
-  "Return the headword to look up for the Greek entry at point."
-  (or (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
+  "Return the headword to look up for the Greek entry point is in.
+Resolved from point on every call via
+`diogenes--lookup-headword-at-point', so the opener always acts on
+the entry the cursor is currently in -- including entries loaded
+later by `diogenes-lookup-next' / `diogenes-lookup-previous'."
+  (or (and (fboundp 'diogenes--lookup-headword-at-point)
+           (diogenes--lookup-headword-at-point))
       (get-text-property (point) 'orth)
+      (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
       (thing-at-point 'word t)
       (user-error "No headword found at point")))
 
@@ -271,9 +329,11 @@ Requires `diogenes-montanari-pdf-file' to point at a Montanari PDF
 with an interval outline, and `pdf-tools' (recommended) or
 `doc-view' for display."
   (interactive
-   (list (if current-prefix-arg
-             (read-string "Open Montanari at word: ")
-           (diogenes-montanari--current-headword))))
+   (progn
+     (diogenes--lookup-assert-lang "greek" "Montanari's Brill Dictionary")
+     (list (if current-prefix-arg
+               (read-string "Open Montanari at word: ")
+             (diogenes-montanari--current-headword)))))
   (let* ((word (or word (diogenes-montanari--current-headword)))
          (page (diogenes-montanari--page-for-word word)))
     (unless page

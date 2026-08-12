@@ -1,10 +1,5 @@
 ;;; diogenes-old.el --- Open the Oxford Latin Dictionary PDF from lookup -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024 Michael Neidhart
-;;
-;; Author: Michael Neidhart <mayhoth@gmail.com>
-;; Keywords: classics, tools, philology, humanities
-
 ;;; Commentary:
 
 ;; This module lets you jump from a Diogenes dictionary entry (the
@@ -38,6 +33,7 @@
 (require 'seq)
 (require 'ucs-normalize)
 
+(declare-function diogenes--lookup-assert-lang "diogenes-perseus" (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 (declare-function pdf-info-number-of-pages "pdf-info" (&optional file-or-buffer))
 (declare-function pdf-view-goto-page "pdf-view" (page &optional window))
@@ -58,7 +54,7 @@ upstream Diogenes build tools, is such a PDF."
   :type '(choice (const :tag "Not set" nil) file)
   :group 'diogenes)
 
-(defcustom diogenes-old-page-offset 1
+(defcustom diogenes-old-page-offset 0
   "Integer added to every page number derived from the OLD outline.
 Normally you should leave this at 0: the destinations stored in a
 PDF outline are physical page indices, so they already point at
@@ -204,8 +200,10 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
 This feature needs an OLD PDF whose bookmarks are the page guide words"
                   file))
     ;; Sort ascending by key; break ties by earlier page.  Each key is
-    ;; the first headword on its page, so if two consecutive pages share
-    ;; a guide word the earlier one is where that word starts.
+    ;; the last headword on its page; if the same guide word heads two
+    ;; consecutive pages (a long entry spanning the page break), the
+    ;; earlier page -- where the entry begins -- must come first, so the
+    ;; matcher's "first key >= word" lands there.
     (sort index (lambda (a b)
                   (or (string< (car a) (car b))
                       (and (string= (car a) (car b))
@@ -230,22 +228,26 @@ Uses and populates `diogenes-old--index-cache'."
 
 (defun diogenes-old--page-for-word (word &optional file)
   "Return the OLD page number containing the entry for WORD.
-Each bookmark in the index is the *first* headword on its page (the
-scans are named for the lemma that opens the page), so WORD's
-entry is on the last page whose guide word sorts at or before WORD
--- exactly how one uses a printed dictionary's guide words.
+Each bookmark in the index is the *last* headword on its page, so
+WORD's entry is on the first page whose guide word sorts at or
+after WORD -- the earliest page whose running head has reached
+WORD.  When WORD is itself the last entry of a page and continues
+onto the next (so the same guide word heads two consecutive
+pages), this returns the earlier page, where the entry begins.
 Returns an integer page (with `diogenes-old-page-offset' applied),
-or the first page if WORD precedes every guide word."
+or the final page if WORD sorts after every guide word."
   (let* ((index (diogenes-old--index file))
          (key (diogenes-old--sort-key word))
-         (best nil))
-    ;; INDEX is sorted ascending; walk while guide-key <= word-key,
-    ;; keeping the last page that still qualifies.
+         (hit nil))
+    ;; INDEX is sorted ascending by key, ties broken to the EARLIER page.
+    ;; The first entry whose last-word key is >= WORD's key is the page
+    ;; WORD falls on; because ties favour the earlier page, a word that
+    ;; heads two consecutive pages resolves to where it begins.
     (cl-loop for (gkey . page) in index
-             while (or (string< gkey key) (string= gkey key))
-             do (setq best page))
-    ;; If WORD precedes the first guide word, use the first page.
-    (let ((page (or best (cdr (car index)))))
+             when (or (string< key gkey) (string= key gkey))
+             do (setq hit page) and return nil)
+    ;; If WORD sorts after every guide word, use the last page.
+    (let ((page (or hit (cdr (car (last index))))))
       (when page
         (+ page diogenes-old-page-offset)))))
 
@@ -312,13 +314,21 @@ available.  Honours `diogenes-old-display-in-other-window'."
 
 (defvar diogenes--lookup-headword)     ; defined/made-local in diogenes-perseus.el
 
+(declare-function diogenes--lookup-headword-at-point "diogenes-perseus" (&optional pos))
+
 (defun diogenes-old--current-headword ()
-  "Return the headword to look up for the entry at point.
-Prefers the buffer-local `diogenes--lookup-headword' captured when
-the entry was formatted; otherwise falls back to the `orth' text
-property, then to the word at point."
-  (or (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
+  "Return the headword to look up for the entry point is in.
+Resolved from point on every call via
+`diogenes--lookup-headword-at-point', so the opener always acts on
+the entry the cursor is currently in -- including entries loaded
+later by `diogenes-lookup-next' / `diogenes-lookup-previous' --
+rather than the entry the buffer was first opened on.  Falls back to
+the buffer-local `diogenes--lookup-headword', then the `orth' at
+point, then the word at point."
+  (or (and (fboundp 'diogenes--lookup-headword-at-point)
+           (diogenes--lookup-headword-at-point))
       (get-text-property (point) 'orth)
+      (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
       (thing-at-point 'word t)
       (user-error "No headword found at point")))
 
@@ -333,9 +343,11 @@ Requires `diogenes-old-pdf-file' to point at an OLD PDF that has a
 running-head outline, and `pdf-tools' (recommended) or `doc-view'
 for display."
   (interactive
-   (list (if current-prefix-arg
-             (read-string "Open OLD at word: ")
-           (diogenes-old--current-headword))))
+   (progn
+     (diogenes--lookup-assert-lang "latin" "The Oxford Latin Dictionary")
+     (list (if current-prefix-arg
+               (read-string "Open OLD at word: ")
+             (diogenes-old--current-headword)))))
   (let* ((word (or word (diogenes-old--current-headword)))
          (page (diogenes-old--page-for-word word)))
     (unless page

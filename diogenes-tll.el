@@ -1,10 +1,5 @@
 ;;; diogenes-tll.el --- Open the Thesaurus Linguae Latinae PDFs from lookup -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024 Michael Neidhart
-;;
-;; Author: Michael Neidhart <mayhoth@gmail.com>
-;; Keywords: classics, tools, philology, humanities
-
 ;;; Commentary:
 
 ;; This module lets you jump from a Diogenes dictionary entry (the
@@ -272,9 +267,11 @@ Requires `diogenes-tll-pdf-directory' to point at a folder of TLL
 fascicle PDFs whose names carry \"(word-word)\" intervals, and
 `pdf-tools' (recommended) or `doc-view' for display."
   (interactive
-   (list (if current-prefix-arg
-             (read-string "Open TLL at word: ")
-           (diogenes-old--current-headword))))
+   (progn
+     (diogenes--lookup-assert-lang "latin" "The Thesaurus Linguae Latinae")
+     (list (if current-prefix-arg
+               (read-string "Open TLL at word: ")
+             (diogenes-old--current-headword)))))
   (let* ((word (or word (diogenes-old--current-headword)))
          (file (diogenes-tll--file-for-word word)))
     (unless file

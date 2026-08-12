@@ -1,10 +1,5 @@
 ;;; diogenes-cambridge.el --- Open the Cambridge Greek Lexicon PDF -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024 Michael Neidhart
-;;
-;; Author: Michael Neidhart <mayhoth@gmail.com>
-;; Keywords: classics, tools, philology, humanities
-
 ;;; Commentary:
 
 ;; This module lets you jump from a Diogenes *Greek* dictionary entry
@@ -89,26 +84,55 @@ titles such as \"3: άγακτίμενος\"."
   "Cache mapping a PDF cache-key to its parsed guide-word index.")
 
 (defun diogenes-cambridge--parse-title (title)
-  "Parse a CGL bookmark TITLE into (KEY PARITY), or nil.
-KEY is the Greek collation key of the guide word; PARITY is the
-symbol `odd' (guide word is the page's LAST headword) or `even'
-\(guide word is the page's FIRST headword), taken from the running
-number.  Letter-header titles like \"Α, α\" do not match the
-running-number pattern and yield nil."
+  "Parse a CGL bookmark TITLE into its Greek collation KEY, or nil.
+Letter-header titles like \"Α, α\" do not match the running-number
+pattern and yield nil.  The running number's parity is no longer
+used: the CGL outline's OCR is not clean enough (truncated or
+mis-ordered guide words) for parity-based refinement, so matching
+relies on a monotonic backbone of the guide words instead."
   (when (string-match diogenes-cambridge-entry-regexp title)
-    (let* ((n (string-to-number (match-string 1 title)))
-           (word (match-string 2 title))
-           (key (diogenes-montanari--greek-key word)))
-      (when (> (length key) 0)
-        (list key (if (cl-oddp n) 'odd 'even))))))
+    (let ((key (diogenes-montanari--greek-key (match-string 2 title))))
+      (when (> (length key) 0) key))))
+
+(defun diogenes-cambridge--monotone-backbone (rows)
+  "Return the longest non-decreasing subsequence of ROWS by key.
+ROWS is a list of (PAGE . KEY) in reading (page) order.  The CGL
+guide words ascend down the book; OCR errors (truncated or garbled
+words) show up as order-violating outliers, which this drops,
+leaving a clean monotonic guide-word list for binary search."
+  (let ((n (length rows)))
+    (if (zerop n)
+        nil
+      (let* ((vec (vconcat rows))
+             (keys (make-vector n nil))
+             (tails (make-vector n 0))
+             (tails-len 0)
+             (prev (make-vector n -1)))
+        (dotimes (i n) (aset keys i (cdr (aref vec i))))
+        (dotimes (i n)
+          (let ((k (aref keys i)) (lo 0) (hi tails-len))
+            (while (< lo hi)
+              (let ((mid (/ (+ lo hi) 2)))
+                (if (string< k (aref keys (aref tails mid)))
+                    (setq hi mid)
+                  (setq lo (1+ mid)))))
+            (aset prev i (if (> lo 0) (aref tails (1- lo)) -1))
+            (aset tails lo i)
+            (when (= lo tails-len) (setq tails-len (1+ tails-len)))))
+        (let ((seq nil) (i (aref tails (1- tails-len))))
+          (while (>= i 0)
+            (push (aref vec i) seq)
+            (setq i (aref prev i)))
+          seq)))))
 
 (defun diogenes-cambridge--build-index (file)
   "Read FILE's outline and return the CGL guide-word index.
 The return value is a plist:
-  :by-page  a vector of (PAGE KEY PARITY), in reading (page) order;
-  :order    a vector of indices into :by-page, sorted by KEY.
-Letter headers and unparseable titles are skipped.  Signals a
-user-error if nothing usable is found."
+  :keys   a vector of guide-word keys, ascending;
+  :pages  the matching vector of page numbers.
+Only the monotonic backbone of the guide words is kept, so OCR
+outliers do not derail the binary search.  Signals a user-error if
+nothing usable is found."
   (unless (require 'pdf-info nil t)
     (user-error "pdf-tools is not installed; cannot read the CGL outline.  \
 Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-install"))
@@ -122,26 +146,18 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
           (cl-loop for entry in outline
                    for page = (alist-get 'page entry)
                    for title = (or (alist-get 'title entry) "")
-                   for parsed = (and (integerp page) (> page 0)
-                                     (diogenes-cambridge--parse-title title))
-                   when parsed
-                   collect (list page (car parsed) (cadr parsed)))))
+                   for key = (and (integerp page) (> page 0)
+                                  (diogenes-cambridge--parse-title title))
+                   when key
+                   collect (cons page key))))
     (when (null rows)
       (user-error "The PDF %s has no usable CGL guide words in its outline" file))
-    ;; Reading order = page order.
-    (let* ((by-page (vconcat (sort rows (lambda (a b) (< (car a) (car b))))))
-           (n (length by-page))
-           ;; Order indices by KEY (then page), for binary search.
-           (order (vconcat
-                   (sort (number-sequence 0 (1- n))
-                         (lambda (i j)
-                           (let ((ki (nth 1 (aref by-page i)))
-                                 (kj (nth 1 (aref by-page j))))
-                             (or (string< ki kj)
-                                 (and (string= ki kj)
-                                      (< (car (aref by-page i))
-                                         (car (aref by-page j)))))))))))
-      (list :by-page by-page :order order))))
+    ;; Reading order = page order; then keep the monotonic backbone.
+    (setq rows (sort rows (lambda (a b) (< (car a) (car b)))))
+    (let* ((backbone (diogenes-cambridge--monotone-backbone rows))
+           (keys (vconcat (mapcar #'cdr backbone)))
+           (pages (vconcat (mapcar #'car backbone))))
+      (list :keys keys :pages pages))))
 
 (defun diogenes-cambridge--cache-key (file)
   "Return a cache key for FILE combining its truename and mtime."
@@ -166,55 +182,34 @@ FILE defaults to `diogenes-cambridge-pdf-file'."
 ;;;; HEADWORD -> PAGE
 ;;;; --------------------------------------------------------------------
 
-(defun diogenes-cambridge--bisect-last-<= (by-page order key)
-  "Return the reading-order index of the last guide word sorting <= KEY.
-BY-PAGE and ORDER are as in `diogenes-cambridge--build-index'.
-Returns nil if KEY precedes every guide word."
-  (let ((lo 0) (hi (length order)) (found nil))
-    ;; Binary search over ORDER (sorted by key) for the rightmost entry
-    ;; whose key <= KEY; return the corresponding BY-PAGE index.
-    (while (< lo hi)
-      (let* ((mid (/ (+ lo hi) 2))
-             (idx (aref order mid))
-             (k (nth 1 (aref by-page idx))))
-        (if (or (string< k key) (string= k key))
-            (progn (setq found idx) (setq lo (1+ mid)))
-          (setq hi mid))))
-    found))
-
 (defun diogenes-cambridge--page-for-word (word &optional file)
   "Return the CGL page number for WORD's entry.
-Finds the nearest preceding guide word by an accent-insensitive
-binary search, then refines with the running-number parity: if
-that guide word is a page's LAST headword (odd) and WORD sorts
-strictly after it, WORD is on the following page.  Returns an
+Locates WORD by an accent-insensitive binary search over the
+monotonic backbone of the outline's guide words: the page is the
+last one whose guide word sorts at or before WORD.  Returns an
 integer page (with `diogenes-cambridge-page-offset' applied) or
-nil."
+nil.
+
+The CGL bookmark text is OCR'd and occasionally garbled or
+incomplete (some pages carry no bookmark), so a word may land on
+the nearest preceding guide-word page rather than exactly its own;
+the running head shown there lets you step a page with `pdf-tools'
+if needed."
   (let* ((index (diogenes-cambridge--index file))
-         (by-page (plist-get index :by-page))
-         (order (plist-get index :order))
-         (key (diogenes-montanari--greek-key word)))
-    (when (and (> (length key) 0) (> (length by-page) 0))
-      (let* ((i (diogenes-cambridge--bisect-last-<= by-page order key))
-             (page
-              (cond
-               ;; WORD precedes every guide word: use the first page.
-               ((null i) (car (aref by-page 0)))
-               (t (let* ((row (aref by-page i))
-                         (rkey (nth 1 row))
-                         (par (nth 2 row))
-                         (rpage (car row)))
-                    (cond
-                     ;; Exact guide word: it is on this page regardless of role.
-                     ((string= rkey key) rpage)
-                     ;; Guide word is the page's LAST headword and WORD sorts
-                     ;; after it => WORD is on the next page in reading order.
-                     ((and (eq par 'odd) (< (1+ i) (length by-page)))
-                      (car (aref by-page (1+ i))))
-                     ;; Guide word is the page's FIRST headword (or no next
-                     ;; page): WORD is on this page.
-                     (t rpage)))))))
-        (when page
+         (keys (plist-get index :keys))
+         (pages (plist-get index :pages))
+         (key (diogenes-montanari--greek-key word))
+         (n (length keys)))
+    (when (and (> (length key) 0) (> n 0))
+      ;; Binary search: rightmost i with keys[i] <= key.
+      (let ((lo 0) (hi n) (found -1))
+        (while (< lo hi)
+          (let* ((mid (/ (+ lo hi) 2))
+                 (k (aref keys mid)))
+            (if (or (string< k key) (string= k key))
+                (progn (setq found mid) (setq lo (1+ mid)))
+              (setq hi mid))))
+        (let ((page (aref pages (if (>= found 0) found 0))))
           (+ page diogenes-cambridge-page-offset))))))
 
 ;;;; --------------------------------------------------------------------
@@ -223,10 +218,18 @@ nil."
 
 (defvar diogenes--lookup-headword)      ; from diogenes-perseus.el
 
+(declare-function diogenes--lookup-headword-at-point "diogenes-perseus" (&optional pos))
+
 (defun diogenes-cambridge--current-headword ()
-  "Return the headword to look up for the Greek entry at point."
-  (or (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
+  "Return the headword to look up for the Greek entry point is in.
+Resolved from point on every call via
+`diogenes--lookup-headword-at-point', so the opener always acts on
+the entry the cursor is currently in -- including entries loaded
+later by `diogenes-lookup-next' / `diogenes-lookup-previous'."
+  (or (and (fboundp 'diogenes--lookup-headword-at-point)
+           (diogenes--lookup-headword-at-point))
       (get-text-property (point) 'orth)
+      (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
       (thing-at-point 'word t)
       (user-error "No headword found at point")))
 
@@ -241,9 +244,11 @@ Requires `diogenes-cambridge-pdf-file' to point at a CGL PDF with a
 one-word-per-page outline, and `pdf-tools' (recommended) or
 `doc-view' for display."
   (interactive
-   (list (if current-prefix-arg
-             (read-string "Open Cambridge Greek Lexicon at word: ")
-           (diogenes-cambridge--current-headword))))
+   (progn
+     (diogenes--lookup-assert-lang "greek" "The Cambridge Greek Lexicon")
+     (list (if current-prefix-arg
+               (read-string "Open Cambridge Greek Lexicon at word: ")
+             (diogenes-cambridge--current-headword)))))
   (let* ((word (or word (diogenes-cambridge--current-headword)))
          (page (diogenes-cambridge--page-for-word word)))
     (unless page

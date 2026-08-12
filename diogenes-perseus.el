@@ -23,6 +23,8 @@
 (declare-function diogenes-lookup-open-montanari "diogenes-montanari" (&optional word))
 (declare-function diogenes-lookup-open-cambridge "diogenes-cambridge" (&optional word))
 (declare-function diogenes-lookup-open-bdag "diogenes-bdag" (&optional word))
+(declare-function diogenes-lookup-open-passow "diogenes-passow" (&optional word))
+(declare-function diogenes-lookup-open-tgl "diogenes-tgl" (&optional word))
 
 ;;;; --------------------------------------------------------------------
 ;;;; UTILITIES
@@ -529,23 +531,56 @@ while KEY-FN must return the key."
       ;; Record the headword of the entry we just looked up, for the
       ;; benefit of the print-dictionary openers, and show clickable
       ;; links at the top of the buffer: OLD and TLL for Latin,
-      ;; Montanari for Greek.
+      ;; Montanari/CGL/BDAG/Passow/TGL for Greek.
       (setq diogenes--lookup-headword
 	    (diogenes--lookup-first-headword))
       (when diogenes--lookup-headword
-	(diogenes--lookup-insert-dict-links diogenes--lookup-headword lang)))))
+	(save-excursion
+	  (goto-char (point-min))
+	  (diogenes--lookup-insert-dict-links diogenes--lookup-headword lang)
+	  (insert "\n"))))))
+
+(defvar diogenes--lookup-headword nil
+  "Headword of the entry shown in the current lookup buffer.
+Buffer-local in `diogenes-lookup-mode' buffers; used by the
+print-dictionary openers.")
+(defvar diogenes--lookup-lang nil
+  "Language (\"greek\" or \"latin\") of the current lookup buffer's entry.
+Buffer-local in `diogenes-lookup-mode' buffers.")
+
+(defun diogenes--lookup-assert-lang (expected dict-name)
+  "Abort unless the current lookup entry's language is EXPECTED.
+EXPECTED is \"greek\" or \"latin\"; DICT-NAME is the dictionary's
+name, used in the error message.  The print dictionaries call this
+at the start of their opener commands so that, e.g., a Greek-only
+lexicon is not opened on a Latin entry and vice versa.  The check
+relies on the buffer-local `diogenes--lookup-lang' recorded when
+the lookup buffer was built; if the language is unknown, no error
+is raised."
+  (let ((lang (and (boundp 'diogenes--lookup-lang) diogenes--lookup-lang)))
+    (when (and lang (not (string= lang expected)))
+      (user-error "%s is a %s dictionary, but this entry is %s"
+                  dict-name
+                  (capitalize expected)
+                  lang))))
 
 (defun diogenes--lookup-insert-dict-links (headword lang)
-  "Insert clickable print-dictionary links for HEADWORD atop the buffer.
+  "Insert clickable print-dictionary links for HEADWORD at point.
 For Latin (LANG \"latin\") this inserts [OLD] and [TLL]; for Greek
-it inserts [Montanari].  Clicking a link (or pressing RET on it)
-opens the corresponding PDF at the page containing HEADWORD.  Each
-link is only useful when its dictionary's path variable is set
-\(`diogenes-old-pdf-file', `diogenes-tll-pdf-directory',
-`diogenes-montanari-pdf-file')."
+it inserts [Montanari], [CGL], [BDAG], [Passow] and [TGL].  Clicking
+a link (or pressing RET on it) opens the corresponding PDF at the
+page containing HEADWORD.  Each link carries HEADWORD in its
+`headword' text property, so links belonging to different entries
+open different pages.  Each link is only useful when its
+dictionary's path variable is set (`diogenes-old-pdf-file',
+`diogenes-tll-pdf-directory', `diogenes-montanari-pdf-file', ...).
+
+The links are inserted at point; callers position point first (at
+the top of the buffer for the initial entry, or directly above a
+subsequent entry loaded by `diogenes-lookup-next' /
+`diogenes-lookup-previous')."
   (let ((inhibit-read-only t))
     (save-excursion
-      (goto-char (point-min))
       (pcase lang
 	("latin"
 	 (insert (propertize "[OLD]"
@@ -588,6 +623,22 @@ link is only useful when its dictionary's path variable is set
 			     'headword headword
 			     'help-echo (format "Open BDAG (Bauer) at \"%s\"" headword)
 			     'rear-nonsticky t)
+		 "  "
+		 (propertize "[Passow]"
+			     'font-lock-face 'link
+			     'keymap diogenes-perseus-action-map
+			     'action 'passow
+			     'headword headword
+			     'help-echo (format "Open Passow at \"%s\"" headword)
+			     'rear-nonsticky t)
+		 "  "
+		 (propertize "[TGL]"
+			     'font-lock-face 'link
+			     'keymap diogenes-perseus-action-map
+			     'action 'tgl
+			     'headword headword
+			     'help-echo (format "Open Estienne's Thesaurus Graecae Linguae at \"%s\"" headword)
+			     'rear-nonsticky t)
 		 "  "))))))
 
 (defun diogenes--lookup-first-headword ()
@@ -600,6 +651,45 @@ Reads the `orth' text property placed on head elements by
 						(lambda (_ v) (and v t)))))
       (and match (prop-match-value match)))))
 
+(defun diogenes--lookup-headword-at-point (&optional pos)
+  "Return the headword of the entry that POS (default point) lies in.
+Each entry's head text carries an `orth' text property with that
+entry's headword (see `diogenes--dict-handle-elt'); an entry's body
+does not.  Directly above each entry is a print-dictionary links
+line whose links carry that same entry's headword in a `headword'
+text property.  Resolution, in order:
+
+  1. a `headword' property at POS -- POS is on this entry's links line;
+  2. an `orth' property at POS    -- POS is on the entry's head line;
+  3. the nearest `orth' before POS -- POS is in the entry's body;
+  4. the first headword in the buffer (POS precedes everything).
+
+Recomputed from POS on every call, so moving point into a different
+entry -- including entries loaded afterwards by `diogenes-lookup-next'
+/ `diogenes-lookup-previous' -- makes the print-dictionary openers act
+on that entry, not the one the buffer was originally opened on.
+Returns nil only if the buffer has no headwords at all."
+  (let ((p (or pos (point))))
+    (or
+     ;; 1. On a links line: its links carry this entry's headword.
+     (get-text-property p 'headword)
+     ;; 2. On the head line itself.
+     (get-text-property p 'orth)
+     ;; 3. In the body: the containing entry's head is the nearest
+     ;;    `orth' strictly before P.  Walk backward over changes.
+     (save-excursion
+       (goto-char p)
+       (let ((found nil))
+         (while (and (not found) (> (point) (point-min)))
+           (let ((change (previous-single-property-change (point) 'orth)))
+             (if (null change)
+                 (goto-char (point-min))
+               (goto-char change)
+               (setq found (get-text-property (point) 'orth)))))
+         found))
+     ;; 4. Nothing before P (e.g. very top of buffer): first headword.
+     (diogenes--lookup-first-headword))))
+
 (defun diogenes--lookup-dict (word lang)
   "Search for a word in a Diogenes dictionary. Dispatcher function."
   (pcase lang
@@ -611,6 +701,34 @@ Reads the `orth' text property placed on head elements by
     ("latin" (diogenes--search-dict word "latin"
 			 #'diogenes--ascii-sort-function
 			 #'diogenes--xml-key-fn))))
+
+(defun diogenes--lookup-headword-in-region (beg end)
+  "Return the first entry headword (the `orth' property) in BEG..END, or nil."
+  (save-excursion
+    (goto-char beg)
+    (let ((match (text-property-search-forward
+                  'orth nil (lambda (_ v) (and v t)) )))
+      (and match
+           (< (prop-match-beginning match) end)
+           (prop-match-value match)))))
+
+(defun diogenes--lookup-add-entry-links (beg end lang)
+  "Insert a print-dictionary links line for the entry in BEG..END.
+Finds that entry's headword (its `orth' property) within the region
+and, if the language has links and a headword was found, inserts the
+links line at BEG followed by a newline, so the links sit on their
+own line directly above the entry.  Returns the number of characters
+inserted (so callers can keep positions straight), or 0."
+  (let ((headword (diogenes--lookup-headword-in-region beg end)))
+    (if (not (and headword (member lang '("latin" "greek"))))
+        0
+      (let ((inhibit-read-only t))
+        (save-excursion
+          (goto-char beg)
+          (let ((p (point)))
+            (diogenes--lookup-insert-dict-links headword lang)
+            (insert "\n")
+            (- (point) p)))))))
 
 (defun diogenes-lookup-next (&optional n)
   "Find and show the next entry in the active dictionary.
@@ -628,9 +746,14 @@ When called with a numerical prefix, show the next N entries."
       (setq diogenes--lookup-bufend end)
       (goto-char (point-max))
       (diogenes--lookup-print-separator)
-      (if formatted
-	  (diogenes--lookup-insert-and-format formatted)
-	(diogenes--lookup-insert-xml xml start end (current-buffer)))
+      (let ((entry-beg (point-max)))
+	(if formatted
+	    (diogenes--lookup-insert-and-format formatted)
+	  (diogenes--lookup-insert-xml xml start end (current-buffer)))
+	;; Give this newly-loaded entry its own clickable
+	;; print-dictionary links, carrying THIS entry's headword.
+	(diogenes--lookup-add-entry-links entry-beg (point-max)
+					  diogenes--lookup-lang))
       (when (and n (> n 1)) (diogenes-lookup-next (1- n))))))
 
 (defun diogenes-lookup-previous (&optional n)
@@ -650,10 +773,18 @@ When called with a numerical prefix, show the previous N entries."
       (goto-char (point-min))
       (diogenes--lookup-print-separator)
       (goto-char (point-min))
-      (if formatted
-	  (diogenes--lookup-insert-and-format formatted)
-	(diogenes--lookup-insert-xml xml start end (current-buffer)))
-
+      (let ((entry-beg (point))
+	    (size-before (- (point-max) (point-min))))
+	(if formatted
+	    (diogenes--lookup-insert-and-format formatted)
+	  (diogenes--lookup-insert-xml xml start end (current-buffer)))
+	;; `insert-and-format' leaves point back at ENTRY-BEG, so derive
+	;; the entry's end from how much the buffer grew, then give this
+	;; entry its own links line carrying THIS entry's headword.
+	(let ((entry-end (+ entry-beg
+			    (- (- (point-max) (point-min)) size-before))))
+	  (diogenes--lookup-add-entry-links entry-beg entry-end
+					    diogenes--lookup-lang)))
       (goto-char (point-min))
       (when (and n (> n 1)) (diogenes-lookup-previous (1- n))))))
 
@@ -713,10 +844,11 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "C-c C-p"                       #'diogenes-lookup-previous)
     (keymap-set map "C-c C-c"                       #'diogenes-perseus-action)
     (keymap-set map "o"                             #'diogenes-lookup-open-old)
-    (keymap-set map "t"                             #'diogenes-lookup-open-tll)
+    (keymap-set map "t"                             #'diogenes-lookup-open-tll-or-tgl)
     (keymap-set map "m"                             #'diogenes-lookup-open-montanari)
     (keymap-set map "c"                             #'diogenes-lookup-open-cambridge)
     (keymap-set map "b"                             #'diogenes-lookup-open-bdag)
+    (keymap-set map "p"                             #'diogenes-lookup-open-passow)
     (keymap-set map "q"                             #'diogenes--quit)
     map)
   "Basic mode map for the Diogenes Lookup Mode.")
@@ -1195,8 +1327,44 @@ if nil, query interactively for their values"
 
 
 ;;; Callback function
+(defun diogenes--word-parse-lang (char)
+  "Return the language to parse the word at CHAR as: \"greek\", \"latin\", or nil.
+Resolution, in order:
+
+  1. an explicit `lang' text property of \"greek\" or \"latin\" at CHAR
+     (set from the XML markup on quoted foreign words);
+  2. \"greek\" if the word at point actually contains Greek-script
+     characters (Emacs regex category `\\cg'), regardless of markup --
+     so a Greek word sitting in otherwise unmarked (\"english\") prose
+     is still recognised;
+  3. \"latin\" only in a Latin dictionary (buffer-local
+     `diogenes--lookup-lang' = \"latin\"), where the entry prose and its
+     Latin lemmata share the Latin script and parsing an incidental
+     English word as Latin is harmless.
+
+In a Greek dictionary a Latin-script word is deliberately NOT parsed:
+Greek headwords are already caught by their script in step 2, so any
+remaining Latin-script token is an English gloss, and this returns nil
+so `diogenes-perseus-action' refuses rather than attempting a spurious
+Greek parse.  Returns nil whenever no classical language applies."
+  (let ((prop (get-text-property char 'lang))
+	(word (thing-at-point 'word t)))
+    (cond
+     ((member prop '("greek" "latin")) prop)
+     ((and word (string-match-p "\\cg" word)) "greek")
+     ((and (boundp 'diogenes--lookup-lang)
+	   (equal diogenes--lookup-lang "latin"))
+      "latin")
+     (t nil))))
+
 (defun diogenes-perseus-action (char)
-  "Callback for the links in Diogenes Lookup and Analysis Mode."
+  "Callback for the links in Diogenes Lookup and Analysis Mode.
+On a link (a bibliographic reference, a print-dictionary opener, or a
+marked lemma) it performs that link's action.  Anywhere else, if the
+word at point is Greek or Latin -- by its XML markup, by its script,
+or by the language of the dictionary being shown -- it parses and
+looks that word up (as `diogenes-parse-and-lookup-greek' /
+`-latin' would); see `diogenes--word-parse-lang'."
   (interactive "d")
   (let ((action (get-text-property char 'action)))
     (cl-case action
@@ -1207,15 +1375,33 @@ if nil, query interactively for their values"
       (montanari (diogenes-lookup-open-montanari (get-text-property char 'headword)))
       (cambridge (diogenes-lookup-open-cambridge (get-text-property char 'headword)))
       (bdag (diogenes-lookup-open-bdag (get-text-property char 'headword)))
+      (passow (diogenes-lookup-open-passow (get-text-property char 'headword)))
+      (tgl (diogenes-lookup-open-tgl (get-text-property char 'headword)))
       (lookup (diogenes--lookup-dict (get-text-property char 'lemma)
 				     (get-text-property char 'lang)))
       (forms (diogenes--show-all-forms (get-text-property char 'lemma)
 				       (get-text-property char 'lang)))
-      (t (let ((lang (get-text-property char 'lang)))
-	   (pcase lang
-	     ((or "greek" "latin")
-	      (diogenes--parse-and-lookup (thing-at-point 'word) lang))
-	     (_ (message "C-c C-c cannot do anything useful here!"))))))))
+      (t (let ((lang (diogenes--word-parse-lang char))
+	       (word (thing-at-point 'word t)))
+	   (cond
+	    ((and lang word) (diogenes--parse-and-lookup word lang))
+	    ((not word) (message "C-c C-c: no word at point"))
+	    (t (message "C-c C-c cannot do anything useful here!"))))))))
+
+(defun diogenes-lookup-open-tll-or-tgl ()
+  "Open the print thesaurus appropriate to the current entry's language.
+For a Latin entry this opens the TLL (Thesaurus Linguae Latinae); for
+a Greek entry, Estienne's TGL (Thesaurus Graecae Linguae).  Bound to
+\\`t' in `diogenes-lookup-mode', it dispatches on the buffer-local
+`diogenes--lookup-lang' so the same key serves both languages.  A
+prefix argument is passed through to the underlying opener (which then
+prompts for a word).  If the language is unknown, it defaults to the
+TLL, the historical binding of this key."
+  (interactive)
+  (let ((lang (and (boundp 'diogenes--lookup-lang) diogenes--lookup-lang)))
+    (pcase lang
+      ("greek" (call-interactively #'diogenes-lookup-open-tgl))
+      (_       (call-interactively #'diogenes-lookup-open-tll)))))
 
 
 

@@ -1,9 +1,5 @@
 ;;; diogenes-bdag.el --- Open the BDAG (Bauer) Greek NT lexicon PDF -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024 Michael Neidhart
-;;
-;; Author: Michael Neidhart <mayhoth@gmail.com>
-;; Keywords: classics, tools, philology, humanities
 
 ;;; Commentary:
 
@@ -99,20 +95,31 @@ Recognises both the \"<n>: A - B\" interval form and the single
 as \"Α, α\" carry no running number and yield nil."
   (cond
    ((string-match diogenes-bdag-interval-regexp title)
-    (let ((lo (diogenes-montanari--greek-key (match-string 1 title)))
-          (hi (diogenes-montanari--greek-key (match-string 2 title))))
+    ;; Capture BOTH groups before calling `diogenes-montanari--greek-key',
+    ;; which runs its own regexp matching internally and would otherwise
+    ;; clobber this match data before we read group 2.
+    (let* ((raw-lo (match-string 1 title))
+           (raw-hi (match-string 2 title))
+           (lo (diogenes-montanari--greek-key raw-lo))
+           (hi (diogenes-montanari--greek-key raw-hi)))
       (when (and (> (length lo) 0) (> (length hi) 0))
         ;; BDAG's text is clean, so bounds are reliable; keep as-is.
         (cons lo hi))))
    ((string-match diogenes-bdag-single-regexp title)
-    (let ((w (diogenes-montanari--greek-key (match-string 1 title))))
+    (let* ((raw (match-string 1 title))
+           (w (diogenes-montanari--greek-key raw)))
       (when (> (length w) 0) (cons w w))))))
 
 (defun diogenes-bdag--build-index (file)
-  "Read FILE's outline and return a sorted page-interval index.
-Each element is (LOW-KEY HIGH-KEY PAGE), sorted ascending by
-LOW-KEY then PAGE.  Letter headers and unparseable titles are
-skipped.  Signals a user-error if nothing usable is found."
+  "Read FILE's outline and return a sorted running-head index.
+Each element is (GUIDE-KEY . PAGE), where GUIDE-KEY is the page's
+LAST headword (the high bound of its interval).  Sorted ascending
+by GUIDE-KEY, ties broken to the EARLIER page.  This mirrors the
+OLD module: a word is placed on the first page whose last headword
+has reached it, so an entry that ends one page and continues on
+the next resolves to where it begins.  Letter headers and
+unparseable titles are skipped.  Signals a user-error if nothing
+usable is found."
   (unless (require 'pdf-info nil t)
     (user-error "pdf-tools is not installed; cannot read the BDAG outline.  \
 Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-install"))
@@ -131,13 +138,16 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
                    for parsed = (and (integerp page) (> page 0)
                                      (diogenes-bdag--parse-title title))
                    when parsed
-                   collect (list (car parsed) (cdr parsed) page))))
+                   ;; Guide key = the page's LAST headword (interval high).
+                   collect (cons (cdr parsed) page))))
     (when (null index)
       (user-error "The PDF %s has no usable BDAG page intervals in its outline" file))
+    ;; Ascending by guide key; ties to the earlier page so a headword that
+    ;; heads two consecutive pages resolves to the first (its start).
     (sort index (lambda (a b)
                   (or (string< (car a) (car b))
                       (and (string= (car a) (car b))
-                           (< (caddr a) (caddr b))))))))
+                           (< (cdr a) (cdr b))))))))
 
 (defun diogenes-bdag--cache-key (file)
   "Return a cache key for FILE combining its truename and mtime."
@@ -164,22 +174,22 @@ FILE defaults to `diogenes-bdag-pdf-file'."
 
 (defun diogenes-bdag--page-for-word (word &optional file)
   "Return the BDAG page number containing WORD's entry.
-Each index element covers the interval [LOW, HIGH] of headwords on
-a page.  We return the page whose interval contains WORD's Greek
-key; if WORD falls in a gap between pages, the nearest preceding
-page is used.  Returns an integer page (with
-`diogenes-bdag-page-offset' applied) or nil."
+Each index entry's guide key is the LAST headword on its page, so
+WORD's entry is on the first page whose guide word sorts at or
+after WORD -- the earliest page whose running head has reached
+WORD.  When WORD is itself the last entry of a page and continues
+onto the next (the same guide word heading two consecutive pages),
+ties favour the earlier page, so this returns where the entry
+begins.  Returns an integer page (with `diogenes-bdag-page-offset'
+applied), or the final page if WORD sorts after every guide word."
   (let* ((index (diogenes-bdag--index file))
          (key (diogenes-montanari--greek-key word))
-         (nearest nil)
-         (contained nil))
+         (hit nil))
     (when (> (length key) 0)
-      (cl-loop for (lo hi page) in index
-               while (or (string< lo key) (string= lo key))
-               do (setq nearest page)
-               when (or (string< key hi) (string= key hi))
-               do (setq contained page)))
-    (let ((page (or contained nearest (caddr (car index)))))
+      (cl-loop for (gkey . page) in index
+               when (or (string< key gkey) (string= key gkey))
+               do (setq hit page) and return nil))
+    (let ((page (or hit (cdr (car (last index))))))
       (when page
         (+ page diogenes-bdag-page-offset)))))
 
@@ -189,10 +199,18 @@ page is used.  Returns an integer page (with
 
 (defvar diogenes--lookup-headword)      ; from diogenes-perseus.el
 
+(declare-function diogenes--lookup-headword-at-point "diogenes-perseus" (&optional pos))
+
 (defun diogenes-bdag--current-headword ()
-  "Return the headword to look up for the Greek entry at point."
-  (or (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
+  "Return the headword to look up for the Greek entry point is in.
+Resolved from point on every call via
+`diogenes--lookup-headword-at-point', so the opener always acts on
+the entry the cursor is currently in -- including entries loaded
+later by `diogenes-lookup-next' / `diogenes-lookup-previous'."
+  (or (and (fboundp 'diogenes--lookup-headword-at-point)
+           (diogenes--lookup-headword-at-point))
       (get-text-property (point) 'orth)
+      (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
       (thing-at-point 'word t)
       (user-error "No headword found at point")))
 
@@ -207,9 +225,11 @@ Requires `diogenes-bdag-pdf-file' to point at a BDAG PDF with an
 interval outline, and `pdf-tools' (recommended) or `doc-view' for
 display."
   (interactive
-   (list (if current-prefix-arg
-             (read-string "Open BDAG at word: ")
-           (diogenes-bdag--current-headword))))
+   (progn
+     (diogenes--lookup-assert-lang "greek" "BDAG (Bauer)")
+     (list (if current-prefix-arg
+               (read-string "Open BDAG at word: ")
+             (diogenes-bdag--current-headword)))))
   (let* ((word (or word (diogenes-bdag--current-headword)))
          (page (diogenes-bdag--page-for-word word)))
     (unless page
