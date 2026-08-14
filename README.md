@@ -429,11 +429,12 @@ OCR, which takes a few seconds the first time in a session.
  
 - That work is cached in memory for the session and on disk (keyed by the OCR files' modification times), so it is paid at most once per machine and redone only if you re-OCR a volume.
 - You can also build a **portable** index once and keep it as a small file:
-| Command | Writes | Effect |
-| --- | --- | --- |
-| `M-x diogenes-passow-build-index` | `passow-index.eld` in the Passow folder | Every later lookup loads instantly, even the first of a session |
-| `M-x diogenes-tgl-build-index` | `tgl-index.eld` in the TGL folder | Same; portable across machines |
- 
+
+| Command | Writes |
+| --- | --- |
+| `M-x diogenes-passow-build-index` | `passow-index.eld` in the Passow folder |
+| `M-x diogenes-tgl-build-index` | `tgl-index.eld` in the TGL folder |
+
 - Commit the `.eld` file alongside the volumes and other users skip the parse entirely.
 - Rebuild after adding or re-OCRing a volume (the file records a signature and warns when stale).
 - `diogenes-passow-clear-cache` / `diogenes-tgl-clear-cache` discard the caches to force a rebuild.
