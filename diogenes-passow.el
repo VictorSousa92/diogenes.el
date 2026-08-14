@@ -290,9 +290,162 @@ all volumes.  The volume's PDF is discovered automatically."
       (push (cons d (file-attribute-modification-time (file-attributes d))) sig))
     (cons (file-truename parent) sig)))
 
+(defcustom diogenes-passow-cache-directory
+  (expand-file-name "diogenes-passow" user-emacs-directory)
+  "Directory where the parsed Passow index is cached on disk.
+Parsing the Passow OCR volumes takes several seconds; the result is
+saved here so later Emacs sessions load it in milliseconds instead of
+re-parsing.  The cache is keyed by the OCR files' modification times,
+so replacing or re-OCRing a volume automatically invalidates it.  Set
+to nil to disable on-disk caching (the in-memory cache still applies
+within a session)."
+  :type '(choice (const :tag "Disable disk cache" nil) directory)
+  :group 'diogenes)
+
+(defconst diogenes-passow--cache-format-version 1
+  "Bumped when the cached data structure changes, to invalidate old files.")
+
+(defun diogenes-passow--signature-hash (signature)
+  "Return a short stable string hash of dir SIGNATURE for use in a filename."
+  (secure-hash 'sha1 (format "%S" signature)))
+
+(defun diogenes-passow--cache-file (signature)
+  "Return the on-disk cache file path for dir SIGNATURE, or nil if disabled."
+  (when diogenes-passow-cache-directory
+    (expand-file-name (format "passow-%d-%s.eld"
+                              diogenes-passow--cache-format-version
+                              (diogenes-passow--signature-hash signature))
+                      diogenes-passow-cache-directory)))
+
+(defun diogenes-passow--vol-to-serializable (vol)
+  "Return a copy of VOL with its hash-table fields turned into alists.
+Only `:letter-hist' is a hash table; converting it to an alist makes
+the cached form plain data, independent of hash-table print syntax."
+  (let ((copy (copy-sequence vol))
+        (hist (plist-get vol :letter-hist)))
+    (when (hash-table-p hist)
+      (let (alist)
+        (maphash (lambda (k v) (push (cons k v) alist)) hist)
+        (setq copy (plist-put copy :letter-hist (cons :alist alist)))))
+    copy))
+
+(defun diogenes-passow--vol-from-serializable (vol)
+  "Inverse of `diogenes-passow--vol-to-serializable': restore `:letter-hist'."
+  (let ((copy (copy-sequence vol))
+        (hist (plist-get vol :letter-hist)))
+    (when (and (consp hist) (eq (car hist) :alist))
+      (let ((table (make-hash-table :test 'eql)))
+        (dolist (kv (cdr hist)) (puthash (car kv) (cdr kv) table))
+        (setq copy (plist-put copy :letter-hist table))))
+    copy))
+
+(defun diogenes-passow--load-disk-cache (signature)
+  "Return the cached volume list for SIGNATURE from disk, or nil.
+The stored form embeds the signature; a mismatch (should not happen,
+since the filename encodes the signature) is treated as a miss."
+  (let ((file (diogenes-passow--cache-file signature)))
+    (when (and file (file-readable-p file))
+      (condition-case err
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (let ((data (read (current-buffer))))
+              (when (and (consp data)
+                         (equal (car data) signature))
+                (mapcar #'diogenes-passow--vol-from-serializable (cdr data)))))
+        ;; A corrupt or unreadable cache file must never break lookup.
+        (error (ignore err) nil)))))
+
+(defun diogenes-passow--save-disk-cache (signature vols)
+  "Write VOLS for SIGNATURE to the on-disk cache; return VOLS.
+Failures (unwritable directory, disk full) are swallowed: the disk
+cache is an optimisation, never required for correctness."
+  (let ((file (diogenes-passow--cache-file signature)))
+    (when file
+      (condition-case err
+          (progn
+            (make-directory (file-name-directory file) t)
+            (let ((coding-system-for-write 'utf-8)
+                  (print-length nil)     ; never abbreviate long structures
+                  (print-level nil)
+                  (print-circle nil))
+              (with-temp-file file
+                (prin1 (cons signature
+                             (mapcar #'diogenes-passow--vol-to-serializable vols))
+                       (current-buffer)))))
+        (error (ignore err) nil))))
+  vols)
+
+(defconst diogenes-passow--prebuilt-index-name "passow-index.eld"
+  "Filename of the portable prebuilt index, kept in the Passow parent folder.
+Unlike the mtime-keyed cache under `diogenes-passow-cache-directory',
+this file is a deliberate, shippable artifact: build it once with
+\\[diogenes-passow-build-index] and it makes every lookup instant, on
+any machine, without the OCR being parsed at run time.")
+
+(defun diogenes-passow--prebuilt-index-file (parent)
+  "Return the prebuilt-index path for PARENT."
+  (expand-file-name diogenes-passow--prebuilt-index-name parent))
+
+(defun diogenes-passow--load-prebuilt-index (parent signature)
+  "Load and return the volume list from PARENT's prebuilt index, or nil.
+SIGNATURE is the current directory signature; when the stored one
+differs, the OCR has changed since the index was built, so we WARN
+(the index may be stale) but still use it -- the user can rebuild with
+\\[diogenes-passow-build-index].  A missing, corrupt or wrong-version
+file is a silent miss, so lookup falls through to the caches/parse."
+  (let ((file (diogenes-passow--prebuilt-index-file parent)))
+    (when (and file (file-readable-p file))
+      (condition-case err
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (let ((data (read (current-buffer))))
+              ;; Stored form: (:diogenes-passow-index VERSION SIGNATURE . VOLS)
+              (when (and (consp data)
+                         (eq (car data) :diogenes-passow-index)
+                         (eq (nth 1 data) diogenes-passow--cache-format-version))
+                (let ((stored-sig (nth 2 data))
+                      (vols (nthcdr 3 data)))
+                  (unless (equal stored-sig signature)
+                    (message "Passow: prebuilt index %s may be stale (OCR changed); \
+rebuild with M-x diogenes-passow-build-index"
+                             (abbreviate-file-name file)))
+                  (mapcar #'diogenes-passow--vol-from-serializable vols)))))
+        (error (ignore err) nil)))))
+
+(defun diogenes-passow--parse-all-volumes (parent)
+  "Parse every volume under PARENT and return the ordered volume list.
+This is the expensive step (it reads and scans each volume's OCR).
+PARENT must already be an existing, expanded directory."
+  (let* ((subs (seq-filter #'file-directory-p
+                           (directory-files parent t "\\`[^.]" t)))
+         (vols (delq nil (mapcar #'diogenes-passow--build-volume
+                                 (sort subs #'string<)))))
+    (unless vols
+      (user-error "No usable Passow volumes found under %s" parent))
+    ;; Order volumes by their dominant first letter (the letter heading the
+    ;; most pages), which is robust to OCR noise.
+    (sort vols
+          (lambda (a b)
+            (< (diogenes-passow--dominant-letter-rank a)
+               (diogenes-passow--dominant-letter-rank b))))))
+
 (defun diogenes-passow--volumes (&optional parent)
-  "Return the list of volume plists under PARENT (cached).
-PARENT defaults to `diogenes-passow-directory'."
+  "Return the list of volume plists under PARENT (cached in memory and on disk).
+PARENT defaults to `diogenes-passow-directory'.  Resolution order,
+cheapest first:
+
+  1. the in-memory cache (instant within a session);
+  2. a PREBUILT index file (`passow-index.eld' in the parent folder,
+     written by \\[diogenes-passow-build-index]) -- a portable, shippable
+     artifact, so even the first lookup on a fresh machine is instant;
+  3. the mtime-keyed on-disk cache from a previous session; and only
+  4. a cold parse of the OCR (several seconds), which is then memoised
+     and written to the mtime-keyed cache.
+
+Parsing the OCR is thus paid at most once, and with a prebuilt index
+never at lookup time at all."
   (let ((parent (or parent diogenes-passow-directory)))
     (unless parent
       (user-error "Set `diogenes-passow-directory' to your Passow parent folder first"))
@@ -300,20 +453,22 @@ PARENT defaults to `diogenes-passow-directory'."
     (unless (file-directory-p parent)
       (user-error "Passow directory %s does not exist" parent))
     (let ((key (diogenes-passow--dir-signature parent)))
-      (or (gethash key diogenes-passow--cache)
-          (setf (gethash key diogenes-passow--cache)
-                (let* ((subs (seq-filter #'file-directory-p
-                                         (directory-files parent t "\\`[^.]" t)))
-                       (vols (delq nil (mapcar #'diogenes-passow--build-volume
-                                               (sort subs #'string<)))))
-                  (unless vols
-                    (user-error "No usable Passow volumes found under %s" parent))
-                  ;; Order volumes by their dominant first letter (the letter
-                  ;; heading the most pages), which is robust to OCR noise.
-                  (sort vols
-                        (lambda (a b)
-                          (< (diogenes-passow--dominant-letter-rank a)
-                             (diogenes-passow--dominant-letter-rank b))))))))))
+      (or
+       ;; 1. In-memory cache.
+       (gethash key diogenes-passow--cache)
+       ;; 2. Prebuilt, portable index file beside the OCR.
+       (let ((pre (diogenes-passow--load-prebuilt-index parent key)))
+         (when pre
+           (setf (gethash key diogenes-passow--cache) pre)))
+       ;; 3. mtime-keyed on-disk cache from a previous session.
+       (let ((disk (diogenes-passow--load-disk-cache key)))
+         (when disk
+           (setf (gethash key diogenes-passow--cache) disk)))
+       ;; 4. Cold parse, then memoise and persist to the mtime cache.
+       (setf (gethash key diogenes-passow--cache)
+             (let ((vols (diogenes-passow--parse-all-volumes parent)))
+               (diogenes-passow--save-disk-cache key vols)
+               vols))))))
 
 (defconst diogenes-passow--greek-order
   "αβγδεζηθικλμνξοπρστυφχψω"
@@ -533,12 +688,61 @@ volume's PDF and OCR text.  Uses `pdf-tools' (recommended) or
 
 ;;;###autoload
 (defun diogenes-passow-clear-cache ()
-  "Forget the cached Passow volume index.
+  "Forget the cached Passow volume index (in memory and on disk).
 Call this if you add, replace or re-OCR a volume while Emacs is
-running."
+running.  Also deletes the on-disk cache files under
+`diogenes-passow-cache-directory', so the next lookup rebuilds from
+the current OCR rather than reloading a stale cache."
   (interactive)
   (clrhash diogenes-passow--cache)
+  (when (and diogenes-passow-cache-directory
+             (file-directory-p diogenes-passow-cache-directory))
+    (dolist (f (directory-files diogenes-passow-cache-directory t
+                                "\\`passow-[0-9]+-.*\\.eld\\'"))
+      (ignore-errors (delete-file f))))
+  ;; NB: the portable prebuilt index (`passow-index.eld', written by
+  ;; `diogenes-passow-build-index') is a deliberate artifact and is left
+  ;; in place -- rebuild it with that command after re-OCRing.  It records
+  ;; the directory signature and warns when it looks stale.
   (message "Diogenes Passow index cache cleared"))
+
+;;;###autoload
+(defun diogenes-passow-build-index ()
+  "Parse the Passow OCR now and write a portable prebuilt index file.
+Reads every volume under `diogenes-passow-directory', builds the
+page index (the slow step, a few seconds), and writes it to
+`passow-index.eld' in that parent folder.  Thereafter every lookup --
+including the first one in a session, and on any other machine the
+folder is copied to -- loads that file instantly instead of parsing
+the OCR.  Run this once after installing or re-OCRing the volumes;
+it also refreshes the in-memory and mtime caches so the current
+session benefits immediately."
+  (interactive)
+  (let ((parent (or diogenes-passow-directory
+                    (user-error "Set `diogenes-passow-directory' first"))))
+    (setq parent (file-name-as-directory (expand-file-name parent)))
+    (unless (file-directory-p parent)
+      (user-error "Passow directory %s does not exist" parent))
+    (let* ((key (diogenes-passow--dir-signature parent))
+           (file (diogenes-passow--prebuilt-index-file parent)))
+      (message "Passow: building index from OCR (this may take a few seconds)...")
+      (let ((vols (diogenes-passow--parse-all-volumes parent)))
+        (let ((coding-system-for-write 'utf-8)
+              (print-length nil)
+              (print-level nil)
+              (print-circle nil))
+          (with-temp-file file
+            (prin1 (append (list :diogenes-passow-index
+                                 diogenes-passow--cache-format-version
+                                 key)
+                           (mapcar #'diogenes-passow--vol-to-serializable vols))
+                   (current-buffer))))
+        ;; Warm the session's caches too.
+        (setf (gethash key diogenes-passow--cache) vols)
+        (diogenes-passow--save-disk-cache key vols)
+        (message "Passow: wrote prebuilt index (%d volume%s) to %s"
+                 (length vols) (if (= (length vols) 1) "" "s")
+                 (abbreviate-file-name file))))))
 
 (provide 'diogenes-passow)
 ;;; diogenes-passow.el ends here
