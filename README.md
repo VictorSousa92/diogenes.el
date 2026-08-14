@@ -229,13 +229,116 @@ dates in BC/AD and Olympiads.
 
 # Additional features (Victor)
  
-*(Everything in this section was added by me, Victor, on top of
+**(Everything in this section was added by me, Victor, on top of
 Nitardus's package above. The sections above are his and unchanged.)*
  
 Small corrections to the Installation section above:
  
 - The variable is `diogenes-path`, not `diogenes-library-path` (the latter does not exist).
 - In the `use-package` example, use `(setq diogenes-path "/path/to/diogenes")` in `:init`, not `(diogenes-path "...")`.
+## Installation and setup
+ 
+diogenes.el is the Emacs front-end; Diogenes itself (its Perl and its
+data) must be installed separately, and `diogenes-path` must point at it.
+The print-dictionary PDFs are also supplied by you, via the path
+variables below.
+ 
+### Fetching the package from GitHub
+ 
+The package is on GitHub, so it is installed straight from there. Pick
+by Emacs version:
+ 
+| Emacs | Method |
+| --- | --- |
+| 30+ | `use-package` with `:vc` (built in) |
+| 29 | `package-vc-install` (built in) |
+| 28 or older | a third-party manager (`straight.el` or `quelpa`) |
+ 
+**Emacs 30+** (the recipe fields map directly: `:url` = repo, `:branch` = branch):
+ 
+```elisp
+(use-package diogenes
+  :vc (:url "https://github.com/VictorSousa92/diogenes.el"
+       :branch "OLD-TLL-Montanari-GCL-BDAG-Passow-TGL")
+  :init
+  ;; ... path variables (see below) ...
+  :bind ("C-c d" . diogenes))
+```
+ 
+**Emacs 29** (`:vc` does not exist yet; fetch once with `package-vc-install`):
+ 
+```elisp
+(unless (package-installed-p 'diogenes)
+  (package-vc-install
+   '(diogenes :url "https://github.com/VictorSousa92/diogenes.el"
+              :branch "OLD-TLL-Montanari-GCL-BDAG-Passow-TGL")))
+```
+ 
+- The `unless` guard matters: `package-vc-install` errors if the package is already installed, so without it every start-up would fail.
+- Update later with `M-x package-vc-upgrade RET diogenes RET`.
+- After that one fetch, configure it with an ordinary `use-package` block **without** `:vc` (fetching and configuring are separate on 29). The variables and the key binding go in exactly the same place as on Emacs 30:
+```elisp
+  (use-package diogenes
+    :defer t
+    :init
+    (setq diogenes-path "/path/to/your/diogenes/install")
+    ;; ... the other path variables (see "The full configuration") ...
+    :bind ("C-c d" . diogenes))
+```
+ 
+  If you would rather not use `use-package` at all, the plain equivalent is:
+ 
+```elisp
+  (require 'diogenes)
+  (setq diogenes-path "/path/to/your/diogenes/install")
+  ;; ... the other path variables ...
+  (global-set-key (kbd "C-c d") #'diogenes)
+```
+ 
+### Where the config goes
+ 
+The **same** `use-package` block works in both editors; only where you
+put it differs.
+ 
+- **Spacemacs**: put the `use-package` block inside `dotspacemacs/user-config` in your `.spacemacs`. To fetch from GitHub, also add the recipe to `dotspacemacs-additional-packages`:
+```elisp
+  dotspacemacs-additional-packages
+  '((diogenes :location (recipe
+                         :fetcher github
+                         :repo "VictorSousa92/diogenes.el"
+                         :branch "OLD-TLL-Montanari-GCL-BDAG-Passow-TGL")))
+```
+ 
+  Spacemacs installs it, and the `use-package` block in `user-config` configures it.
+ 
+- **Traditional Emacs**: put the `use-package` block in your `init.el` (or `.emacs`). Use the `:vc` form (Emacs 30) or the `package-vc-install` form (Emacs 29) above to fetch it; there is no `dotspacemacs-additional-packages`.
+### The full configuration
+ 
+Set the data path, each dictionary's PDF path, and a key for the
+transient menu. Replace each `/path/to/your/...` placeholder with the
+real location on your machine.
+ 
+```elisp
+(use-package diogenes
+  :defer t
+  :init
+  (setq diogenes-path "/path/to/your/diogenes/install")
+  (setq diogenes-old-pdf-file        "/path/to/your/OLD/file")
+  (setq diogenes-tll-pdf-directory   "/path/to/your/TLL/fascicles/directory")
+  (setq diogenes-montanari-pdf-file  "/path/to/your/Montanari/file")
+  (setq diogenes-cambridge-pdf-file  "/path/to/your/CGL/file")
+  (setq diogenes-bdag-pdf-file       "/path/to/your/BDAG/file")
+  (setq diogenes-passow-directory    "/path/to/your/Passow/master/directory")
+  (setq diogenes-tgl-directory       "/path/to/your/TGL/master/directory")
+  :bind ("C-c d" . diogenes))
+```
+ 
+Notes:
+ 
+- All variables go in `:init` (they must be set **before** the package loads); `:defer t` is fine, since `:init` runs regardless.
+- `("C-c d" . diogenes)` in `:bind` gives you the transient menu on `C-c d` (see below).
+- Only set the dictionaries you actually have; an unset one is simply unavailable.
+- For Passow and the TGL, each path is the parent folder of the per-volume material; see [Print dictionaries](#print-dictionaries-pdf) for the folder layout and the required OCR text files.
 ## Getting started with dictionary lookup
  
 The sections above list the commands but not the everyday workflow.
