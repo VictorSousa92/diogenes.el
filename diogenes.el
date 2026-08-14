@@ -70,11 +70,6 @@
   "Interface to P. Heslin's Diogenes."
   :group 'tools)
 
-(defcustom diogenes-cli-cmd "/usr/local/diogenes/server/diogenes-cli.pl"
-  "Path to diogenes-cli.pl"
-  :type 'string
-  :group 'diogenes)
-
 (defcustom diogenes-perl-executable "perl"
   "Path to perl executable."
   :type 'string
