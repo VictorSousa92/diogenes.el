@@ -299,16 +299,16 @@ column numbering each restart at 1)."
     (list nil (list :v5-index :part part :column column) nil)))
 
 (defun diogenes-pdf-search--tgl-v5-prompt ()
-  "Prompt for a volume-V jump; return a (WORD COLUMN-REF APPROXIMATE) list.
-Offers, from within volume V:
-  * its own two-part INDEX (part 1 or 2, then a column);
+  "Prompt for a volume-V index jump; return a (WORD COLUMN-REF APPROXIMATE) list.
+Reached when the index-reference route of `\\[diogenes-pdf-lookup-entry]'
+is given tomus 5 (from any TGL volume -- being inside volume V is not
+itself special; its `C-u' prefix behaves like every other volume's).
+Offers:
+  * volume V's own two-part INDEX (part 1 or 2, then a column);
   * the ANOMALOUS-ROOTS section (by column, or approximate search); and
   * a jump to ANOTHER TOME by index reference (t.N c.NNN) -- useful when
     reading a `t.3 c.746'-style pointer in the index and wanting to
-    follow it into tomes I-IV (or back into volume V's own index).
-Shared by both entry points: pressing \\[diogenes-pdf-lookup-entry]
-inside volume V, and answering \"5\" to the tomus prompt from another
-volume."
+    follow it into tomes I-IV (or back into volume V's own index)."
   (let ((top (car (read-multiple-choice
                    "TGL vol V: "
                    '((?i "index" "This volume's alphabetical INDEX (parts 1-2)")
@@ -409,28 +409,25 @@ Set the matching path variable (e.g. `diogenes-old-pdf-file') to this file"))))
        (let ((prompt (format "Look up in %s: " (diogenes-pdf-search--name dict))))
          (list (read-from-minibuffer prompt (diogenes-pdf-search--default-word))
                nil nil)))
-      ;; Prefix in the TGL.
+      ;; Prefix in the TGL: same in every volume (including V).  Choose an
+      ;; approximate search or an index reference; the volume-V two-part /
+      ;; anomalous sub-menu is reached only by the index-reference route
+      ;; when the tomus answered is 5 -- not by which volume is on screen.
       ((eq dict 'tgl)
-       (let ((tomus (diogenes-pdf-search--tgl-tomus file)))
-         (if (eql tomus 5)
-             ;; Volume V: Index (two parts) or the anomalous-roots section.
-             (diogenes-pdf-search--tgl-v5-prompt)
-           ;; Volumes I-IV (or unknown): approximate search or index-ref jump.
-           (let ((choice (car (read-multiple-choice
-                               "TGL prefix jump: "
-                               '((?a "approximate" "Approximate/prefix search, as in other dictionaries")
-                                 (?i "index-ref"   "Jump by an index reference t.N c.NNN"))))))
-             (if (eq choice ?i)
-                 (let ((tm (read-number "TGL tomus (1-5): ")))
-                   ;; A t.5 reference needs volume V's two-part / anomalous
-                   ;; sub-menu, exactly as if we were inside volume V.
-                   (if (eql tm 5)
-                       (diogenes-pdf-search--tgl-v5-prompt)
-                     (let ((column (read-number "TGL column (C) number: ")))
-                       (list nil (cons tm column) nil))))
-               (list (read-from-minibuffer "Approximate (prefix) in the TGL: "
-                                           (diogenes-pdf-search--default-word))
-                     nil t))))))
+       (let ((choice (car (read-multiple-choice
+                           "TGL prefix jump: "
+                           '((?a "approximate" "Approximate/prefix search, as in other dictionaries")
+                             (?i "index-ref"   "Jump by an index reference t.N c.NNN"))))))
+         (if (eq choice ?i)
+             (let ((tm (read-number "TGL tomus (1-5): ")))
+               ;; A t.5 reference gets volume V's two-part / anomalous sub-menu.
+               (if (eql tm 5)
+                   (diogenes-pdf-search--tgl-v5-prompt)
+                 (let ((column (read-number "TGL column (C) number: ")))
+                   (list nil (cons tm column) nil))))
+           (list (read-from-minibuffer "Approximate (prefix) in the TGL: "
+                                       (diogenes-pdf-search--default-word))
+                 nil t))))
       ;; Prefix in any other dictionary: approximate search.
       (t
        (let ((prompt (format "Approximate (prefix) in %s: "
