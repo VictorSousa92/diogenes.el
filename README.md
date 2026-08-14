@@ -241,6 +241,24 @@ Small corrections to the Installation section above:
 The sections above list the commands but not the everyday workflow.
 Here is the short version.
  
+Easiest entry point: `M-x diogenes` opens the **transient menu**, which
+exposes nearly all of the package (searching, browsing, parsing, and the
+lookups below) with mnemonic keys, so you need not remember command
+names. The individual commands below can also be called or bound
+directly.
+ 
+Bind it to a key so you need not type `M-x diogenes` each time. If you
+install with `use-package` (as in the Installation section above), add a
+`:bind`:
+ 
+```elisp
+(use-package diogenes
+  :bind ("C-c d" . diogenes))
+```
+ 
+Or bind it directly in your `.emacs` / `init.el` / `.spacemacs`:
+`(global-set-key (kbd "C-c d") #'diogenes)`.
+ 
 Look a word up:
  
 | Command | Does |
