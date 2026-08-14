@@ -1,10 +1,5 @@
 ;;; diogenes-pdf-search.el --- Look up an entry inside an open dictionary PDF -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024 Michael Neidhart
-;;
-;; Author: Michael Neidhart <mayhoth@gmail.com>
-;; Keywords: classics, tools, philology, humanities
-
 ;;; Commentary:
 
 ;; This module adds ONE command, `diogenes-pdf-lookup-entry', that you
@@ -78,6 +73,7 @@
 (declare-function diogenes-tgl--volume-text          "diogenes-tgl"       (tomus))
 (declare-function diogenes-tgl--column-model         "diogenes-tgl"       (file))
 (declare-function diogenes-tgl--column-to-page       "diogenes-tgl"       (column model &optional part))
+(declare-function diogenes-tgl--v5-part1-first-column "diogenes-tgl"      (model))
 (declare-function diogenes-tgl--show                 "diogenes-tgl"       (tomus page &optional word))
 (defvar diogenes-tgl-page-offset)
 
@@ -288,35 +284,58 @@ text with the mouse), then the word at point in a plain buffer."
 ;;;; THE COMMAND
 ;;;; --------------------------------------------------------------------
 
+(defun diogenes-pdf-search--tgl-v5-index-then-column (part-known)
+  "Prompt for a volume-V index column; return the (WORD COLUMN-REF nil) list.
+When PART-KNOWN is nil, first ask which of the two index parts (their
+column numbering each restart at 1)."
+  (let* ((part (if part-known part-known
+                 (if (eq (car (read-multiple-choice
+                               "Index part: "
+                               '((?1 "part-1" "Main index (columns from 229)")
+                                 (?2 "part-2" "Second index (column numbering restarts at 1)"))))
+                         ?2)
+                     2 1)))
+         (column (read-number "Index column (C) number: ")))
+    (list nil (list :v5-index :part part :column column) nil)))
+
 (defun diogenes-pdf-search--tgl-v5-prompt ()
   "Prompt for a volume-V jump; return a (WORD COLUMN-REF APPROXIMATE) list.
-Offers the INDEX (part 1 or 2, then a column) or the ANOMALOUS-ROOTS
-section (jump by column, or approximate search).  Shared by both entry
-points: pressing \\[diogenes-pdf-lookup-entry] inside volume V, and
-answering \"5\" to the tomus prompt from another volume."
+Offers, from within volume V:
+  * its own two-part INDEX (part 1 or 2, then a column);
+  * the ANOMALOUS-ROOTS section (by column, or approximate search); and
+  * a jump to ANOTHER TOME by index reference (t.N c.NNN) -- useful when
+    reading a `t.3 c.746'-style pointer in the index and wanting to
+    follow it into tomes I-IV (or back into volume V's own index).
+Shared by both entry points: pressing \\[diogenes-pdf-lookup-entry]
+inside volume V, and answering \"5\" to the tomus prompt from another
+volume."
   (let ((top (car (read-multiple-choice
                    "TGL vol V: "
-                   '((?i "index" "Jump into the alphabetical INDEX (parts 1-2)")
-                     (?a "anomalous" "The anomalous/poetic verb-forms section"))))))
-    (if (eq top ?i)
-        (let* ((part (car (read-multiple-choice
-                           "Index part: "
-                           '((?1 "part-1" "Main index (columns from 229)")
-                             (?2 "part-2" "Second index (column numbering restarts at 1)")))))
-               (column (read-number "Index column (C) number: ")))
-          (list nil (list :v5-index :part (if (eq part ?2) 2 1) :column column)
-                nil))
-      (let ((how (car (read-multiple-choice
-                       "Anomalous roots: "
-                       '((?c "column" "Jump to a column number in this section")
-                         (?a "approximate" "Search a word by approximation"))))))
-        (if (eq how ?c)
-            (let ((column (read-number "Anomalous-roots column (C) number: ")))
-              (list nil (list :v5-anomalous-column :column column) nil))
-          (list (read-from-minibuffer
-                 "Approximate (prefix) in anomalous roots: "
-                 (diogenes-pdf-search--default-word))
-                (list :v5-anomalous-approx) t))))))
+                   '((?i "index" "This volume's alphabetical INDEX (parts 1-2)")
+                     (?a "anomalous" "The anomalous/poetic verb-forms section")
+                     (?t "other-tome" "Jump by reference t.N c.NNN into another tome"))))))
+    (pcase top
+      (?i (diogenes-pdf-search--tgl-v5-index-then-column nil))
+      (?t
+       ;; Cross-tome index reference.  Tomus 5 loops back into this
+       ;; volume's own two-part index; tomes 1-4 take a plain column.
+       (let ((tm (read-number "TGL tomus (1-5): ")))
+         (if (eql tm 5)
+             (diogenes-pdf-search--tgl-v5-index-then-column nil)
+           (let ((column (read-number "TGL column (C) number: ")))
+             (list nil (cons tm column) nil)))))
+      (_
+       (let ((how (car (read-multiple-choice
+                        "Anomalous roots: "
+                        '((?c "column" "Jump to a column number in this section")
+                          (?a "approximate" "Search a word by approximation"))))))
+         (if (eq how ?c)
+             (let ((column (read-number "Anomalous-roots column (C) number: ")))
+               (list nil (list :v5-anomalous-column :column column) nil))
+           (list (read-from-minibuffer
+                  "Approximate (prefix) in anomalous roots: "
+                  (diogenes-pdf-search--default-word))
+                 (list :v5-anomalous-approx) t)))))))
 
 (defun diogenes-pdf-search--tgl-column-page (tomus column &optional part)
   "Return the PDF page in TGL volume TOMUS for printed COLUMN, or signal.
@@ -436,6 +455,19 @@ Set the matching path variable (e.g. `diogenes-old-pdf-file') to this file"))))
                (column (plist-get plist :column)))
            (unless (and (integerp column) (> column 0))
              (user-error "Index column must be a positive number"))
+           ;; Part 1's numbered index does not begin at column 1: the earlier
+           ;; columns are volume V's front matter (dialects, anomalous roots,
+           ;; Herodian).  If the requested part-1 column is before the index
+           ;; proper, say so rather than jump to a nonsensical page.
+           (when (eql (or part 1) 1)
+             (let* ((txt (ignore-errors (diogenes-tgl--volume-text 5)))
+                    (model (and txt (diogenes-tgl--column-model txt)))
+                    (first (and model
+                                (diogenes-tgl--v5-part1-first-column model))))
+               (when (and first (< column first))
+                 (user-error
+                  "The main index (part 1) begins at column %d; column %d falls in the front matter before it (dialects, anomalous roots, Herodian) -- use the Anomalous-roots option for those"
+                  first column))))
            (let ((page (diogenes-pdf-search--tgl-column-page 5 column part)))
              (diogenes-tgl--show 5 page)
              (message "TGL vol V index part %d: c.%d -> page %d"
