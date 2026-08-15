@@ -255,22 +255,42 @@ or the final page if WORD sorts after every guide word."
 ;;;; OPENING THE PDF
 ;;;; --------------------------------------------------------------------
 
+(defun diogenes-old--goto-page-in-window (buffer page)
+  "Go to PAGE in the window that displays BUFFER, disturbing no other window.
+`pdf-view-goto-page' with no window argument acts on the SELECTED
+window, so a jump that runs asynchronously (see
+`diogenes-old--goto-page-when-ready') could repage whatever PDF the
+user has since switched to.  Passing BUFFER's own window confines the
+jump; if BUFFER is not currently displayed, the jump is skipped rather
+than applied to the wrong window."
+  (when (buffer-live-p buffer)
+    (let ((win (get-buffer-window buffer t)))
+      (with-current-buffer buffer
+        (cond
+         ((derived-mode-p 'pdf-view-mode)
+          (when win
+            (let ((page (if (fboundp 'pdf-info-number-of-pages)
+                            (max 1 (min page (pdf-info-number-of-pages)))
+                          (max 1 page))))
+              (pdf-view-goto-page page win))))
+         ((derived-mode-p 'doc-view-mode)
+          (when win
+            (with-selected-window win
+              (doc-view-goto-page (max 1 page))))))))))
+
 (defun diogenes-old--goto-page-when-ready (buffer page)
   "Jump to PAGE in BUFFER once its PDF viewer is ready.
 Handles the asynchronous start-up of `pdf-view-mode': if the
 buffer is not yet displaying pages, the jump is deferred to
-`pdf-view-mode-hook'."
+`pdf-view-mode-hook'.  The jump is always confined to BUFFER's own
+window (see `diogenes-old--goto-page-in-window'), so it never changes
+the page of another PDF the user may have selected in the meantime."
   (with-current-buffer buffer
     (cond
      ((derived-mode-p 'pdf-view-mode)
-      ;; Clamp to the document's page count when we can, so an
-      ;; off-by-one at the very end can't error out.
-      (let ((page (if (fboundp 'pdf-info-number-of-pages)
-                      (max 1 (min page (pdf-info-number-of-pages)))
-                    (max 1 page))))
-        (pdf-view-goto-page page)))
+      (diogenes-old--goto-page-in-window buffer page))
      ((derived-mode-p 'doc-view-mode)
-      (doc-view-goto-page (max 1 page)))
+      (diogenes-old--goto-page-in-window buffer page))
      ((and (fboundp 'pdf-view-mode)
            buffer-file-name
            (string-match-p "\\.pdf\\'" buffer-file-name))
@@ -283,10 +303,7 @@ buffer is not yet displaying pages, the jump is deferred to
                      (run-with-timer
                       0 nil
                       (lambda ()
-                        (when (buffer-live-p buf)
-                          (with-current-buffer buf
-                            (when (derived-mode-p 'pdf-view-mode)
-                              (pdf-view-goto-page (max 1 pg))))))))))
+                        (diogenes-old--goto-page-in-window buf pg))))))
         (add-hook 'pdf-view-mode-hook fn nil t)))
      (t
       (message "OLD entry is on page %d (couldn't drive the PDF viewer)" page)))))

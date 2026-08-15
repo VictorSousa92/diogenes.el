@@ -544,14 +544,29 @@ while KEY-FN must return the key."
 	    diogenes--lookup-lang lang)
       (cond (formatted (diogenes--lookup-insert-and-format formatted))
 	    (t (diogenes--lookup-insert-xml xml start end lookup-buffer)))
-      ;; Record the headword of the entry we just looked up, for the
-      ;; benefit of the print-dictionary openers, and show clickable
-      ;; links at the top of the buffer: OLD and TLL for Latin,
-      ;; Montanari for Greek.
+      ;; Record the first entry's headword (a fallback for the openers) and
+      ;; give the entry its own clickable link banner (OLD/TLL for Latin;
+      ;; Montanari, CGL, BDAG, Passow, TGL for Greek).  Navigation adds a
+      ;; banner per entry too, so links follow you between entries.
       (setq diogenes--lookup-headword
 	    (diogenes--lookup-first-headword))
-      (when diogenes--lookup-headword
-	(diogenes--lookup-insert-dict-links diogenes--lookup-headword lang)))))
+      (save-excursion
+	(goto-char (point-min))
+	(diogenes--lookup-insert-entry-links lang)))))
+
+(defun diogenes--lookup-insert-entry-links (lang &optional pos)
+  "Insert the print-dictionary link banner for the entry at POS (point default).
+Resolves that entry's own headword via `diogenes--lookup-headword-at-point'
+and inserts its links just before the headword, so every entry -- the one
+first looked up and each later `diogenes-lookup-next' / `-previous' step --
+carries links that act on ITS headword.  A no-op when the entry has no
+detectable headword."
+  (let ((pos (or pos (point))))
+    (save-excursion
+      (goto-char pos)
+      (let ((hw (diogenes--lookup-headword-at-point pos)))
+	(when hw
+	  (diogenes--lookup-insert-dict-links hw lang))))))
 
 (defvar diogenes--lookup-headword nil
   "Headword of the entry shown in the current lookup buffer.
@@ -578,16 +593,20 @@ is raised."
                   lang))))
 
 (defun diogenes--lookup-insert-dict-links (headword lang)
-  "Insert clickable print-dictionary links for HEADWORD atop the buffer.
+  "Insert clickable print-dictionary links for HEADWORD at point.
 For Latin (LANG \"latin\") this inserts [OLD] and [TLL]; for Greek
-it inserts [Montanari].  Clicking a link (or pressing RET on it)
-opens the corresponding PDF at the page containing HEADWORD.  Each
-link is only useful when its dictionary's path variable is set
-\(`diogenes-old-pdf-file', `diogenes-tll-pdf-directory',
-`diogenes-montanari-pdf-file')."
+it inserts [Montanari] [CGL] [BDAG] [Passow] [TGL].  Clicking a link
+\(or pressing RET on it) opens the corresponding PDF at the page
+containing HEADWORD.  The links are inserted AT POINT, so the caller
+positions to the top of the entry the links belong to; the initial
+lookup and each `diogenes-lookup-next' / `-previous' step do this once
+per entry, so every entry carries its own banner.  Each link is only
+useful when its dictionary's path variable is set (`diogenes-old-pdf-file',
+`diogenes-tll-pdf-directory', `diogenes-montanari-pdf-file',
+`diogenes-cambridge-pdf-file', `diogenes-bdag-pdf-file',
+`diogenes-passow-directory', `diogenes-tgl-directory')."
   (let ((inhibit-read-only t))
     (save-excursion
-      (goto-char (point-min))
       (pcase lang
 	("latin"
 	 (insert (propertize "[OLD]"
@@ -658,6 +677,33 @@ Reads the `orth' text property placed on head elements by
 						(lambda (_ v) (and v t)))))
       (and match (prop-match-value match)))))
 
+(defun diogenes--lookup-headword-at-point (&optional pos)
+  "Return the headword of the entry containing POS (point by default).
+A lookup buffer accumulates entries as you navigate with
+`diogenes-lookup-next' / `diogenes-lookup-previous'; each entry's
+headword carries the `orth' text property (placed by
+`diogenes--dict-handle-elt').  The entry POS sits in is the one whose
+headword is the NEAREST `orth' at or before POS, so this reads the
+`orth' at POS when point is inside a headword, else searches backward;
+if POS precedes the first headword, it falls back to the first `orth'
+after POS.  Returns nil when the buffer has no `orth' property at all.
+
+This is what makes the print-dictionary keys (o m c b p t) and the
+per-entry link banners act on the entry the cursor is in, rather than
+the entry the buffer was first opened on."
+  (let ((pos (or pos (point))))
+    (save-excursion
+      (goto-char pos)
+      (or (get-text-property pos 'orth)
+          (let ((match (text-property-search-backward 'orth nil
+                        (lambda (_ v) (and v t)))))
+            (if match
+                (prop-match-value match)
+              (goto-char pos)
+              (let ((m (text-property-search-forward 'orth nil
+                        (lambda (_ v) (and v t)))))
+                (and m (prop-match-value m)))))))))
+
 (defun diogenes--lookup-dict (word lang)
   "Search for a word in a Diogenes dictionary. Dispatcher function."
   (pcase lang
@@ -686,9 +732,13 @@ When called with a numerical prefix, show the next N entries."
       (setq diogenes--lookup-bufend end)
       (goto-char (point-max))
       (diogenes--lookup-print-separator)
-      (if formatted
-	  (diogenes--lookup-insert-and-format formatted)
-	(diogenes--lookup-insert-xml xml start end (current-buffer)))
+      (let ((entry-start (point)))
+	(if formatted
+	    (diogenes--lookup-insert-and-format formatted)
+	  (diogenes--lookup-insert-xml xml start end (current-buffer)))
+	;; give the newly-appended entry its own dictionary link banner,
+	;; acting on ITS headword (see `diogenes--lookup-insert-entry-links').
+	(diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))
       (when (and n (> n 1)) (diogenes-lookup-next (1- n))))))
 
 (defun diogenes-lookup-previous (&optional n)
@@ -708,10 +758,12 @@ When called with a numerical prefix, show the previous N entries."
       (goto-char (point-min))
       (diogenes--lookup-print-separator)
       (goto-char (point-min))
-      (if formatted
-	  (diogenes--lookup-insert-and-format formatted)
-	(diogenes--lookup-insert-xml xml start end (current-buffer)))
-
+      (let ((entry-start (point)))
+	(if formatted
+	    (diogenes--lookup-insert-and-format formatted)
+	  (diogenes--lookup-insert-xml xml start end (current-buffer)))
+	;; link banner for the just-prepended entry, on ITS headword.
+	(diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))
       (goto-char (point-min))
       (when (and n (> n 1)) (diogenes-lookup-previous (1- n))))))
 
@@ -1290,10 +1342,14 @@ if nil, query interactively for their values"
 	      ;; Looking up a word opens its dictionary entry.  When we are
 	      ;; already in a lookup buffer, offer to show it in THIS window
 	      ;; (staying put) rather than popping open another one; either
-	      ;; way the entry we came from stays alive.
+	      ;; way the entry we came from stays alive.  The choice only
+	      ;; matters when there is another window to pop into -- with a
+	      ;; single window there is nowhere else to go, so default to
+	      ;; reusing it without asking.
 	      (let ((diogenes--lookup-same-window
 		     (and (derived-mode-p 'diogenes-lookup-mode)
-			  (y-or-n-p "Open the result in this same window? "))))
+			  (or (= (count-windows) 1)
+			      (y-or-n-p "Open the result in this same window? ")))))
 		(diogenes--parse-and-lookup (thing-at-point 'word) lang)))
 	     (_ (message "C-c C-c cannot do anything useful here!"))))))))
 

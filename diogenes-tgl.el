@@ -439,6 +439,20 @@ the column count never restarts (the normal single-part case)."
         (setq by-page (cdr by-page))))
     found))
 
+(defun diogenes-tgl--index-marker-page (file)
+  "Return the OCR/PDF page where the `INDEX IN' marker appears in FILE, or nil.
+This is the first page of the index proper (volume V); columns printed
+before it belong to the front matter."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (when (search-forward diogenes-tgl--index-marker nil t)
+      (let ((mk diogenes-tgl-page-marker-regexp) (page nil))
+        (save-excursion
+          (when (re-search-backward mk nil t)
+            (setq page (string-to-number (match-string 1)))))
+        page))))
+
 (defun diogenes-tgl--build-v5-column-model (file)
   "Build volume V's TWO-PART piecewise column model from OCR FILE.
 Volume V's index restarts its column numbering partway through (part 2,
@@ -448,22 +462,47 @@ denotes two different pages -- one in each part -- so a single model
 cannot resolve it.  We therefore split the anchors at the restart page
 and fit each part independently, returning
 
-    (:v5 PART1-SEGMENTS PART2-SEGMENTS RESTART-PAGE)
+    (:v5 PART1-SEGMENTS PART2-SEGMENTS RESTART-PAGE PART1-FIRST-COLUMN)
 
-where each PART is an ordinary (START-COLUMN . INTERCEPT) segment list.
-When no restart is found the value degrades to a plain one-part model
-list, so callers that ignore the split still work."
+where each PART is an ordinary (START-COLUMN . INTERCEPT) segment list,
+and PART1-FIRST-COLUMN is the smallest column number actually printed
+in part 1 (the first column of the main index proper -- part 1's model
+extrapolates back to column 1, but the numbered index does not begin
+until this column; the earlier columns are the volume's front matter,
+including the anomalous roots).  When no restart is found the value
+degrades to a plain one-part model list, so callers that ignore the
+split still work."
   (let* ((anchors (diogenes-tgl--page-anchors file))
          (restart (or diogenes-tgl-v5-part2-page
                       (diogenes-tgl--detect-column-restart anchors))))
     (if (not restart)
         (diogenes-tgl--build-model-from-anchors anchors)
-      (let ((p1 (cl-remove-if (lambda (e) (>= (car e) restart)) anchors))
-            (p2 (cl-remove-if (lambda (e) (<  (car e) restart)) anchors)))
+      (let* ((p1 (cl-remove-if (lambda (e) (>= (car e) restart)) anchors))
+             (p2 (cl-remove-if (lambda (e) (<  (car e) restart)) anchors))
+             ;; The index PROPER begins at the "INDEX IN" marker page; the
+             ;; columns printed on earlier part-1 pages belong to the front
+             ;; matter (dialects, anomalous roots, Herodian) and must not be
+             ;; counted.  So part 1's first index column is the smallest
+             ;; column among anchors at or after that marker page.
+             (index-page (diogenes-tgl--index-marker-page file))
+             (index-anchors (if index-page
+                                (cl-remove-if (lambda (e) (< (car e) index-page)) p1)
+                              p1))
+             (p1-first (when index-anchors
+                         (apply #'min (mapcar #'cdr index-anchors)))))
         (list :v5
               (diogenes-tgl--build-model-from-anchors p1)
               (diogenes-tgl--build-model-from-anchors p2)
-              restart)))))
+              restart
+              p1-first)))))
+
+(defun diogenes-tgl--v5-part1-first-column (model)
+  "Return part 1's first printed index column from a `:v5' MODEL, or nil.
+This is the smallest column number that actually appears in the main
+index (part 1); columns below it belong to volume V's front matter, not
+to the index proper.  Returns nil for a non-`:v5' MODEL."
+  (when (and (consp model) (eq (car model) :v5))
+    (nth 4 model)))
 
 ;;;; --------------------------------------------------------------------
 ;;;; VOLUME V "ANOMALOUS ROOTS"  (VERBORVM QVORVNDAM THEMATA, pp. 53-114)
@@ -1408,6 +1447,141 @@ The leading \"C.\" is Estienne's abbreviation for /compositum/.")
 (defvar diogenes-tgl--compound-cache (make-hash-table :test 'equal)
   "Cache mapping a volume OCR cache-key to its compound headword->page map.")
 
+(defconst diogenes-tgl--caps-lookalike-map
+  '((?A . ?α) (?B . ?β) (?E . ?ε) (?H . ?η) (?I . ?ι) (?K . ?κ)
+    (?M . ?μ) (?N . ?ν) (?O . ?ο) (?P . ?ρ) (?T . ?τ) (?Y . ?υ)
+    (?X . ?χ) (?Z . ?ζ))
+  "Latin capital letters to the lower-case Greek they visually stand for.
+Estienne prints a compound's prefix in capitals (e.g. ΔΙΑ, ΚΑΤΑ), which
+the OCR often renders with Latin look-alikes (K for kappa, P for rho,
+and so on).  Used by `diogenes-tgl--fold-caps-prefix' to read such a
+prefix.")
+
+(defun diogenes-tgl--fold-caps-prefix (token)
+  "Fold a caps prefix TOKEN (Greek and/or Latin look-alike capitals) to a Greek key.
+Greek capitals are collated normally; Latin capitals are mapped via
+`diogenes-tgl--caps-lookalike-map'; accents/breathings and other
+characters are dropped.  Returns the lower-case Greek key, or a string
+containing a `?' placeholder for an unmappable letter (so it will not
+accidentally match a real prefix)."
+  (let ((out nil))
+    (dolist (ch (append (ucs-normalize-NFD-string (or token "")) nil))
+      (cond
+       ((and (>= ch #x300) (<= ch #x36f)) nil)                 ; combining mark
+       ((or (and (>= ch #x3b1) (<= ch #x3c9))
+            (and (>= ch #x391) (<= ch #x3a9)))                 ; Greek letter
+        (let ((c (downcase ch))) (push (if (= c ?ς) ?σ c) out)))
+       ((assq ch diogenes-tgl--caps-lookalike-map)             ; Latin look-alike
+        (push (cdr (assq ch diogenes-tgl--caps-lookalike-map)) out))
+       ((or (and (>= ch ?A) (<= ch ?Z)) (and (>= ch ?a) (<= ch ?z)))
+        (push ?? out))))                                       ; unmappable Latin
+    (apply #'string (nreverse out))))
+
+(defconst diogenes-tgl--compound-variant-connectors
+  '("vel" "uel" "et" "and")
+  "Latin connectors that introduce a variant spelling in a compound headword.
+On a \"C.\" line the lemma may be followed by alternative spellings
+\(voices/forms), each introduced by one of these or by `&'; the Latin
+gloss then follows.  A bare comma, by contrast, usually introduces
+grammatical apparatus (a genitive ending, articles), which is NOT a
+variant.  Used by `diogenes-tgl--compound-headword-keys'.")
+
+(defun diogenes-tgl--latin-word-p (token)
+  "Non-nil if TOKEN is a Latin-script word (no Greek letters)."
+  (and (string-match-p "[A-Za-z]" token)
+       (not (string-match-p "[\u0386-\u03ce\u1f00-\u1fff]" token))))
+
+(defun diogenes-tgl--greek-word-p (token)
+  "Non-nil if TOKEN contains a Greek letter."
+  (and (stringp token)
+       (string-match-p "[\u0386-\u03ce\u1f00-\u1fff]" token)))
+
+(defun diogenes-tgl--compound-headword-keys (line)
+  "Return the collation keys of a \"C.\" compound LINE's headword region, or nil.
+Parses the Greek headword region of a compound entry and returns a list
+whose first element is the LEMMA and the rest its variant spellings.
+
+The headword region is read per Estienne's layout: the lemma, then any
+alternative spellings each introduced by a connector
+\(`diogenes-tgl--compound-variant-connectors' or `&'), up to where the
+Latin gloss begins (the first Latin-script word -- a verb in -o, or a
+noun, etc.).  Two OCR-specific points are handled:
+
+  * a SPLIT lemma whose capital prefix is separated from its root by a
+    space (e.g. `C.ΔΙΑ πράσω') is rejoined -- across whitespace only,
+    never across a comma; the prefix may be OCR'd in Latin look-alikes
+    \(`KATA'), which are folded via `diogenes-tgl--fold-caps-prefix'
+    when they spell a prepositional prefix; and
+  * grammatical apparatus after a bare COMMA (a genitive ending like
+    `ονος', the articles `ὁ ἡ τό') is skipped, NOT treated as a variant,
+    so a noun entry yields only its lemma.
+
+Returns nil when LINE is not a \"C.\" entry or no Greek lemma is found."
+  (when (and (stringp line) (string-match "\\`C\\." line))
+    (let* ((body (replace-regexp-in-string "\\`C\\.[[:space:]]*" "" line))
+           (raw (split-string body "[[:space:]]+" t))
+           (seq nil) (sep 'start))
+      ;; tokenise, tracking the separator BEFORE each token: whitespace,
+      ;; comma, `&', or a connector word (folded into the separator).
+      (dolist (w raw)
+        ;; peel leading punctuation
+        (while (and (> (length w) 0) (memq (aref w 0) '(?, ?&)))
+          (setq sep (if (eq (aref w 0) ?&) 'amp 'comma))
+          (setq w (substring w 1)))
+        ;; detach trailing commas/ampersands (they mark the NEXT separator)
+        (let ((trail nil))
+          (when (string-match "\\([,&]+\\)\\'" w)
+            (setq trail (match-string 1 w))
+            (setq w (substring w 0 (match-beginning 1))))
+          (let ((low (downcase (string-trim-right w "\\."))))
+            (cond
+             ((member low diogenes-tgl--compound-variant-connectors)
+              (setq sep 'conn))
+             ((> (length w) 0)
+              (push (cons sep w) seq)
+              (setq sep 'ws))))
+          (when trail
+            (setq sep (if (string-match-p "&" trail) 'amp 'comma)))))
+      (setq seq (nreverse seq))
+      ;; walk the region
+      (let ((lemma nil) (variants nil) (i 0) (n (length seq)))
+        (while (< i n)
+          (let* ((cell (nth i seq)) (s (car cell)) (tok (cdr cell))
+                 (gtok (diogenes-tgl--greek-word-p tok)))
+            (cond
+             ((null lemma)
+              (cond
+               (gtok
+                (setq lemma (diogenes-montanari--greek-key tok))
+                ;; join a following whitespace-separated Greek token (split lemma)
+                (let ((nx (nth (1+ i) seq)))
+                  (when (and nx (eq (car nx) 'ws)
+                             (diogenes-tgl--greek-word-p (cdr nx)))
+                    (setq lemma (concat lemma (diogenes-montanari--greek-key (cdr nx))))
+                    (setq i (1+ i)))))
+               ((let ((fold (diogenes-tgl--fold-caps-prefix tok)))
+                  (and (member fold diogenes-tgl--prepositional-prefixes)
+                       ;; a Latin-caps prefix: join the following ws Greek root
+                       (let ((nx (nth (1+ i) seq)))
+                         (when (and nx (eq (car nx) 'ws)
+                                    (diogenes-tgl--greek-word-p (cdr nx)))
+                           (setq lemma (concat fold (diogenes-montanari--greek-key
+                                                     (cdr nx))))
+                           (setq i (1+ i))
+                           t)))))
+               (t (setq i n))))          ; Latin gloss -> stop (no lemma)
+             (t
+              (if (not gtok)
+                  (setq i n)             ; Latin gloss -> region ends
+                ;; a Greek form after the lemma is a VARIANT only if a
+                ;; connector/`&' introduced it; comma-apparatus is skipped.
+                (when (memq s '(conn amp))
+                  (let ((k (diogenes-montanari--greek-key tok)))
+                    (when (>= (length k) 4) (push k variants))))))))
+          (setq i (1+ i)))
+        (when lemma
+          (cons lemma (nreverse variants)))))))
+
 (defun diogenes-tgl--parse-compounds (file)
   "Scan volume OCR FILE and return a hash: compound key -> first PDF page.
 Records the first page on which each \"C.\"-marked compound headword
@@ -1446,6 +1620,16 @@ garbled one.  The index proper (volume V) is skipped."
           (while (and (not (eobp)) (< (point) index-start))
             (let ((line (buffer-substring-no-properties
                          (line-beginning-position) (line-end-position))))
+              ;; A compound line whose headword the OCR split after its capital
+              ;; prefix (e.g. "C.ΔΙΑ πράσω") is REJECTED by the entry gate below
+              ;; (its terminator is a space + Greek root, not punctuation), so
+              ;; harvest such lines here, independently: record the lemma and
+              ;; every variant spelling (see `diogenes-tgl--compound-headword-keys').
+              (when (and pdfp (string-match "\\`C\\." line))
+                (let ((keys (diogenes-tgl--compound-headword-keys line)))
+                  (dolist (sk keys)
+                    (when (and (>= (length sk) 4) (not (gethash sk map)))
+                      (puthash sk pdfp map)))))
               (cond
                ((string-match marker line)
                 (setq pdfp (string-to-number (match-string 1 line))))
@@ -1472,15 +1656,19 @@ garbled one.  The index proper (volume V) is skipped."
             (setf (gethash key diogenes-tgl--compound-cache)
                   (diogenes-tgl--parse-compounds file)))))))
 
-(defun diogenes-tgl--fuzzy-in-map (key map)
-  "Return a key of hash MAP within one edit of KEY (same first 2 letters), or nil."
+(defun diogenes-tgl--fuzzy-in-map (key map &optional accept)
+  "Return a key of hash MAP within one edit of KEY (same first 2 letters), or nil.
+When ACCEPT is non-nil it is called with each otherwise-matching candidate
+key; only a candidate for which it returns non-nil is accepted (scanning
+continues past rejected ones)."
   (when (>= (length key) 4)
     (let ((pre (substring key 0 2)) (hit nil))
       (catch 'found
         (maphash (lambda (k _v)
                    (when (and (>= (length k) 4)
                               (string= (substring k 0 2) pre)
-                              (diogenes-tgl--edit1-p key k))
+                              (diogenes-tgl--edit1-p key k)
+                              (or (null accept) (funcall accept k)))
                      (setq hit k) (throw 'found k)))
                  map))
       hit)))
@@ -1492,16 +1680,32 @@ volume need not match the compound's initial letter), exact match
 first, then a 1-edit fuzzy match within each volume's compound map to
 absorb single-letter OCR damage in the compound's own headword.  Takes
 the first exact hit in volume order; only if no volume has an exact
-hit does it accept the first fuzzy hit."
+hit does it accept the first fuzzy hit.
+
+The fuzzy pass is constrained when KEY is a PREPOSITIONAL compound (see
+`diogenes-tgl--prepositional-root-initials'): its root's initial letter
+is then certain, so a fuzzy candidate whose own prepositional root
+begins with a different letter is rejected -- this stops a one-letter
+OCR wobble from matching a genuinely different compound a letter apart
+\(e.g. διαπράσσω must not match διαφράσσω: root π vs φ).  When KEY has no
+prepositional prefix the fuzzy pass is unconstrained, as before."
   (when (>= (length key) 4)
-    (let ((fuzzy nil))
+    (let* ((fuzzy nil)
+           (allowed (diogenes-tgl--prepositional-root-initials key))
+           (accept (when allowed
+                     (lambda (cand)
+                       (let ((ci (diogenes-tgl--prepositional-root-initials cand)))
+                         ;; accept if the candidate is not a prepositional
+                         ;; compound at all, or shares an allowed root initial
+                         (or (null ci)
+                             (cl-intersection ci allowed)))))))
       (or (cl-loop for tomus in '(1 2 3 4)
                    for map = (diogenes-tgl--compounds tomus)
                    for page = (and map (gethash key map))
                    when page return (cons tomus (+ page diogenes-tgl-page-offset))
                    ;; remember a fuzzy candidate for the fallback pass
                    do (when (and map (not fuzzy))
-                        (let ((fk (diogenes-tgl--fuzzy-in-map key map)))
+                        (let ((fk (diogenes-tgl--fuzzy-in-map key map accept)))
                           (when fk
                             (setq fuzzy (cons tomus (+ (gethash fk map)
                                                        diogenes-tgl-page-offset)))))))
@@ -1881,14 +2085,74 @@ and sending root lookups (e.g. ἵστημι) to the fallback body scan."
     (when body
       (gethash key (plist-get body :caps)))))
 
+(defconst diogenes-tgl--bare-caps-line-regexp
+  (concat "\\`['\u2019\u1ffe\u1fbf\u02bc\u0384`]?"
+          "\\([" diogenes-tgl--greek-capital-class "]\\{4,\\}\\)"
+          "[ \t]*\\'")
+  "Regexp matching a line that is a BARE all-caps word (4+ letters), nothing else.
+Some article openings are OCR'd with no trailing punctuation -- the
+all-caps headword alone on a line (e.g. ΙΗΜΙ for the root ἵημι) -- so
+the punctuation-terminated `diogenes-tgl--caps-entry-regexp' misses
+them.  This matches such a line; group 1 is the word.  A 4-letter
+minimum, plus the consecutive-page test in
+`diogenes-tgl--bare-caps-opening', keeps short running-header tokens
+\(e.g. ΑΓΑ, ΑΓΓ) and one-off header truncations out.")
+
+(defun diogenes-tgl--bare-caps-opening (tomus key)
+  "Return the first PDF page in TOMUS where KEY opens as a BARE all-caps line, or nil.
+A genuine root article prints its all-caps headword as the running
+header across the CONSECUTIVE pages the article spans; a truncated
+running-header artifact appears only sporadically.  So this scans
+TOMUS's OCR for bare all-caps lines (see
+`diogenes-tgl--bare-caps-line-regexp') whose key is KEY, and returns
+the first page of the earliest run of at least two consecutive pages.
+On-demand fallback for `diogenes-tgl--caps-locate' when the punctuated
+caps map has no opening for KEY; deliberately narrow, so it does not
+pollute the global caps map."
+  (let ((file (diogenes-tgl--volume-text tomus)))
+    (when (and file (>= (length key) 4))
+      (let ((case-fold-search nil))
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (let ((marker diogenes-tgl-page-marker-regexp)
+                (pdfp nil) (hits nil))    ; hits: list of pages carrying KEY, in order
+            (while (not (eobp))
+              (let ((line (buffer-substring-no-properties
+                           (line-beginning-position) (line-end-position))))
+                (if (string-match marker line)
+                    (setq pdfp (string-to-number (match-string 1 line)))
+                  (when (and pdfp
+                             (string-match diogenes-tgl--bare-caps-line-regexp line)
+                             (string= (diogenes-montanari--greek-key
+                                       (match-string 1 line))
+                                      key))
+                    (unless (eql (car hits) pdfp) (push pdfp hits)))))
+              (forward-line 1))
+            ;; earliest run of >=2 consecutive pages
+            (let ((asc (nreverse hits)) (run-start nil) (result nil))
+              (while (and asc (not result))
+                (let ((p (car asc)) (nx (cadr asc)))
+                  (cond
+                   ((and nx (= nx (1+ p)))
+                    (unless run-start (setq run-start p))
+                    (setq result run-start))
+                   (t (setq run-start nil)))
+                  (setq asc (cdr asc))))
+              result)))))))
+
 (defun diogenes-tgl--caps-locate (key)
   "Return (TOMUS . PAGE) for KEY's caps-entry opening in its own volume, or nil.
 Consults only the volume that KEY's initial letter routes to (see
-`diogenes-tgl--tomus-for-key'), so it cannot cross volumes."
+`diogenes-tgl--tomus-for-key'), so it cannot cross volumes.  First the
+punctuation-terminated caps map; then, on a miss, the bare-caps
+consecutive-page fallback (`diogenes-tgl--bare-caps-opening'), which
+recovers root openings the OCR left without trailing punctuation."
   (when (> (length key) 0)
     (let ((tomus (diogenes-tgl--tomus-for-key key)))
       (when tomus
-        (let ((page (diogenes-tgl--caps-opening tomus key)))
+        (let ((page (or (diogenes-tgl--caps-opening tomus key)
+                        (diogenes-tgl--bare-caps-opening tomus key))))
           (when page
             (cons tomus (+ page diogenes-tgl-page-offset))))))))
 
@@ -2355,6 +2619,70 @@ prefixes).  Used only by `diogenes-tgl--root-candidates'.")
 (defconst diogenes-tgl--greek-vowels "\u03b1\u03b5\u03b7\u03b9\u03bf\u03c5\u03c9"
   "Lowercase Greek vowels (alpha epsilon eta iota omicron upsilon omega), for seam detection.")
 
+(defconst diogenes-tgl--prepositional-prefixes
+  '("\u03b1\u03bc\u03c6\u03b9"          ; αμφι
+    "\u03b1\u03bd\u03c4\u03b9"          ; αντι
+    "\u03ba\u03b1\u03c4\u03b1"          ; κατα
+    "\u03bc\u03b5\u03c4\u03b1"          ; μετα
+    "\u03c0\u03b1\u03c1\u03b1"          ; παρα
+    "\u03c0\u03b5\u03c1\u03b9"          ; περι
+    "\u03c0\u03c1\u03bf\u03c3"          ; προς
+    "\u03c5\u03c0\u03b5\u03c1"          ; υπερ
+    "\u03b5\u03bd\u03b4\u03bf"          ; ενδο
+    "\u03b1\u03bd\u03b1"                ; ανα
+    "\u03b1\u03c0\u03bf"                ; απο
+    "\u03b4\u03b9\u03b1"                ; δια
+    "\u03b5\u03b9\u03c3"                ; εισ
+    "\u03b5\u03c0\u03b9"                ; επι
+    "\u03c0\u03c1\u03bf"                ; προ
+    "\u03c3\u03c5\u03bd"                ; συν
+    "\u03c3\u03c5\u03bc"                ; συμ
+    "\u03c3\u03c5\u03bb"                ; συλ
+    "\u03c5\u03c0\u03bf"                ; υπο
+    "\u03b5\u03be\u03c9"                ; εξω
+    "\u03b5\u03ba"                      ; εκ
+    "\u03b5\u03be"                      ; εξ
+    "\u03b5\u03bd")                     ; εν
+  "The PREPOSITIONAL prefixes (Smyth Section 884), longest first.
+A subset of `diogenes-tgl--prefixes': the true prepositions/adverbs
+used as preverbs, where a compound splits unambiguously into prefix +
+root, so the root's initial letter is certain.  The inseparable and
+intensive prefixes (Section 885: alpha-privative, alpha-copulative, νη,
+δυσ, ευ, ημι, αρι, ερι, αγα, ζα, δα, αν) are deliberately EXCLUDED --
+their residual root letter is not reliable enough to constrain a match
+by (an alpha-word need not be an alpha-privative compound).  Used by
+`diogenes-tgl--prepositional-root-initials'.")
+
+(defun diogenes-tgl--prepositional-root-initials (key)
+  "Return the set of possible root INITIAL letters if KEY is a prepositional compound.
+Strips each applicable prefix in `diogenes-tgl--prepositional-prefixes'
+from KEY (respecting `diogenes-tgl-morph-min-root' and the same
+vowel-seam / de-lengthening allowances as `diogenes-tgl--root-candidates'),
+and returns the list of distinct first characters of the resulting
+roots.  Returns nil when KEY has no prepositional prefix -- meaning
+\"no constraint\": callers must not filter in that case."
+  (let ((min diogenes-tgl-morph-min-root) (inits nil))
+    (dolist (p diogenes-tgl--prepositional-prefixes)
+      (let ((lp (length p)))
+        (when (and (> (length key) lp)
+                   (string-prefix-p p key)
+                   (>= (- (length key) lp) min))
+          (let* ((rem (substring key lp))
+                 (roots (list rem)))
+            ;; same seam/de-lengthen allowances as root extraction
+            (when (and (diogenes-tgl--vowel-p (substring p (1- lp) lp))
+                       (> (length rem) 0)
+                       (diogenes-tgl--vowel-p (substring rem 0 1)))
+              (push (substring rem 1) roots)
+              (setq roots (append roots
+                                  (diogenes-tgl--delengthen-initial rem)
+                                  (diogenes-tgl--delengthen-initial
+                                   (substring rem 1)))))
+            (dolist (r roots)
+              (when (and (stringp r) (> (length r) 0))
+                (cl-pushnew (aref r 0) inits)))))))
+    (nreverse inits)))
+
 (defun diogenes-tgl--vowel-p (s)
   "Non-nil if one-character string S is a lowercase Greek vowel."
   (and (stringp s) (> (length s) 0)
@@ -2699,12 +3027,41 @@ lines carry no column and never resolve here."
 (defvar diogenes-tgl--index-pagekeys-cache (make-hash-table :test 'equal)
   "Cache mapping volume V's OCR cache-key to its (REPKEY . PAGE) sequence.")
 
+(defun diogenes-tgl--robust-representative (keys)
+  "Return a noise-robust representative key for a page's KEYS, or nil.
+Take the modal initial letter across KEYS, then the median key among
+those that share it -- so a handful of OCR-scrambled lines whose keys
+begin with an alien letter cannot drag the representative to the wrong
+part of the alphabet."
+  (when keys
+    (let ((counts (make-hash-table :test 'eql)) (modal nil) (best 0))
+      (dolist (k keys)
+        (when (> (length k) 0)
+          (let ((c (aref k 0)))
+            (puthash c (1+ (gethash c counts 0)) counts))))
+      (maphash (lambda (c n) (when (> n best) (setq modal c best n))) counts)
+      (when modal
+        (let ((same (sort (cl-remove-if-not
+                           (lambda (k) (and (> (length k) 0) (eql (aref k 0) modal)))
+                           keys)
+                          #'string<)))
+          (when same (nth (/ (length same) 2) same)))))))
+
 (defun diogenes-tgl--index-pagekeys (file)
-  "Return a page-ordered list of (REPRESENTATIVE-KEY . PDF-PAGE) for volume V's index.
-For each index page, the representative key is the median (by sort
-order) of the headword keys detected on it -- robust to the odd
-OCR-scrambled line -- so the list is nearly monotone in key and can be
-scanned to find where an arbitrary word falls alphabetically."
+  "Return the volume-V index page-key data for FILE.
+The value is a plist:
+  (:seq ((REPRESENTATIVE-KEY . PDF-PAGE) ...)   ; page-ordered
+   :perpage HASH)                               ; PDF-PAGE -> sorted key list
+
+The representative key of each page is noise-robust (see
+`diogenes-tgl--robust-representative'): the modal initial letter's
+median key, so a few OCR-scrambled lines cannot skew a page into the
+wrong part of the alphabet.  :seq drives the COARSE page estimate;
+:perpage drives the FINE within-window refinement (see
+`diogenes-tgl--where-in-index').  Both index parts are included -- the
+index is printed in two parts that together run the whole alphabet
+\(alpha--pi, then rho--omega) -- because positioning is done per-letter
+rather than by one global scan."
   (let ((ck (diogenes-tgl--file-cache-key file)))
     (or (gethash ck diogenes-tgl--index-pagekeys-cache)
         (setf (gethash ck diogenes-tgl--index-pagekeys-cache)
@@ -2728,47 +3085,160 @@ scanned to find where an arbitrary word falls alphabetically."
                             (when (>= (length k) 3)
                               (push k (gethash pdfp perpage)))))))
                     (forward-line 1))
-                  ;; representative (median) key per page, ordered by page
                   (let (seq)
                     (maphash
                      (lambda (page keys)
                        (let ((sorted (sort keys #'string<)))
-                         (push (cons (nth (/ (length sorted) 2) sorted) page)
-                               seq)))
+                         (puthash page sorted perpage) ; store sorted for fine step
+                         (let ((rep (diogenes-tgl--robust-representative sorted)))
+                           (when rep (push (cons rep page) seq)))))
                      perpage)
-                    (sort seq (lambda (a b) (< (cdr a) (cdr b)))))))))))
+                    (list :seq (sort seq (lambda (a b) (< (cdr a) (cdr b))))
+                          :perpage perpage))))))))
 
 (defun diogenes-tgl--where-in-index (word)
   "Return (5 . PAGE) for where WORD's entry falls in volume V, or nil.
-Prefers a supplementary index entry or a t.5 index reference for WORD;
-failing those, estimates WORD's alphabetical position among the index
-headwords.  Intended for the manual-check `i' key, not the main
+Estimates WORD's alphabetical position among the volume-V index
+headwords (a robust coarse page, then a fine within-window refinement).
+A supplementary index entry or a t.5 index reference is used in
+preference ONLY when it agrees with that estimate's neighbourhood --
+otherwise it is ignored: the index apparatus mentions a word (e.g. a
+gloss or a `vide') on pages far from where the word itself falls
+alphabetically, and following such an incidental mention would jump to
+the wrong letter.  Intended for the manual-check `i' key, not the main
 resolver."
   (let* ((index (diogenes-tgl--index))
          (key (diogenes-montanari--greek-key word)))
     (when (> (length key) 0)
+      (let ((estimate
+             ;; two-step alphabetical estimate: COARSE vicinity, then FINE.
+             (let ((file (diogenes-tgl--volume-text 5)))
+               (when file
+                 (let* ((data (diogenes-tgl--index-pagekeys file))
+                        (coarse (diogenes-tgl--index-coarse-page
+                                 key (plist-get data :seq))))
+                   (when coarse
+                     (+ (or (diogenes-tgl--index-fine-page
+                             key coarse (plist-get data :perpage))
+                            coarse)
+                        diogenes-tgl-page-offset))))))
+            (candidate
+             ;; a harvested supplementary entry, or a t.5 reference page
+             (or (let ((e (diogenes-tgl--index-entry-locate key index)))
+                   (and e (cdr e)))
+                 (let* ((rec (gethash key (plist-get index :refs)))
+                        (five (cl-find 5 rec :key #'car)))
+                   (when five
+                     (let ((model (diogenes-tgl--column-model
+                                   (diogenes-tgl--volume-text 5))))
+                       (when model
+                         (+ (diogenes-tgl--column-to-page (nth 1 five) model)
+                            diogenes-tgl-page-offset))))))))
+        (cond
+         ;; Trust the harvested page only when it sits in the estimate's
+         ;; neighbourhood (same letter region); otherwise it is an incidental
+         ;; mention and the alphabetical estimate is the right place.
+         ((and candidate estimate
+               (<= (abs (- candidate estimate))
+                   diogenes-tgl-index-entry-agree-window))
+          (cons 5 candidate))
+         (estimate (cons 5 estimate))
+         ;; No estimate (letter absent from the index): fall back to the
+         ;; harvested page if we have one -- better than nothing.
+         (candidate (cons 5 candidate))
+         (t nil))))))
+
+(defcustom diogenes-tgl-index-entry-agree-window 40
+  "How near, in pages, a harvested index entry/reference must be to the estimate.
+The `i' key estimates a word's alphabetical place in the volume-V
+index; a supplementary entry or a t.5 reference for the word is only
+preferred over that estimate when within this many pages of it.
+Farther away it is treated as an incidental mention (a gloss or a
+`vide' printed under another lemma) and ignored."
+  :type 'integer
+  :group 'diogenes-tgl)
+
+(defun diogenes-tgl--index-coarse-page (key seq)
+  "Coarse step: return the vicinity PAGE for KEY from SEQ, or nil.
+SEQ is the page-ordered ((REPRESENTATIVE-KEY . PAGE) ...) list.
+Positioning is confined to the pages whose representative begins with
+KEY's initial letter, and among those to the LARGEST contiguous run
+\(the letter's real index block, so a lone mis-OCR'd page elsewhere
+cannot capture the lookup).  Within that block, return the last page
+whose representative is <= KEY, else the block's first page."
+  (when (> (length key) 0)
+    (let* ((l (aref key 0))
+           (pages (cl-remove-if-not
+                   (lambda (rk) (and (> (length (car rk)) 0)
+                                     (eql (aref (car rk) 0) l)))
+                   seq)))
+      (when pages
+        (let ((runs nil) (cur (list (car pages))))
+          (dolist (rk (cdr pages))
+            (if (<= (- (cdr rk) (cdr (car cur))) 4)
+                (push rk cur)
+              (push (nreverse cur) runs)
+              (setq cur (list rk))))
+          (push (nreverse cur) runs)
+          (let* ((block (car (sort runs (lambda (a b) (> (length a) (length b))))))
+                 (best (cdr (car block))))
+            (dolist (rk block)
+              (when (not (string< key (car rk)))  ; (car rk) <= key
+                (setq best (cdr rk))))
+            best))))))
+
+(defcustom diogenes-tgl-index-fine-window 3
+  "Half-width, in pages, of the fine-refinement window for the `i' key.
+After the coarse step lands on a vicinity page, the fine step examines
+this many pages either side to pick the page where the word actually
+falls."
+  :type 'integer
+  :group 'diogenes-tgl)
+
+(defun diogenes-tgl--index-fine-page (key center perpage)
+  "Fine step: refine to the page that actually prints KEY, near CENTER, or nil.
+PERPAGE maps a PDF page to its sorted headword-key list.  Considers the
+pages within `diogenes-tgl-index-fine-window' of CENTER.
+
+A TGL index page has two OCR-interleaved columns, so its span of keys
+covers almost the whole letter and cannot bracket a word by min/max.
+But the words sharing KEY's own leading letters cluster on the single
+page where that article is printed.  So we pick the page carrying the
+most headwords that share KEY's initial prefix, trying a 4-, then 3-,
+then 2-letter prefix (a shorter prefix still catches the article when a
+word's exact neighbours are OCR-mangled).  If no page in the window
+shares even a 2-letter prefix (a rare or badly scanned word), fall back
+to the crossover page: the last page where at least half of its
+initial-letter keys are <= KEY.  Returns CENTER if nothing is usable."
+  (when (and (integerp center) perpage (> (length key) 0))
+    (let ((w (max 0 diogenes-tgl-index-fine-window)))
       (or
-       ;; a real supplementary entry, or a t.5 reference, is exact:
-       (diogenes-tgl--index-entry-locate key index)
-       (let ((rec (gethash key (plist-get index :refs))))
-         (let ((five (cl-find 5 rec :key #'car)))
-           (when five
-             (let* ((col (nth 1 five))
-                    (model (diogenes-tgl--column-model
-                            (diogenes-tgl--volume-text 5))))
-               (when model
-                 (cons 5 (+ (diogenes-tgl--column-to-page col model)
-                            diogenes-tgl-page-offset)))))))
-       ;; otherwise, alphabetical estimate from the page-key sequence
-       (let ((file (diogenes-tgl--volume-text 5)))
-         (when file
-           (let ((seq (diogenes-tgl--index-pagekeys file))
-                 (best nil))
-             (cl-dolist (rk seq)
-               (if (string< (car rk) key)
-                   (setq best (cdr rk))
-                 (cl-return)))
-             (when best (cons 5 (+ best diogenes-tgl-page-offset))))))))))
+       ;; prefix-cluster page, longest prefix first
+       (cl-loop for plen in '(4 3 2)
+                when (>= (length key) plen)
+                thereis
+                (let ((pfx (substring key 0 plen)) (best nil) (bestc 0))
+                  (cl-loop for pg from (- center w) to (+ center w) do
+                           (let ((c 0))
+                             (dolist (k (gethash pg perpage))
+                               (when (and (>= (length k) plen)
+                                          (string= (substring k 0 plen) pfx))
+                                 (setq c (1+ c))))
+                             (when (> c bestc) (setq bestc c best pg))))
+                  (and best (> bestc 0) best)))
+       ;; fallback: crossover on the initial letter
+       (let ((l (aref key 0)) (best center) (found nil))
+         (cl-loop for pg from (- center w) to (+ center w) do
+                  (let ((same (cl-remove-if-not
+                               (lambda (k) (and (> (length k) 0) (eql (aref k 0) l)))
+                               (gethash pg perpage))))
+                    (when same
+                      (let ((below (cl-count-if
+                                    (lambda (k) (not (string< key k))) same)))
+                        (when (>= (* 2 below) (length same))
+                          (setq best pg found t))))))
+         (and found best))
+       center))))
 
 (defun diogenes-tgl--index-entry-locate (key index)
   "Return (5 . PAGE) for KEY as a supplementary volume-V index entry, or nil.
@@ -3228,8 +3698,11 @@ look-up instant, on any machine, without parsing the OCR at run time."
   :type 'string
   :group 'diogenes)
 
-(defconst diogenes-tgl--index-format-version 1
-  "Bumped when the prebuilt-index structure changes, to invalidate old files.")
+(defconst diogenes-tgl--index-format-version 2
+  "Bumped when the prebuilt-index structure changes, to invalidate old files.
+Version 2: the compound map now also harvests split-headword compounds
+\(e.g. `C.ΔΙΑ πράσω'), so a version-1 index (built before that) is
+rejected and rebuilt on demand.")
 
 (defun diogenes-tgl--prebuilt-index-file ()
   "Return the portable prebuilt-index path, or nil if the directory is unset."
@@ -3379,11 +3852,18 @@ parsing the OCR.  Run once after installing or re-OCRing the volumes."
       (message "TGL: wrote prebuilt index to %s"
                (abbreviate-file-name file)))))
 
-(defun diogenes-tgl-clear-cache ()
+(defun diogenes-tgl-clear-cache (&optional keep-prebuilt)
   "Forget all cached TGL data (volumes, index, column models, body scans).
 Call this if you add, replace or re-OCR a volume while Emacs is
-running."
-  (interactive)
+running.
+
+This also DELETES the portable prebuilt index file, if present, because
+otherwise the next look-up would immediately reload it and undo the
+clear -- so stale prebuilt data cannot mask freshly-parsed results.
+With a prefix argument (KEEP-PREBUILT non-nil) the file is kept and only
+the in-memory caches are cleared; the stale file will then reload on the
+next look-up, so use this only when you know the file is current."
+  (interactive "P")
   (clrhash diogenes-tgl--volumes-cache)
   (clrhash diogenes-tgl--index-cache)
   (clrhash diogenes-tgl--index-pagekeys-cache)
@@ -3396,7 +3876,22 @@ running."
   (clrhash diogenes-tgl--letter-map-cache)
   (clrhash diogenes-tgl--anomalous-cache)
   (setq diogenes-tgl--prebuilt-loaded nil)
-  (message "Diogenes TGL caches cleared"))
+  (let ((deleted nil))
+    (if keep-prebuilt
+        ;; keep the file and allow it to reload on the next look-up
+        (setq diogenes-tgl--prebuilt-loaded nil)
+      (let ((file (ignore-errors (diogenes-tgl--prebuilt-index-file))))
+        (when (and file (file-exists-p file))
+          (condition-case err
+              (progn (delete-file file) (setq deleted t))
+            (error (message "Diogenes TGL: could not delete prebuilt index %s (%s)"
+                            (abbreviate-file-name file)
+                            (error-message-string err))))))
+      ;; do not reload a (possibly stale) prebuilt index this session
+      (setq diogenes-tgl--prebuilt-loaded t))
+    (message "Diogenes TGL caches cleared%s"
+             (if deleted "; prebuilt index deleted (rebuild with M-x diogenes-tgl-build-index)"
+               ""))))
 
 (provide 'diogenes-tgl)
-;;; diogenes-tgl.el ends here`
+;;; diogenes-tgl.el ends here
