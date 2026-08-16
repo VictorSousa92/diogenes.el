@@ -76,6 +76,64 @@ wins; unrelated entries are preserved.  Neither argument is mutated."
           (cl-remove-if (lambda (cell) (assoc (car cell) extra))
                         alist)))
 
+(defcustom diogenes-purpose-reuse-home-window t
+  "When non-nil, show a Diogenes buffer in the startup/home window if it is alone.
+With window-purpose active, a browse or lookup normally opens in its
+own purpose window.  But when the only window in the frame is the
+Spacemacs startup buffer (`spacemacs-buffer-name', usually
+\"*spacemacs*\"), it is nicer to reuse that single window rather than
+split it or pop a new one.  This option enables that carve-out; it
+takes effect only while `diogenes-purpose' is installed."
+  :type 'boolean
+  :group 'diogenes)
+
+(defcustom diogenes-purpose-home-buffer-names '("*spacemacs*" "*dashboard*" "*GNU Emacs*")
+  "Buffer names treated as the startup/home page for window reuse.
+If `spacemacs-buffer-name' is bound, its value is added automatically.
+Used by `diogenes-purpose-reuse-home-window'."
+  :type '(repeat string)
+  :group 'diogenes)
+
+(defun diogenes-purpose--home-buffer-name-p (name)
+  "Non-nil if NAME is one of the recognised startup/home buffer names."
+  (and name
+       (or (member name diogenes-purpose-home-buffer-names)
+           (and (boundp 'spacemacs-buffer-name)
+                (equal name spacemacs-buffer-name)))))
+
+(defun diogenes-purpose--diogenes-buffer-p (buffer)
+  "Non-nil if BUFFER is a Diogenes buffer this module gives a purpose.
+Recognised by major mode (the keys of `diogenes-purpose-mode-purposes')
+or by a lookup-family buffer name (`*diogenes-lookup*', analysis, forms)."
+  (let ((buffer (get-buffer buffer)))
+    (and buffer
+         (or (assq (buffer-local-value 'major-mode buffer)
+                   diogenes-purpose-mode-purposes)
+             (let ((n (buffer-name buffer)))
+               (and n (string-match-p
+                       "\\`\\*\\(?:[Dd]iogenes[ -][Ll]ookup\\|Diogenes Analysis\\|Diogenes Forms\\|diogenes-browser\\)"
+                       n)))))))
+
+(defun diogenes-purpose--sole-home-window-p ()
+  "Non-nil if the selected frame has ONE window showing a home buffer."
+  (and (one-window-p)
+       (diogenes-purpose--home-buffer-name-p
+        (buffer-name (window-buffer (selected-window))))))
+
+(defun diogenes-purpose--overriding-action (buffer alist)
+  "`display-buffer' overriding action wrapping window-purpose's own.
+When `diogenes-purpose-reuse-home-window' is on, BUFFER is a Diogenes
+buffer, and the frame's only window shows the startup/home buffer,
+display BUFFER in that window (reusing it, no split, no pop).
+Otherwise fall through to window-purpose's normal action
+\(`purpose--action-function')."
+  (if (and diogenes-purpose-reuse-home-window
+           (diogenes-purpose--diogenes-buffer-p buffer)
+           (diogenes-purpose--sole-home-window-p))
+      (window--display-buffer buffer (selected-window) 'reuse alist)
+    (when (fboundp 'purpose--action-function)
+      (purpose--action-function buffer alist))))
+
 ;;;###autoload
 (defun diogenes-purpose-install ()
   "Give Diogenes buffers their own window-purposes and recompile.
@@ -98,14 +156,32 @@ Idempotent."
                                    (and (boundp 'purpose-user-name-purposes)
                                         purpose-user-name-purposes))))
   (purpose-compile-user-configuration)
+  ;; Wrap window-purpose's overriding action so a Diogenes buffer reuses the
+  ;; sole startup/home window when appropriate.  Only do this when purpose's
+  ;; own action is the current override (so we compose with it, not clobber
+  ;; something else), and not twice.
+  (when (and (equal display-buffer-overriding-action
+                    '(purpose--action-function))
+             (fboundp 'purpose--action-function))
+    (setq display-buffer-overriding-action
+          '(diogenes-purpose--overriding-action)))
   t)
 
 ;;;###autoload
 (defun diogenes-purpose-uninstall ()
   "Remove Diogenes purposes from the `purpose-user-*-purposes' variables.
-Recompiles the configuration afterwards.  Only the entries this module
-added are removed; unrelated user entries stay."
+Recompiles the configuration afterwards, and restores window-purpose's
+own `display-buffer-overriding-action' if this module had wrapped it.
+Only the entries this module added are removed; unrelated user entries
+stay."
   (interactive)
+  ;; Restore purpose's overriding action if we had wrapped it.
+  (when (equal display-buffer-overriding-action
+               '(diogenes-purpose--overriding-action))
+    (setq display-buffer-overriding-action
+          (if (fboundp 'purpose--action-function)
+              '(purpose--action-function)
+            nil)))
   (when (boundp 'purpose-user-mode-purposes)
     (setq purpose-user-mode-purposes
           (cl-remove-if (lambda (cell)

@@ -393,26 +393,56 @@ BUFFER's own window and skipped if BUFFER is no longer displayed."
     (when (buffer-live-p buffer)
       (let ((win (get-buffer-window buffer t)))
         (when win
-          (let* ((ready
+          (let* ((target
+                  (with-current-buffer buffer
+                    (if (and (boundp 'reader-current-doc-pagecount)
+                             (numberp reader-current-doc-pagecount)
+                             (> reader-current-doc-pagecount 0))
+                        (max 1 (min page reader-current-doc-pagecount))
+                      (max 1 page))))
+                 (ready
                   (with-current-buffer buffer
                     (and (boundp 'reader-current-doc-pagecount)
                          (numberp reader-current-doc-pagecount)
                          (> reader-current-doc-pagecount 0)
                          (fboundp 'reader-goto-page))))
-                 (done
-                  (and ready
-                       (with-selected-window win
-                         (with-current-buffer buffer
-                           (let ((pg (if (numberp reader-current-doc-pagecount)
-                                         (max 1 (min page reader-current-doc-pagecount))
-                                       (max 1 page))))
-                             (ignore-errors (reader-goto-page pg) t)))))))
-            (unless done
-              (when (< attempt diogenes-old-reader-jump-retries)
+                 ;; Is the document already on the target page?  We verify
+                 ;; with `reader-current-pagenumber' when it is available;
+                 ;; a cold-start `reader-goto-page' can return without error
+                 ;; yet not move the page, so "the call did not error" is
+                 ;; NOT a reliable success signal -- we must see the page
+                 ;; actually reach the target.
+                 (can-verify
+                  (with-current-buffer buffer (fboundp 'reader-current-pagenumber)))
+                 (at-target
+                  (and can-verify
+                       (with-current-buffer buffer
+                         (ignore-errors
+                           (eql (reader-current-pagenumber) target))))))
+            (cond
+             ;; Confirmed on the target page: done.
+             ((and ready can-verify at-target) t)
+             ;; Ready but not yet on target (or cannot verify): (re)issue the
+             ;; jump, then keep polling until confirmed or the cap is hit.
+             ((and ready (< attempt diogenes-old-reader-jump-retries))
+              (with-selected-window win
+                (with-current-buffer buffer
+                  (ignore-errors (reader-goto-page target))))
+              ;; When we cannot read the page back to confirm, still stop
+              ;; after a few guaranteed re-issues so a warm reader is not
+              ;; hammered forever.
+              (unless (and (not can-verify)
+                           (>= attempt 5))
                 (run-with-timer
                  diogenes-old-reader-jump-retry-interval nil
                  #'diogenes-old--reader-goto-when-ready
-                 buffer page (1+ attempt))))))))))
+                 buffer page (1+ attempt))))
+             ;; Not ready yet: wait and retry.
+             ((< attempt diogenes-old-reader-jump-retries)
+              (run-with-timer
+               diogenes-old-reader-jump-retry-interval nil
+               #'diogenes-old--reader-goto-when-ready
+               buffer page (1+ attempt))))))))))
 
 (defun diogenes-old--goto-page-when-ready (buffer page)
   "Jump to PAGE in BUFFER once its viewer is ready.
@@ -455,58 +485,54 @@ another document the user may have selected in the meantime."
      (t
       (message "OLD entry is on page %d (couldn't drive the viewer)" page)))))
 
+(defun diogenes-old--reader-installed-p ()
+  "Non-nil if the Emacs Reader is present and claims `.pdf' files.
+When true, a plain `find-file-noselect' on a PDF would open it in
+`reader-mode', so the pdf-tools and doc-view branches must keep the
+Reader's `auto-mode-alist' entry from claiming the file."
+  (and (fboundp 'reader-open-doc)
+       (cl-some (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
+                auto-mode-alist)))
+
 (defun diogenes-old--open-buffer-in-viewer (file viewer)
   "Return a buffer visiting FILE, opened in VIEWER's major mode.
 VIEWER is `pdf-tools', `doc-view', or `emacs-reader'.  If a buffer
 already visits FILE it is returned as-is (whatever viewer it is in),
-so we never open a second copy of a huge scan.  Otherwise the file is
-opened fresh and put into the requested viewer's mode.
+so we never open a second copy of a huge scan.
 
-The Emacs Reader registers `.pdf' in `auto-mode-alist', so a plain
-`find-file-noselect' would always choose `reader-mode' once the Reader
-is loaded.  To honour the VIEWER choice we bind `auto-mode-alist' /
-`magic-mode-alist' appropriately for the fresh open, then explicitly
-switch to the target mode as a belt-and-suspenders."
+For `pdf-tools' and `doc-view', the file is opened exactly the way it
+always was -- a plain `find-file-noselect', letting the normal
+major-mode machinery choose the viewer -- UNLESS the Emacs Reader is
+installed (see `diogenes-old--reader-installed-p'), in which case the
+Reader's `.pdf' -> `reader-mode' entry is temporarily removed for the
+open so it does not hijack the file; the mode is not otherwise forced.
+
+For `emacs-reader', the Reader's own entry point `reader-open-doc' is
+used (a manual `pdf-view-mode'/`reader-mode' switch on an
+already-loaded buffer is not equivalent)."
   (or (find-buffer-visiting file)
       (let ((large-file-warning-threshold nil))  ; huge scans: open without prompt
         (pcase viewer
           ('emacs-reader
            ;; `reader-open-doc' is the Emacs Reader's own entry point: it sets
            ;; up the MuPDF document state and puts the buffer in `reader-mode'.
-           ;; Opening via `find-file-noselect' instead is wrong -- pdf-tools may
-           ;; win the major-mode race for `.pdf' and ingest the whole scan
-           ;; (slow), and switching an already-loaded buffer to `reader-mode'
-           ;; does not initialise the reader.  `reader-open-doc' selects the
-           ;; document as a side effect, so shield the window configuration and
-           ;; then locate the buffer it created for FILE.
+           ;; It selects the document as a side effect, so shield the window
+           ;; configuration and then locate the buffer it created for FILE.
            (save-window-excursion
              (reader-open-doc (expand-file-name file)))
            (find-buffer-visiting file))
-          ('doc-view
-           ;; Keep the Reader's auto-mode entry from claiming the file.
-           (let* ((auto-mode-alist
-                   (cl-remove-if (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
-                                 auto-mode-alist))
-                  (magic-mode-alist
-                   (cl-remove-if (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
-                                 magic-mode-alist))
-                  (buffer (find-file-noselect file)))
-             (with-current-buffer buffer
-               (unless (derived-mode-p 'doc-view-mode)
-                 (when (fboundp 'doc-view-mode) (doc-view-mode))))
-             buffer))
-          (_  ; pdf-tools
-           (let* ((auto-mode-alist
-                   (cl-remove-if (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
-                                 auto-mode-alist))
-                  (magic-mode-alist
-                   (cl-remove-if (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
-                                 magic-mode-alist))
-                  (buffer (find-file-noselect file)))
-             (with-current-buffer buffer
-               (unless (derived-mode-p 'pdf-view-mode)
-                 (when (fboundp 'pdf-view-mode) (pdf-view-mode))))
-             buffer))))))
+          ((or 'pdf-tools 'doc-view)
+           (if (diogenes-old--reader-installed-p)
+               ;; Reader would claim the .pdf; drop its auto-mode entry just
+               ;; for this open so pdf-tools/doc-view get the file instead.
+               (let ((auto-mode-alist
+                      (cl-remove-if
+                       (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
+                       auto-mode-alist)))
+                 (find-file-noselect file))
+             ;; No Reader installed: open exactly as before, no interference.
+             (find-file-noselect file)))
+          (_ (find-file-noselect file))))))
 
 (defun diogenes-old--show-page (page &optional file)
   "Display the dictionary PDF FILE at PAGE inside Emacs.
