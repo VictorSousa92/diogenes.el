@@ -633,48 +633,62 @@ the tomus prompt offers a small menu.
 Note on the key: lowercase `l` is taken in pdf-view-mode, so the default
 is capital `L`. Change it with `diogenes-pdf-search-key` before load.
  
-## Window management with `pop-up-frames` (and tiling window managers)
+## Window management: the optional `diogenes-purpose` module
  
-This is an optional helper, separate from the dictionaries, for people
-who run with
+`diogenes-purpose.el` is an optional helper that controls where the
+Diogenes buffers are displayed. It is aimed mainly at **Spacemacs users**
+and at anyone who runs with
  
 ```elisp
 (setq pop-up-frames t)
 ```
  
-so that Emacs opens buffers in separate frames rather than splitting one
-frame into windows. That setting is common among users of tiling window
-managers (i3, sway, Hyprland, bspwm, and the like), who prefer to let the
-window manager arrange Emacs frames as tiles instead of having Emacs
-manage its own internal window splits.
+which opens buffers in separate frames rather than splitting one frame
+into windows (common among users of tiling window managers such as i3,
+sway, Hyprland, and bspwm, who let the window manager tile the Emacs
+frames).
  
-With `pop-up-frames t`, the Diogenes buffers can misbehave in two ways:
-a lookup launched from the corpus browser lands on top of the browser
-instead of getting its own frame, and successive lookups or dictionary
-PDFs each spawn yet another frame until the screen is buried. The helper
-`diogenes-purpose.el` fixes both by giving the Diogenes buffers their own
-[window-purpose](https://github.com/bmag/emacs-purpose) purposes, so that
-window-purpose keeps each family of buffers in its own window:
+The problem it solves: **Spacemacs turns window-purpose
+([`purpose.el`](https://github.com/bmag/emacs-purpose)) on for
+everyone**, and out of the box every Diogenes buffer (the browser and
+every lookup) has the same generic `edit` purpose. Because purpose shows
+a buffer in a window that already carries its purpose, a lookup launched
+from the corpus browser is placed in the browser's own window instead of
+its own; and with `pop-up-frames t`, successive lookups or dictionary
+PDFs each spawn another frame until the screen is buried.
+ 
+`diogenes-purpose.el` fixes this the purpose-native way, by giving the
+Diogenes buffers their own purposes:
  
 - lookup and analysis buffers share one `diogenes-lookup` purpose;
 - the corpus browser gets its own `diogenes-browser` purpose;
-so a lookup never displaces the browser, and a new lookup reuses the
-existing lookup window instead of opening another frame.
+so a lookup never displaces the browser, and lookups reuse one
+`diogenes-lookup` window instead of piling up.
  
-### Why window-purpose
+### Loading it is a deliberate choice
  
-Spacemacs enables window-purpose (`purpose.el`) out of the box, and it
-takes over buffer placement: its action runs before `pop-up-frames` and
-before `display-buffer-alist`, so it, not those, decides where a buffer
-goes. By default every Diogenes buffer (browser and lookups alike) has
-the generic `edit` purpose, the same as ordinary text and code windows,
-which is exactly why a lookup lands in the browser's window. Giving the
-Diogenes buffers distinct purposes is the window-purpose-native way to
-separate them.
+Whether you load this module changes how a lookup picks its window, so
+treat it as a switch between two behaviours:
  
-If you are **not** running window-purpose, you do not need this module;
-plain Emacs with `pop-up-frames t` already opens each Diogenes buffer in
-its own frame.
+- **Do not load it** (the default): lookups use Emacs's ordinary display. From the browser a lookup reuses an existing suitable window (another lookup, or a dictionary PDF) or opens a new one; on a single-window frame (for example the startup screen) it just shows the new buffer in that window. This is the historical behaviour and holds whether or not `purpose-mode` is on and whether or not `pop-up-frames` is set.
+- **Load it**: lookups are placed by window-purpose into their own `diogenes-lookup` window, and the browser keeps its `diogenes-browser` window, as described above.
+The package reads this choice automatically: loading `diogenes-purpose`
+also makes the lookup code set its major mode before the buffer is
+displayed (purpose decides placement at display time, from the major
+mode), which is what lets purpose classify a lookup correctly. There is
+no variable to set; loading or not loading the module is the toggle.
+ 
+### Why window-purpose, not `pop-up-frames` or `display-buffer-alist`
+ 
+In Spacemacs, window-purpose takes over buffer placement: its action runs
+*before* `pop-up-frames` and *before* `display-buffer-alist`, so it, not
+those, decides where a buffer goes. That is why the fix has to be done in
+purpose's own terms (distinct purposes) rather than by setting
+`display-buffer-alist` or relying on `pop-up-frames`. If you are on plain
+Emacs and have never enabled `purpose-mode`, you do not need this module
+at all; ordinary Emacs display (and `pop-up-frames`, if you set it)
+already does the right thing.
+ 
  
 ### Setup
  
