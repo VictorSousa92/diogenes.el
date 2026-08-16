@@ -464,12 +464,51 @@ Notes on the data:
   - The OCR `.txt` must delimit pages with lines `----- N / TOTAL -----`.
   - TGL volume folders **must be named by Roman numeral** (`I`, `II`, `III`, `IIII`, `V`); the name is the tomus number. Volume V's `.txt` holds the comprehensive index, the TGL's main lookup path.
   - Passow folder names do not matter; letter ranges are detected from the OCR.
-- pdf-tools is used when available; otherwise doc-view.
+- pdf-tools is used when available; otherwise doc-view. A third option, the Emacs Reader, is described just below.
 - If your copy is paginated differently, set the per-dictionary `*-page-offset` to shift every jump by a constant.
 diogenes.el ships none of these PDFs; supply your own and point the path
 variables at them. The TGL and Passow copies I tested are the OCR'd MDZ
 volumes (DAFO dataset) from the [Bavarian State Library's
 MDZ](https://www.digitale-sammlungen.de/en/).
+ 
+### Choosing the PDF viewer
+ 
+Every dictionary is opened by the same routine, and you choose which
+in-Emacs viewer it uses with one variable, `diogenes-old-pdf-viewer`
+(it lives in the OLD module but governs all of them):
+ 
+| Value | Viewer |
+| --- | --- |
+| `auto` (default) | pdf-tools if it is installed, otherwise the built-in doc-view |
+| `pdf-tools` | force pdf-tools |
+| `doc-view` | force the built-in doc-view |
+| `emacs-reader` | the [Emacs Reader](https://codeberg.org/MonadicSheep/emacs-reader), a MuPDF-backed reader (`reader-mode`) |
+ 
+- All four are in-Emacs viewers, so ordinary window management applies to their buffers (including the window-purpose helper described later).
+- The Emacs Reader must be installed separately (see its Codeberg page); it needs MuPDF and a small C module built at install time.
+- One caveat with the Emacs Reader: it renders pages as images and exposes no text layer, so the in-PDF search (`L`, see below) still works but cannot pre-fill the prompt with the word under the cursor. Everything else (the links, the `o t m c b p` keys, jumping to the right page) works with all three viewers.
+- The Emacs Reader has no "document ready" signal, so the jump to a page waits for the document to finish rendering by polling; if a very large volume ever loads too slowly for the default wait, raise `diogenes-old-reader-jump-retries` or `diogenes-old-reader-jump-retry-interval`.
+**Where to set it.** Unlike the path variables (which must be set **before** the package loads, hence in `:init`), `diogenes-old-pdf-viewer` is a `defcustom`, so it must be set **after** the package loads. A plain `setq` that runs before load is overwritten when the package loads and the `defcustom` installs its default value. This is true in both Spacemacs and regular Emacs; only the place you put the setting differs slightly. There are three equivalent ways, in rough order of convenience:
+ 
+1. **`M-x customize-variable RET diogenes-old-pdf-viewer`** (either editor). Customize records the value in a way that survives the load, so ordering never matters. Simplest if you do not want to touch your init by hand.
+2. **In your `use-package` block, use `:config` (not `:init`)**, which runs *after* the package loads. This is the same block in both editors (it lives in `init.el`/`.emacs` for regular Emacs, or in `dotspacemacs/user-config` for Spacemacs):
+```elisp
+(use-package diogenes
+  :init
+  (setq diogenes-path "/path/to/your/diogenes/install")
+  ;; ... the path variables, which DO belong in :init ...
+  :config
+  (setq diogenes-old-pdf-viewer 'emacs-reader)   ; or 'pdf-tools, 'doc-view, 'auto
+  :bind ("C-c d" . diogenes))
+```
+ 
+3. **A `with-eval-after-load` form**, if you are not using `use-package` for this. Put it in `init.el`/`.emacs` (regular Emacs) or in `dotspacemacs/user-config` (Spacemacs); it is identical in both:
+```elisp
+(with-eval-after-load 'diogenes-old
+  (setq diogenes-old-pdf-viewer 'emacs-reader))
+```
+ 
+The feature to wait for is `diogenes-old` (the module that defines the variable), not `diogenes`. Leaving the variable at its default `auto` needs no configuration at all.
  
 ### Three ways to open a dictionary
  
@@ -497,60 +536,71 @@ by a links line:
 ### A caveat on OCR and bookmarks
  
 These are scans of old print books, so their OCR and bookmarks are
-imperfect: dropped or garbled letters, misread diacritics, columns out
-of order, wrong bookmarks. A jump can land a page or two off.
+usually **not** fully reliable: expect dropped or garbled letters,
+misread diacritics, columns out of order, and wrong bookmarks. A jump
+can land a page or two off. This is normal; the thing to internalise is
+that a jump takes you to the right *neighbourhood*, not always the exact
+page.
+ 
+How reliable, by dictionary:
  
 - Most reliable: OLD, BDAG, Montanari, CGL (modern typeset).
 - Less so: Passow.
 - Least reliable: TGL (16th-century, dense multi-column, heavy ligatures).
-- Treat a jump as landing in the right neighbourhood; nudge by hand when OCR was poor.
-Mechanisms that keep TGL lookups on target:
+What to do about it, as a user, when a jump lands you off:
  
-- **Column backbone.** Page is derived from the column number printed in the OCR, not from bookmarks (so `diogenes-tgl-page-offset` normally stays 0). The model uses the fact that a folio prints two columns per page, so `left-column = 2 x page + b`:
-  - The origin (where column 1 sits) is found by extrapolation from the cleanest early column pairs, so it works even when "1 2" is illegible and even when a volume opens mid-alphabet at columns 5-6 (tomus III).
-  - Inserted plates shift later pages; each such "seam" is detected only when several consecutive columns agree, so one garbled figure cannot derail the line, and a page whose own column is missing is still placed by its neighbours.
-  - Result: about 99% of pages map correctly; the rest are garbled figures or the one-page ambiguity right at a plate.
-- **Fuzzy index lookup** (`diogenes-tgl-fuzzy-lookup`): on an exact miss, retries index keys sharing the first two letters and differing by at most one letter.
-- **"vide" pointers** are followed to their target.
-- **"ibidem" entries** (volume V lists many words as "ibidem", meaning the same column as the entry before): the parser carries the last real column forward across such runs, ignores the trailing line-letter, and shares one column across an `X & Y` variant pair.
-- **Morphological fallback** (`diogenes-tgl-morph-fallback`): last resort for a compound printed under its root with no column; strips one Greek prefix and resolves the root, only on an exact root hit and only when root and residue are long enough (`diogenes-tgl-morph-min-root`, default 4).
-- **Anomalous-roots fallback**: a word found nowhere else but listed exactly in volume V's "Verborum quorundam themata" (irregular/poetic verb forms) is sent to its page there.
-When a TGL jump is still wrong:
- 
-- First check the **vicinity**: the target is usually a page or two away, so scroll a little before doing anything else.
-- If it is not nearby, use one of the alternatives below.
+1. **Look nearby first.** The target is usually only a page or two away, so scroll a little before anything else. This alone resolves most misses.
+2. **Search inside the open PDF with `L`.** From the PDF, `L` re-looks-up an entry and jumps to it (see [Searching inside an open PDF](#searching-inside-an-open-pdf)); it is the best remedy for a link or `o t m c b p` key that landed wrong.
+3. **For the TGL specifically**, reach a badly-OCR'd word by its **root** with `C-u L` (compounds and derivatives are often printed under the root, not as separate entries), or open volume V's index near the word with `i` (`diogenes-tgl-open-index-here`) and find it by eye. Once the index shows a reference like `t.3 c.746`, follow it with `C-u L` (choose the index-reference / other-tome option, give that tomus and column) and it jumps straight there.
 | Command / key | Does |
 | --- | --- |
-| `C-u L`, approximate | Search for the word's **root** to land in the right article, then read within it (compounds and derivatives are often printed under the root, not as separate entries) |
+| `L` (in the open PDF) | Re-look-up an entry and jump to it; works for every dictionary |
+| `C-u L`, approximate | Search for the word's **root** to land in the right article, then read within it |
 | `i` (`diogenes-tgl-open-index-here`) | Opens volume V's index near the word, to find it by eye |
  
-- Once the index shows you a reference like `t.3 c.746`, follow it with `C-u L`: choose the index-reference / other-tome option, give that tomus and column, and it jumps straight there.
+The TGL is the hard case, and diogenes.el works fairly hard behind the
+scenes to keep its lookups on target despite the poor scan. If you want
+to understand *why* a TGL jump usually lands well (and why
+`diogenes-tgl-page-offset` normally stays 0), see
+[Appendix: how TGL lookups stay on target](#appendix-how-tgl-lookups-stay-on-target).
+ 
 ### Prebuilt indexes (Passow and TGL)
  
 Passow and the TGL build their lookup index by parsing every volume's
 OCR, which takes a few seconds the first time in a session.
  
-- That work is cached in memory for the session and on disk (keyed by the OCR files' modification times), so it is paid at most once per machine and redone only if you re-OCR a volume.
-- You can also build a **portable** index once and keep it as a small file:
-
+**Highly recommended: build the index once, up front.** Doing this makes
+every subsequent Passow/TGL lookup start instantly instead of paying the
+parse on the first lookup of a session. To do it:
+ 
+1. Start Emacs and load diogenes (open the transient menu with `M-x diogenes`, or just do any one lookup, so the package is loaded).
+2. Run the build command for each dictionary you have, by typing `M-x`, then the command name, then `RET`:
 | Command | Writes |
 | --- | --- |
 | `M-x diogenes-passow-build-index` | `passow-index.eld` in the Passow folder |
 | `M-x diogenes-tgl-build-index` | `tgl-index.eld` in the TGL folder |
-
-- Commit the `.eld` file alongside the volumes and other users skip the parse entirely.
+ 
+Each command parses the volumes once (a few seconds) and writes a small
+`.eld` index file next to them. From then on lookups load that file
+instead of re-parsing, which is a noticeable speed-up, especially for the
+large TGL. Run this once per machine and forget about it.
+ 
+More detail:
+ 
+- Even without building it by hand, the parse result is cached in memory for the session and on disk (keyed by the OCR files' modification times), so it is paid at most once per machine and redone only if you re-OCR a volume. Building it explicitly with the commands above just gets that cost out of the way before your first lookup rather than during it.
+- The `.eld` file is **portable**: commit it alongside the volumes and other users skip the parse entirely.
 - Rebuild after adding or re-OCRing a volume (the file records a signature and warns when stale).
 - `diogenes-passow-clear-cache` / `diogenes-tgl-clear-cache` discard the caches to force a rebuild.
 - `diogenes-passow-cache-directory` (and the TGL equivalent) sets where the session cache lives.
 ## Searching inside an open PDF
  
-`diogenes-pdf-lookup-entry` (bound to `L` in pdf-view-mode and
-doc-view-mode) looks up an entry from inside the PDF you already have
-open and jumps to its page. Best fix for a link or `o t m c b p` key that
-landed you wrong.
+`diogenes-pdf-lookup-entry` (bound to `L` in pdf-view-mode,
+doc-view-mode, and the Emacs Reader's reader-mode) looks up an entry
+from inside the PDF you already have open and jumps to its page. Best
+fix for a link or `o t m c b p` key that landed you wrong.
  
 - Works for every print dictionary above; it detects which one from the visited file (prompt names it).
-- Default is the word at point or the current PDF text selection.
+- Default is the word at point or the current PDF text selection. (In the Emacs Reader there is no text layer, so no default is offered and the prompt starts empty; you type the word, exactly as `L` expects anyway.)
 - For multi-file TLL/Passow/TGL, a word in another fascicle or volume opens that sibling PDF.
 | Key | Action |
 | --- | --- |
@@ -582,3 +632,107 @@ the tomus prompt) offers a small menu.
  
 Note on the key: lowercase `l` is taken in pdf-view-mode, so the default
 is capital `L`. Change it with `diogenes-pdf-search-key` before load.
+ 
+## Window management with `pop-up-frames` (and tiling window managers)
+ 
+This is an optional helper, separate from the dictionaries, for people
+who run with
+ 
+```elisp
+(setq pop-up-frames t)
+```
+ 
+so that Emacs opens buffers in separate frames rather than splitting one
+frame into windows. That setting is common among users of tiling window
+managers (i3, sway, Hyprland, bspwm, and the like), who prefer to let the
+window manager arrange Emacs frames as tiles instead of having Emacs
+manage its own internal window splits.
+ 
+With `pop-up-frames t`, the Diogenes buffers can misbehave in two ways:
+a lookup launched from the corpus browser lands on top of the browser
+instead of getting its own frame, and successive lookups or dictionary
+PDFs each spawn yet another frame until the screen is buried. The helper
+`diogenes-purpose.el` fixes both by giving the Diogenes buffers their own
+[window-purpose](https://github.com/bmag/emacs-purpose) purposes, so that
+window-purpose keeps each family of buffers in its own window:
+ 
+- lookup and analysis buffers share one `diogenes-lookup` purpose;
+- the corpus browser gets its own `diogenes-browser` purpose;
+so a lookup never displaces the browser, and a new lookup reuses the
+existing lookup window instead of opening another frame.
+ 
+### Why window-purpose
+ 
+Spacemacs enables window-purpose (`purpose.el`) out of the box, and it
+takes over buffer placement: its action runs before `pop-up-frames` and
+before `display-buffer-alist`, so it, not those, decides where a buffer
+goes. By default every Diogenes buffer (browser and lookups alike) has
+the generic `edit` purpose, the same as ordinary text and code windows,
+which is exactly why a lookup lands in the browser's window. Giving the
+Diogenes buffers distinct purposes is the window-purpose-native way to
+separate them.
+ 
+If you are **not** running window-purpose, you do not need this module;
+plain Emacs with `pop-up-frames t` already opens each Diogenes buffer in
+its own frame.
+ 
+### Setup
+ 
+`diogenes-purpose.el` ships with the package. Load it after
+window-purpose is up, so the load order does not matter:
+ 
+```elisp
+(with-eval-after-load 'window-purpose
+  (require 'diogenes-purpose))
+```
+ 
+In Spacemacs, put that in `dotspacemacs/user-config`. Loading the module
+installs the purposes immediately (it is idempotent, so re-loading is
+safe). `M-x diogenes-purpose-uninstall` removes them again within a
+session, and `-install` re-applies them.
+ 
+### Dictionary PDFs
+ 
+The lookup and browser buffers are handled automatically. The dictionary
+PDF buffers are left alone by default, because window-purpose matches a
+buffer by its major mode or its name, and a dictionary PDF is an ordinary
+`pdf-view-mode` (or `reader-mode`) buffer whose name is just the file
+name, with nothing to mark it as a Diogenes dictionary without listing
+exact file names. If you want the PDFs to share a purpose too, add their
+buffer names to `diogenes-purpose-extra-name-purposes`, for example:
+ 
+```elisp
+(setq diogenes-purpose-extra-name-purposes
+      '(("Oxford Latin Dictionary.pdf" . diogenes-dict)
+        ("Montanari.pdf"               . diogenes-dict)))
+```
+ 
+The single-file dictionaries have predictable buffer names; the
+directory-based ones (TLL, Passow, TGL) open one file per volume, so
+their names vary.
+ 
+# Appendix: how TGL lookups stay on target
+ 
+This appendix explains the machinery behind TGL page-finding. You do not
+need any of it to use the dictionary; it is here for the curious and for
+anyone debugging a bad jump. The everyday advice ("look nearby, then use
+`L` / `C-u L` / `i`") is in [A caveat on OCR and bookmarks](#a-caveat-on-ocr-and-bookmarks).
+ 
+The TGL is a 16th-century, dense, multi-column book with heavy
+ligatures, so its OCR and bookmarks are the least reliable of all the
+dictionaries. Rather than trust the bookmarks, diogenes.el reconstructs
+the page from other evidence:
+ 
+- **Column backbone.** The page is derived from the column number printed in the OCR, not from bookmarks (which is why `diogenes-tgl-page-offset` normally stays 0). The model uses the fact that a folio prints two columns per page, so `left-column = 2 x page + b`:
+  - The origin (where column 1 sits) is found by extrapolation from the cleanest early column pairs, so it works even when "1 2" is illegible and even when a volume opens mid-alphabet at columns 5-6 (tomus III).
+  - Inserted plates shift later pages; each such "seam" is detected only when several consecutive columns agree, so one garbled figure cannot derail the line, and a page whose own column is missing is still placed by its neighbours.
+  - Result: about 99% of pages map correctly; the rest are garbled figures or the one-page ambiguity right at a plate.
+- **Fuzzy index lookup** (`diogenes-tgl-fuzzy-lookup`): on an exact miss, retries index keys sharing the first two letters and differing by at most one letter.
+- **"vide" pointers** are followed to their target.
+- **"ibidem" entries** (volume V lists many words as "ibidem", meaning the same column as the entry before): the parser carries the last real column forward across such runs, ignores the trailing line-letter, and shares one column across an `X & Y` variant pair.
+- **Morphological fallback** (`diogenes-tgl-morph-fallback`): last resort for a compound printed under its root with no column; strips one Greek prefix and resolves the root, only on an exact root hit and only when root and residue are long enough (`diogenes-tgl-morph-min-root`, default 4).
+- **Anomalous-roots fallback**: a word found nowhere else but listed exactly in volume V's "Verborum quorundam themata" (irregular/poetic verb forms) is sent to its page there.
+Together these are why a TGL jump usually lands in the right article or
+within a page or two of it, despite the scan quality. When one still
+misses, fall back to the user-facing remedies in the caveat section
+above.
