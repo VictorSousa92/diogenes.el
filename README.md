@@ -575,6 +575,7 @@ parse on the first lookup of a session. To do it:
  
 1. Start Emacs and load diogenes (open the transient menu with `M-x diogenes`, or just do any one lookup, so the package is loaded).
 2. Run the build command for each dictionary you have, by typing `M-x`, then the command name, then `RET`:
+   
 | Command | Writes |
 | --- | --- |
 | `M-x diogenes-passow-build-index` | `passow-index.eld` in the Passow folder |
