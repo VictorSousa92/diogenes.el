@@ -620,8 +620,8 @@ Approximate (`C-u L`) details:
   - From volume V, the reference option appears in its menu as "other tome" (see below).
 ### Volume V (special menu)
  
-Volume V has extra structure, so `C-u L` inside it (or answering `5` to
-the tomus prompt) offers a small menu.
+Volume V has extra structure, so `C-u L` answering `5` to
+the tomus prompt offers a small menu.
  
 | Choose | Then | Result |
 | --- | --- | --- |
