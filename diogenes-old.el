@@ -382,67 +382,48 @@ See `diogenes-old-reader-jump-retries'."
   :group 'diogenes)
 
 (defun diogenes-old--reader-goto-when-ready (buffer page &optional attempt)
-  "Jump BUFFER's Emacs Reader to PAGE once the document is ready.
-Polls: the reader is considered ready once `reader-current-doc-pagecount'
-\(a buffer-local variable, safe to test even if the Reader's functions
-autoload lazily) is a positive number.  Until then, and on any error
-from the jump, reschedule via a timer, up to
-`diogenes-old-reader-jump-retries' attempts.  The jump is confined to
-BUFFER's own window and skipped if BUFFER is no longer displayed."
+  "Jump BUFFER's Emacs Reader to PAGE once the document can accept it.
+This affects the Emacs Reader (`reader-mode') ONLY; the pdf-tools and
+doc-view jumps go through `diogenes-old--goto-page-in-window' and are
+untouched.
+
+The first `reader-open-doc' of a session sets up its render state (an
+overlay) asynchronously, and a `reader-goto-page' issued before that is
+ready signals `(wrong-type-argument overlayp nil)' from the dynamic
+module and leaves the document on its cover page.  `reader-current-doc-pagecount'
+is already set by then, so it is NOT a sufficient readiness test.  The
+reliable signal is whether the jump itself completes without error:
+we attempt `reader-goto-page' inside `condition-case', and on ANY error
+treat the reader as not-ready-yet and retry after
+`diogenes-old-reader-jump-retry-interval', up to
+`diogenes-old-reader-jump-retries' times.  Subsequent documents reuse
+the initialised state and succeed on the first attempt.  The jump is
+confined to BUFFER's own window and skipped if BUFFER is not displayed."
   (let ((attempt (or attempt 0)))
     (when (buffer-live-p buffer)
       (let ((win (get-buffer-window buffer t)))
         (when win
-          (let* ((target
-                  (with-current-buffer buffer
-                    (if (and (boundp 'reader-current-doc-pagecount)
-                             (numberp reader-current-doc-pagecount)
-                             (> reader-current-doc-pagecount 0))
-                        (max 1 (min page reader-current-doc-pagecount))
-                      (max 1 page))))
-                 (ready
-                  (with-current-buffer buffer
-                    (and (boundp 'reader-current-doc-pagecount)
-                         (numberp reader-current-doc-pagecount)
-                         (> reader-current-doc-pagecount 0)
-                         (fboundp 'reader-goto-page))))
-                 ;; Is the document already on the target page?  We verify
-                 ;; with `reader-current-pagenumber' when it is available;
-                 ;; a cold-start `reader-goto-page' can return without error
-                 ;; yet not move the page, so "the call did not error" is
-                 ;; NOT a reliable success signal -- we must see the page
-                 ;; actually reach the target.
-                 (can-verify
-                  (with-current-buffer buffer (fboundp 'reader-current-pagenumber)))
-                 (at-target
-                  (and can-verify
-                       (with-current-buffer buffer
-                         (ignore-errors
-                           (eql (reader-current-pagenumber) target))))))
-            (cond
-             ;; Confirmed on the target page: done.
-             ((and ready can-verify at-target) t)
-             ;; Ready but not yet on target (or cannot verify): (re)issue the
-             ;; jump, then keep polling until confirmed or the cap is hit.
-             ((and ready (< attempt diogenes-old-reader-jump-retries))
-              (with-selected-window win
-                (with-current-buffer buffer
-                  (ignore-errors (reader-goto-page target))))
-              ;; When we cannot read the page back to confirm, still stop
-              ;; after a few guaranteed re-issues so a warm reader is not
-              ;; hammered forever.
-              (unless (and (not can-verify)
-                           (>= attempt 5))
+          (let ((ok
+                 (and (fboundp 'reader-goto-page)
+                      (with-selected-window win
+                        (with-current-buffer buffer
+                          (let ((pg (if (and (boundp 'reader-current-doc-pagecount)
+                                             (numberp reader-current-doc-pagecount)
+                                             (> reader-current-doc-pagecount 0))
+                                        (max 1 (min page reader-current-doc-pagecount))
+                                      (max 1 page))))
+                            ;; Success is "the jump did not error".  A cold
+                            ;; first document errors here until its overlay
+                            ;; exists; that error is our retry signal.
+                            (condition-case nil
+                                (progn (reader-goto-page pg) t)
+                              (error nil))))))))
+            (unless ok
+              (when (< attempt diogenes-old-reader-jump-retries)
                 (run-with-timer
                  diogenes-old-reader-jump-retry-interval nil
                  #'diogenes-old--reader-goto-when-ready
-                 buffer page (1+ attempt))))
-             ;; Not ready yet: wait and retry.
-             ((< attempt diogenes-old-reader-jump-retries)
-              (run-with-timer
-               diogenes-old-reader-jump-retry-interval nil
-               #'diogenes-old--reader-goto-when-ready
-               buffer page (1+ attempt))))))))))
+                 buffer page (1+ attempt))))))))))
 
 (defun diogenes-old--goto-page-when-ready (buffer page)
   "Jump to PAGE in BUFFER once its viewer is ready.
@@ -539,15 +520,35 @@ already-loaded buffer is not equivalent)."
 Opens FILE in the viewer chosen by `diogenes-old-pdf-viewer' (see
 `diogenes-old--resolved-viewer': `pdf-tools', `doc-view', or the Emacs
 Reader `reader-mode'), reusing an already-open buffer for FILE if one
-exists.  Honours `diogenes-old-display-in-other-window'.  Returns PAGE."
+exists.  Honours `diogenes-old-display-in-other-window'.  Returns PAGE.
+
+For the Emacs Reader specifically, `display-buffer-overriding-action'
+is bound to nil around the open and display.  window-purpose installs
+such an overriding action, and when it intercepts the Reader's display
+the Reader's render pipeline does not run, so its page overlay is never
+created and every `reader-goto-page' fails with `(wrong-type-argument
+overlayp nil)'.  Letting the Reader display through the normal path
+fixes that.  This binding is scoped to the Reader case only, so
+pdf-tools, doc-view, and window-purpose's handling of every other
+buffer (lookups, browser) are unaffected."
   (let* ((file (or file diogenes-old-pdf-file))
-         (viewer (diogenes-old--resolved-viewer))
-         (buffer (diogenes-old--open-buffer-in-viewer file viewer))
-         (display (if diogenes-old-display-in-other-window
-                      #'display-buffer
-                    #'pop-to-buffer-same-window)))
-    (funcall display buffer)
-    (diogenes-old--goto-page-when-ready buffer page)
+         (viewer (diogenes-old--resolved-viewer)))
+    (if (eq viewer 'emacs-reader)
+        ;; Bypass purpose's display override so the Reader renders normally
+        ;; (creating its overlay).  Covers both the open and the display.
+        (let ((display-buffer-overriding-action nil))
+          (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer))
+                (display (if diogenes-old-display-in-other-window
+                             #'display-buffer
+                           #'pop-to-buffer-same-window)))
+            (funcall display buffer)
+            (diogenes-old--goto-page-when-ready buffer page)))
+      (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer))
+            (display (if diogenes-old-display-in-other-window
+                         #'display-buffer
+                       #'pop-to-buffer-same-window)))
+        (funcall display buffer)
+        (diogenes-old--goto-page-when-ready buffer page)))
     page))
 
 ;;;; --------------------------------------------------------------------
