@@ -1,5 +1,10 @@
 ;;; diogenes-pdf-search.el --- Look up an entry inside an open dictionary PDF -*- lexical-binding: t -*-
 
+;; Copyright (C) 2024 Michael Neidhart
+;;
+;; Author: Michael Neidhart <mayhoth@gmail.com>
+;; Keywords: classics, tools, philology, humanities
+
 ;;; Commentary:
 
 ;; This module adds ONE command, `diogenes-pdf-lookup-entry', that you
@@ -66,16 +71,8 @@
 (declare-function diogenes-passow--locate            "diogenes-passow"    (word))
 (declare-function diogenes-passow--pdf-page          "diogenes-passow"    (pg))
 (declare-function diogenes-tgl--locate               "diogenes-tgl"       (word))
-(declare-function diogenes-tgl--body-locate          "diogenes-tgl"       (word))
-(declare-function diogenes-tgl--approx-locate        "diogenes-tgl"       (word))
-(declare-function diogenes-tgl--anomalous-approx     "diogenes-tgl"       (word))
 (declare-function diogenes-tgl--volume-pdf           "diogenes-tgl"       (tomus))
-(declare-function diogenes-tgl--volume-text          "diogenes-tgl"       (tomus))
-(declare-function diogenes-tgl--column-model         "diogenes-tgl"       (file))
-(declare-function diogenes-tgl--column-to-page       "diogenes-tgl"       (column model &optional part))
-(declare-function diogenes-tgl--v5-part1-first-column "diogenes-tgl"      (model))
 (declare-function diogenes-tgl--show                 "diogenes-tgl"       (tomus page &optional word))
-(defvar diogenes-tgl-page-offset)
 
 (declare-function pdf-view-goto-page          "pdf-view" (page &optional window))
 (declare-function pdf-info-number-of-pages    "pdf-info" (&optional file-or-buffer))
@@ -186,8 +183,9 @@ Single-file dictionaries match by truename against their
 
 (defun diogenes-pdf-search--goto-page (page)
   "Jump the CURRENT PDF buffer to PAGE.
-Works in `pdf-view-mode' (clamping to the document length) and in
-`doc-view-mode'.  Signals a user-error in any other mode."
+Works in `pdf-view-mode' (clamping to the document length),
+`doc-view-mode', and the Emacs Reader's `reader-mode'.  Signals a
+user-error in any other mode."
   (cond
    ((derived-mode-p 'pdf-view-mode)
     (let ((page (if (fboundp 'pdf-info-number-of-pages)
@@ -196,8 +194,18 @@ Works in `pdf-view-mode' (clamping to the document length) and in
       (pdf-view-goto-page page)))
    ((derived-mode-p 'doc-view-mode)
     (doc-view-goto-page (max 1 page)))
+   ((and (derived-mode-p 'reader-mode) (fboundp 'reader-goto-page))
+    ;; The Emacs Reader renders asynchronously; reuse the robust poll
+    ;; from diogenes-old if available, else jump directly.
+    (if (progn (require 'diogenes-old nil t)
+               (fboundp 'diogenes-old--reader-goto-when-ready))
+        (diogenes-old--reader-goto-when-ready (current-buffer) page)
+      (let ((page (if (boundp 'reader-current-doc-pagecount)
+                      (max 1 (min page reader-current-doc-pagecount))
+                    (max 1 page))))
+        (reader-goto-page page))))
    (t
-    (user-error "Not in a PDF buffer (pdf-view-mode or doc-view-mode)"))))
+    (user-error "Not in a PDF buffer (pdf-view-mode, doc-view-mode, or reader-mode)"))))
 
 ;;;; --------------------------------------------------------------------
 ;;;; PER-DICTIONARY: WORD -> (PAGE [. FILE]) FOR THE OPEN BUFFER
@@ -284,80 +292,8 @@ text with the mouse), then the word at point in a plain buffer."
 ;;;; THE COMMAND
 ;;;; --------------------------------------------------------------------
 
-(defun diogenes-pdf-search--tgl-v5-index-then-column (part-known)
-  "Prompt for a volume-V index column; return the (WORD COLUMN-REF nil) list.
-When PART-KNOWN is nil, first ask which of the two index parts (their
-column numbering each restart at 1)."
-  (let* ((part (if part-known part-known
-                 (if (eq (car (read-multiple-choice
-                               "Index part: "
-                               '((?1 "part-1" "Main index (columns from 229)")
-                                 (?2 "part-2" "Second index (column numbering restarts at 1)"))))
-                         ?2)
-                     2 1)))
-         (column (read-number "Index column (C) number: ")))
-    (list nil (list :v5-index :part part :column column) nil)))
-
-(defun diogenes-pdf-search--tgl-v5-prompt ()
-  "Prompt for a volume-V index jump; return a (WORD COLUMN-REF APPROXIMATE) list.
-Reached when the index-reference route of `\\[diogenes-pdf-lookup-entry]'
-is given tomus 5 (from any TGL volume -- being inside volume V is not
-itself special; its `C-u' prefix behaves like every other volume's).
-Offers:
-  * volume V's own two-part INDEX (part 1 or 2, then a column);
-  * the ANOMALOUS-ROOTS section (by column, or approximate search); and
-  * a jump to ANOTHER TOME by index reference (t.N c.NNN) -- useful when
-    reading a `t.3 c.746'-style pointer in the index and wanting to
-    follow it into tomes I-IV (or back into volume V's own index)."
-  (let ((top (car (read-multiple-choice
-                   "TGL vol V: "
-                   '((?i "index" "This volume's alphabetical INDEX (parts 1-2)")
-                     (?a "anomalous" "The anomalous/poetic verb-forms section")
-                     (?t "other-tome" "Jump by reference t.N c.NNN into another tome"))))))
-    (pcase top
-      (?i (diogenes-pdf-search--tgl-v5-index-then-column nil))
-      (?t
-       ;; Cross-tome index reference.  Tomus 5 loops back into this
-       ;; volume's own two-part index; tomes 1-4 take a plain column.
-       (let ((tm (read-number "TGL tomus (1-5): ")))
-         (if (eql tm 5)
-             (diogenes-pdf-search--tgl-v5-index-then-column nil)
-           (let ((column (read-number "TGL column (C) number: ")))
-             (list nil (cons tm column) nil)))))
-      (_
-       (let ((how (car (read-multiple-choice
-                        "Anomalous roots: "
-                        '((?c "column" "Jump to a column number in this section")
-                          (?a "approximate" "Search a word by approximation"))))))
-         (if (eq how ?c)
-             (let ((column (read-number "Anomalous-roots column (C) number: ")))
-               (list nil (list :v5-anomalous-column :column column) nil))
-           (list (read-from-minibuffer
-                  "Approximate (prefix) in anomalous roots: "
-                  (diogenes-pdf-search--default-word))
-                 (list :v5-anomalous-approx) t)))))))
-
-(defun diogenes-pdf-search--tgl-column-page (tomus column &optional part)
-  "Return the PDF page in TGL volume TOMUS for printed COLUMN, or signal.
-Maps COLUMN to a page via TOMUS's column model (the same column->page
-backbone the index lookup uses) and applies `diogenes-tgl-page-offset'.
-For volume V, PART (1 or 2) selects the index part, since its column
-numbering restarts in part 2.  Signals a `user-error' if TOMUS is not
-installed, its OCR/model is missing, or COLUMN cannot be placed."
-  (let ((txt (diogenes-tgl--volume-text tomus)))
-    (unless txt
-      (user-error "TGL volume %s is not installed" tomus))
-    (let ((model (diogenes-tgl--column-model txt)))
-      (unless model
-        (user-error "No column model for TGL volume %s (missing/unreadable OCR)"
-                    tomus))
-      (let ((page (diogenes-tgl--column-to-page column model part)))
-        (unless page
-          (user-error "Could not place column %d in TGL volume %s" column tomus))
-        (+ page diogenes-tgl-page-offset)))))
-
 ;;;###autoload
-(defun diogenes-pdf-lookup-entry (word &optional column-ref approximate)
+(defun diogenes-pdf-lookup-entry (word)
   "Look up WORD's entry inside the dictionary PDF in the current buffer.
 Run this from a `pdf-view-mode' (or `doc-view-mode') buffer that is
 showing one of the print dictionaries Diogenes knows how to open --
@@ -372,28 +308,9 @@ already reading instead of the electronic LSJ/Lewis.  The word at
 point -- or the PDF's active text selection -- is offered as the
 default.
 
-With a prefix argument (\\[universal-argument] then the key) the
-command does an APPROXIMATE search instead of an exact lookup: type a
-partial headword (a beginning of a word, e.g. \"ab\" or \"isth\") and
-the PDF jumps to where that fragment falls alphabetically -- the first
-entry that begins with, or sorts at, what you typed.  This is how you
-reach a neighbourhood when you do not know or cannot type the whole
-headword.
-
-In a TGL volume the prefix argument first asks which of two jumps you
-want -- \"Approximate search (a) or Index reference jump (i)\":
-  a  approximate search, exactly as in the other dictionaries;
-  i  index-reference jump -- prompts for a TOMUS and a column (C)
-     number and jumps that volume's PDF to the page containing that
-     column (the TGL index prints its references as \"t.N c.NNN\").
-
-COLUMN-REF, when non-nil, is a (TOMUS . COLUMN) index-reference request
-\(set only by the TGL prefix path, and it overrides WORD).  APPROXIMATE,
-when non-nil, requests the positional/prefix search described above.
-
-The buffer's dictionary is detected from the visited file, and an
-exact lookup computes the page with that dictionary's own logic, so it
-lands where the matching \"[OLD]\"/\"[BDAG]\"/... link would.  For the
+The buffer's dictionary is detected from the visited file, and the
+page is computed with that dictionary's own lookup logic, so it lands
+where the matching \"[OLD]\"/\"[BDAG]\"/... link would.  For the
 multi-file TLL and TGL, an entry in another fascicle or volume opens
 that sibling PDF."
   (interactive
@@ -402,185 +319,41 @@ that sibling PDF."
           (dict (or (diogenes-pdf-search--identify file)
                     (user-error
                      "This PDF is not a configured Diogenes dictionary.  \
-Set the matching path variable (e.g. `diogenes-old-pdf-file') to this file"))))
-     (cond
-      ;; No prefix: ordinary exact lookup.
-      ((not current-prefix-arg)
-       (let ((prompt (format "Look up in %s: " (diogenes-pdf-search--name dict))))
-         (list (read-from-minibuffer prompt (diogenes-pdf-search--default-word))
-               nil nil)))
-      ;; Prefix in the TGL: same in every volume (including V).  Choose an
-      ;; approximate search or an index reference; the volume-V two-part /
-      ;; anomalous sub-menu is reached only by the index-reference route
-      ;; when the tomus answered is 5 -- not by which volume is on screen.
-      ((eq dict 'tgl)
-       (let ((choice (car (read-multiple-choice
-                           "TGL prefix jump: "
-                           '((?a "approximate" "Approximate/prefix search, as in other dictionaries")
-                             (?i "index-ref"   "Jump by an index reference t.N c.NNN"))))))
-         (if (eq choice ?i)
-             (let ((tm (read-number "TGL tomus (1-5): ")))
-               ;; A t.5 reference gets volume V's two-part / anomalous sub-menu.
-               (if (eql tm 5)
-                   (diogenes-pdf-search--tgl-v5-prompt)
-                 (let ((column (read-number "TGL column (C) number: ")))
-                   (list nil (cons tm column) nil))))
-           (list (read-from-minibuffer "Approximate (prefix) in the TGL: "
-                                       (diogenes-pdf-search--default-word))
-                 nil t))))
-      ;; Prefix in any other dictionary: approximate search.
-      (t
-       (let ((prompt (format "Approximate (prefix) in %s: "
-                             (diogenes-pdf-search--name dict))))
-         (list (read-from-minibuffer prompt (diogenes-pdf-search--default-word))
-               nil t))))))
+Set the matching path variable (e.g. `diogenes-old-pdf-file') to this file")))
+          (prompt (format "Look up in %s: " (diogenes-pdf-search--name dict))))
+     (list (read-from-minibuffer prompt (diogenes-pdf-search--default-word)))))
   (let* ((file (or buffer-file-name
                    (user-error "This buffer is not visiting a PDF file")))
          (dict (or (diogenes-pdf-search--identify file)
-                   (user-error "This PDF is not a configured Diogenes dictionary"))))
-    (cond
-     ;; --- TGL column / index-reference jumps ---------------------------
-     ;; (The :v5-anomalous-approx marker also travels in column-ref but is an
-     ;; approximate search, handled further below, so exclude it here.)
-     ((and column-ref (not (eq (car-safe column-ref) :v5-anomalous-approx)))
-      (unless (eq dict 'tgl)
-        (user-error "Column jumps are only available in the TGL"))
-      (pcase column-ref
-        ;; Volume V, INDEX: (:v5-index :part P :column C)
-        (`(:v5-index . ,plist)
-         (let ((part (plist-get plist :part))
-               (column (plist-get plist :column)))
-           (unless (and (integerp column) (> column 0))
-             (user-error "Index column must be a positive number"))
-           ;; Part 1's numbered index does not begin at column 1: the earlier
-           ;; columns are volume V's front matter (dialects, anomalous roots,
-           ;; Herodian).  If the requested part-1 column is before the index
-           ;; proper, say so rather than jump to a nonsensical page.
-           (when (eql (or part 1) 1)
-             (let* ((txt (ignore-errors (diogenes-tgl--volume-text 5)))
-                    (model (and txt (diogenes-tgl--column-model txt)))
-                    (first (and model
-                                (diogenes-tgl--v5-part1-first-column model))))
-               (when (and first (< column first))
-                 (user-error
-                  "The main index (part 1) begins at column %d; column %d falls in the front matter before it (dialects, anomalous roots, Herodian) -- use the Anomalous-roots option for those"
-                  first column))))
-           (let ((page (diogenes-pdf-search--tgl-column-page 5 column part)))
-             (diogenes-tgl--show 5 page)
-             (message "TGL vol V index part %d: c.%d -> page %d"
-                      (or part 1) column page))))
-        ;; Volume V, ANOMALOUS ROOTS by column: (:v5-anomalous-column :column C)
-        ;; (the section continues part 1's numbering, so use part 1.)
-        (`(:v5-anomalous-column . ,plist)
-         (let ((column (plist-get plist :column)))
-           (unless (and (integerp column) (> column 0))
-             (user-error "Column must be a positive number"))
-           (let ((page (diogenes-pdf-search--tgl-column-page 5 column 1)))
-             (diogenes-tgl--show 5 page)
-             (message "TGL vol V anomalous roots: c.%d -> page %d" column page))))
-        ;; Volumes I-IV index reference: (TOMUS . COLUMN)
-        (`(,tomus . ,column)
-         (unless (and (integerp tomus) (<= 1 tomus 5))
-           (user-error "TGL tomus must be between 1 and 5"))
-         (unless (and (integerp column) (> column 0))
-           (user-error "TGL column must be a positive number"))
-         (let ((page (diogenes-pdf-search--tgl-column-page tomus column)))
-           (diogenes-tgl--show tomus page)
-           (message "TGL: t.%d c.%d -> page %d" tomus column page)))
-        (_ (user-error "Malformed TGL column request"))))
-     ;; --- Approximate (prefix) search in the TGL -----------------------
-     ;; Land at the fragment's alphabetical position among the TGL's own
-     ;; headwords via the body scan (which routes the key to its volume and
-     ;; finds where it falls), opened under `diogenes-tgl-pdf-mode'.  When
-     ;; the request is the volume-V anomalous-roots marker, position within
-     ;; that section instead (`diogenes-tgl--anomalous-approx').
-     ((and approximate (eq dict 'tgl))
-      (let ((frag (string-trim (or word ""))))
-        (when (string-empty-p frag)
-          (user-error "No search fragment given"))
-        (let ((loc (if (eq (car-safe column-ref) :v5-anomalous-approx)
-                       (diogenes-tgl--anomalous-approx frag)
-                     (diogenes-tgl--approx-locate frag))))
-          (unless loc
-            (user-error "Could not place \"%s\" in the TGL" frag))
-          (let ((tomus (car loc)) (page (cdr loc)))
-            (diogenes-tgl--show tomus page frag)
-            (message "TGL: ~\"%s\" -> t.%s p.%d (approximate)" frag tomus page)))))
-     ;; --- Approximate (prefix) search in every other dictionary --------
-     ;; The dictionaries' own resolver is already positional (it lands on
-     ;; the page whose guide word sorts at/after the input), so feeding it
-     ;; a fragment jumps to that fragment's neighbourhood.
-     (approximate
-      (let ((frag (string-trim (or word ""))))
-        (when (string-empty-p frag)
-          (user-error "No search fragment given"))
-        (let ((where (diogenes-pdf-search--resolve dict frag file)))
-          (unless where
-            (user-error "Could not place \"%s\" in %s"
-                        frag (diogenes-pdf-search--name dict)))
-          (cond
-           ((integerp where)
-            (diogenes-pdf-search--goto-page where)
-            (message "%s: ~\"%s\" -> page %d (approximate)"
-                     (diogenes-pdf-search--name dict) frag where))
-           ((consp where)
-            (let ((page (car where)) (other (cdr where)))
-              (require 'diogenes-old nil t)
-              (if (fboundp 'diogenes-old--show-page)
-                  (diogenes-old--show-page page other)
-                (let ((large-file-warning-threshold nil))
-                  (pop-to-buffer (find-file-noselect other))
-                  (diogenes-pdf-search--goto-page page)))
-              (message "%s: ~\"%s\" -> %s p.%d (approximate)"
-                       (diogenes-pdf-search--name dict)
-                       frag (file-name-nondirectory other) page)))))))
-     ;; --- TGL headword lookup ------------------------------------------
-     ;; Resolve with the TGL's own locator and open through
-     ;; `diogenes-tgl--show', so the (possibly sibling) volume opens under
-     ;; `diogenes-tgl-pdf-mode' and remembers WORD for the `i' key.
-     ((eq dict 'tgl)
-      (let ((word (string-trim (or word ""))))
-        (when (string-empty-p word)
-          (user-error "No word given"))
-        (let ((loc (diogenes-tgl--locate word)))
-          (unless loc
-            (user-error "Could not locate \"%s\" in the TGL" word))
-          (let ((tomus (plist-get loc :tomus))
-                (page  (plist-get loc :page)))
-            (unless page
-              (user-error "Could not locate \"%s\" in the TGL" word))
-            (diogenes-tgl--show tomus page word)
-            (message "TGL: \"%s\" -> t.%s p.%d" word tomus page)))))
-     ;; --- Every other dictionary ---------------------------------------
-     (t
-      (let ((word (string-trim (or word ""))))
-        (when (string-empty-p word)
-          (user-error "No word given"))
-        (let ((where (diogenes-pdf-search--resolve dict word file)))
-          (unless where
-            (user-error "Could not locate \"%s\" in %s"
-                        word (diogenes-pdf-search--name dict)))
-          (cond
-           ;; Same file: jump within this very buffer.
-           ((integerp where)
-            (diogenes-pdf-search--goto-page where)
-            (message "%s: \"%s\" -> page %d"
-                     (diogenes-pdf-search--name dict) word where))
-           ;; A sibling volume/fascicle: open it (reusing the shared viewer
-           ;; driver so async pdf-tools startup and page clamping are handled).
-           ((consp where)
-            (let ((page (car where))
-                  (other (cdr where)))
-              (require 'diogenes-old nil t)  ; provides the viewer driver
-              (if (fboundp 'diogenes-old--show-page)
-                  (diogenes-old--show-page page other)
-                ;; Fallback: open the file ourselves and jump.
-                (let ((large-file-warning-threshold nil))
-                  (pop-to-buffer (find-file-noselect other))
-                  (diogenes-pdf-search--goto-page page)))
-              (message "%s: \"%s\" -> %s p.%d"
-                       (diogenes-pdf-search--name dict)
-                       word (file-name-nondirectory other) page))))))))))
+                   (user-error "This PDF is not a configured Diogenes dictionary")))
+         (word (string-trim (or word ""))))
+    (when (string-empty-p word)
+      (user-error "No word given"))
+    (let ((where (diogenes-pdf-search--resolve dict word file)))
+      (unless where
+        (user-error "Could not locate \"%s\" in %s"
+                    word (diogenes-pdf-search--name dict)))
+      (cond
+       ;; Same file: jump within this very buffer.
+       ((integerp where)
+        (diogenes-pdf-search--goto-page where)
+        (message "%s: \"%s\" -> page %d"
+                 (diogenes-pdf-search--name dict) word where))
+       ;; A sibling volume/fascicle: open it (reusing the shared viewer
+       ;; driver so async pdf-tools startup and page clamping are handled).
+       ((consp where)
+        (let ((page (car where))
+              (other (cdr where)))
+          (require 'diogenes-old nil t)  ; provides the viewer driver
+          (if (fboundp 'diogenes-old--show-page)
+              (diogenes-old--show-page page other)
+            ;; Fallback: open the file ourselves and jump.
+            (let ((large-file-warning-threshold nil))
+              (pop-to-buffer (find-file-noselect other))
+              (diogenes-pdf-search--goto-page page)))
+          (message "%s: \"%s\" -> %s p.%d"
+                   (diogenes-pdf-search--name dict)
+                   word (file-name-nondirectory other) page)))))))
 
 ;;;; --------------------------------------------------------------------
 ;;;; KEY INSTALLATION
@@ -601,11 +374,17 @@ to bind nothing and do it yourself."
 
 ;;;###autoload
 (defun diogenes-pdf-search-setup-keys ()
-  "Bind `diogenes-pdf-lookup-entry' in `pdf-view-mode' and `doc-view-mode'.
-Uses `diogenes-pdf-search-key' (default \"L\").  Safe to call at
-startup: the bindings are installed via `with-eval-after-load', so
-they attach whenever the viewers load, in either order.  Does
-nothing if `diogenes-pdf-search-key' is nil."
+  "Bind `diogenes-pdf-lookup-entry' in the supported PDF viewers.
+Binds `diogenes-pdf-search-key' (default \"L\") in `pdf-view-mode',
+`doc-view-mode', and the Emacs Reader's `reader-mode'.  Safe to call at
+startup: the bindings are installed via `with-eval-after-load', so they
+attach whenever the viewers load, in either order.  Does nothing if
+`diogenes-pdf-search-key' is nil.
+
+In the Emacs Reader the command still works -- you type the headword at
+the prompt and the reader jumps to its page -- but, unlike pdf-tools,
+the Reader exposes no text layer, so the word under point cannot be
+offered as the prompt's default; the prompt simply starts empty."
   (when diogenes-pdf-search-key
     (with-eval-after-load 'pdf-view
       (when (boundp 'pdf-view-mode-map)
@@ -614,6 +393,10 @@ nothing if `diogenes-pdf-search-key' is nil."
     (with-eval-after-load 'doc-view
       (when (boundp 'doc-view-mode-map)
         (keymap-set doc-view-mode-map diogenes-pdf-search-key
+                    #'diogenes-pdf-lookup-entry)))
+    (with-eval-after-load 'reader
+      (when (boundp 'reader-mode-map)
+        (keymap-set reader-mode-map diogenes-pdf-search-key
                     #'diogenes-pdf-lookup-entry)))))
 
 (provide 'diogenes-pdf-search)

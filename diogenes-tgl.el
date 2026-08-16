@@ -1330,6 +1330,33 @@ Greek-Extended points, via `diogenes-tgl--greek-capital-class') so it
 matches root headwords like ΛΑΜΒΑΝΩ but never captures the lowercase
 continuation of a capital-initial sub-entry.")
 
+(defconst diogenes-tgl--caps-head-lemma-regexp
+  (concat "\\`['\u2019\u1ffe\u1fbf\u02bc\u0384`]?"
+          "\\([" diogenes-tgl--greek-capital-class "]\\{3,\\}\\)"
+          "[[:space:]]+"
+          "['\u2019\u1ffe\u1fbf\u02bc\u0384`]?"
+          "\\([\u03b1-\u03c9\u1f00-\u1f7d\u1f80-\u1fb4\u1fb6\u1fb7\u1fc2-\u1fc4\u1fc6\u1fc7\u1fd0-\u1fd3\u1fd6\u1fd7\u1fe0-\u1fe7\u1ff2-\u1ff4\u1ff6\u1ff7]\\{2,\\}\\)")
+  "Regexp matching a ROOT head printed in caps then repeated lower-case.
+An Estienne root article often opens with its headword ALL-CAPS,
+immediately followed by the same word in lower case with the
+definition, e.g. `ΑΥΤΟΣ αὐτό, αὐτό (pronomen) Ipse...'.  The plain
+`diogenes-tgl--caps-entry-regexp' misses this because a space and a
+lower-case letter, not punctuation, follow the caps word.  Group 1 is
+the caps head; group 2 the lower-case lemma that follows it.  Used by
+the caps harvester as a second way to detect a root opening.")
+
+(defconst diogenes-tgl--lc-headword-regexp
+  (concat "^['\u2019\u1ffe\u1fbf\u02bc\u0384`]?"
+          "\\(\\(?:[" diogenes-tgl--greek-capital-class "]\\)?"
+          "[\u03b1-\u03c9\u1f00-\u1f7d\u1f80-\u1fb4\u1fb6\u1fb7\u1fc2-\u1fc4\u1fc6\u1fc7\u1fd0-\u1fd3\u1fd6\u1fd7\u1fe0-\u1fe7\u1ff2-\u1ff4\u1ff6\u1ff7]"
+          "\\{3,\\}\\)")
+  "Regexp matching a left-margin head whose body is lower-case Greek.
+Allows an optional single leading capital (the ordinary way a headword
+prints: capital initial, then lower case), so it captures the volume's
+real headwords.  Group 1 is the word.  Used only to gather a volume's
+own headword vocabulary, which validates leading-capital repairs in the
+caps harvester (see `diogenes-tgl--parse-body').")
+
 (defun diogenes-tgl--all-caps-p (s)
   "Non-nil if string S contains no lowercase Greek letter.
 Binds `case-fold-search' to nil: with the user's default case-folding
@@ -1383,6 +1410,30 @@ root opening."
             (when (> (length k) 0) (setq letter (aref k 0)))))
         (setq lines (cdr lines) n (1+ n))))
     letter))
+
+(defun diogenes-tgl--header-letter-loose (body)
+  "Like `diogenes-tgl--header-letter' but tolerant of a broken header.
+The OCR sometimes splits the running-header token into space-separated
+pieces (e.g. `ΑΥ Γ ΑΥΤ' for the ΑΥΓ/ΑΥΤ header), which the strict
+regexp -- anchored to one unbroken caps run -- misses, so
+`diogenes-tgl--header-letter' returns nil there.  This variant also
+accepts a line made up solely of capital-Greek runs and blanks and
+returns the initial of its first letter.  It is used ONLY to validate a
+leading-capital repair of a caps head (see `diogenes-tgl--parse-body');
+the stricter `diogenes-tgl--header-letter' still governs the
+alien-anchor rejection, so that rejection's behaviour is unchanged."
+  (or (diogenes-tgl--header-letter body)
+      (let ((case-fold-search nil) (lines (split-string body "\n"))
+            (n 0) (letter nil))
+        (while (and lines (< n 6) (not letter))
+          (let ((l (car lines)))
+            (when (string-match
+                   "\\`[ \t]*[\u0391-\u03a9]\\(?:[ \t]*[\u0391-\u03a9]\\)+[ \t]*\\'"
+                   l)
+              (let ((k (diogenes-montanari--greek-key l)))
+                (when (> (length k) 0) (setq letter (aref k 0)))))
+            (setq lines (cdr lines) n (1+ n))))
+        letter)))
 
 (defun diogenes-tgl--monotone-backbone (keys)
   "Return the longest non-decreasing subsequence of KEYS (a list of strings).
@@ -1987,8 +2038,23 @@ and sending root lookups (e.g. ἵστημι) to the fallback body scan."
                  (point-max)))))
         (goto-char (point-min))
         (let ((marker diogenes-tgl-page-marker-regexp)
-              (seg-start nil) (pdfp nil))
-          (cl-flet ((harvest-caps (body page hletter)
+              (seg-start nil) (pdfp nil)
+              ;; Own-volume vocabulary of lower-case headwords (line-start
+              ;; lower-case Greek words), gathered in one pre-pass.  Used to
+              ;; validate a leading-capital repair in `harvest-caps': a repair
+              ;; is trusted only if the stripped form is a headword this volume
+              ;; actually prints.
+              (lc-vocab (let ((h (make-hash-table :test 'equal)))
+                          (save-excursion
+                            (goto-char (point-min))
+                            (while (re-search-forward
+                                    diogenes-tgl--lc-headword-regexp
+                                    index-start t)
+                              (let ((k (diogenes-montanari--greek-key
+                                        (match-string 1))))
+                                (when (>= (length k) 3) (puthash k t h)))))
+                          h)))
+          (cl-flet ((harvest-caps (body page hletter loose-hletter)
                       ;; Record the first-occurrence page of each all-caps
                       ;; headword in BODY.  A capitalised line is normally a
                       ;; root opening -- but Estienne also sets DERIVED forms
@@ -2006,15 +2072,63 @@ and sending root lookups (e.g. ἵστημι) to the fallback body scan."
                       ;; word that is not a derivation is kept even if alien
                       ;; (so a genuine entry like ἵστημι is never suppressed).
                       ;; When the page has no detectable header we cannot
-                      ;; judge alienness, so we keep the anchor.
+                      ;; judge alienness, so we keep the anchor.  LOOSE-HLETTER
+                      ;; is a header letter obtained by a more forgiving scan
+                      ;; (`diogenes-tgl--header-letter-loose'); it is used ONLY
+                      ;; to validate a leading-capital repair, never for the
+                      ;; rejection above, so the rejection is unchanged.
                       (let* ((lines (vconcat (split-string body "\n")))
                              (n (length lines)))
                         (dotimes (i n)
                           (let ((line (aref lines i)))
-                            (when (string-match diogenes-tgl--caps-entry-regexp line)
-                              (let ((raw (match-string 1 line)))
+                            (when (or (string-match
+                                       diogenes-tgl--caps-entry-regexp line)
+                                      (string-match
+                                       diogenes-tgl--caps-head-lemma-regexp line))
+                              (let* ((mend (match-end 0))
+                                     (raw (match-string 1 line))
+                                     ;; lower-case lemma right after a caps head
+                                     ;; (only the caps-head-lemma form has one)
+                                     (lemma
+                                      (and (string-match
+                                            diogenes-tgl--caps-head-lemma-regexp line)
+                                           (diogenes-montanari--greek-key
+                                            (match-string 2 line)))))
+                                (ignore mend)
                                 (when (diogenes-tgl--all-caps-p raw)
                                   (let ((k (diogenes-montanari--greek-key raw)))
+                                    ;; An all-caps head IS a root entry, so its
+                                    ;; key must sit in the page's alphabetical
+                                    ;; region.  When it does not, a single
+                                    ;; leading capital may be OCR noise (e.g.
+                                    ;; `ΒΑΥΤΟΣ' for ΑΥΤΟΣ on the αυτ- page).  We
+                                    ;; only repair the caps-THEN-lowercase-lemma
+                                    ;; form, because there the article's own
+                                    ;; lower-case lemma printed right after the
+                                    ;; head proves what the letters should be --
+                                    ;; a self-check no mis-OCR'd running header
+                                    ;; can fool.  Strip the leading capital only
+                                    ;; when ALL hold: its first letter differs
+                                    ;; from the (loosely read) running-header
+                                    ;; letter LOOSE-HLETTER but the SECOND letter
+                                    ;; equals it; the stripped form is a head this
+                                    ;; volume prints (LC-VOCAB) while the
+                                    ;; unstripped form is not; and the printed
+                                    ;; lemma begins with the stripped key's first
+                                    ;; letter.  (The bare caps-entry form, with no
+                                    ;; lemma, is left alone: ΔΕΙΔΩ and ΕΙΔΩ are
+                                    ;; both real, and only the lemma could tell
+                                    ;; them apart.)  We use the LOOSE header here
+                                    ;; because a root's own page may carry a
+                                    ;; space-broken header the strict scan misses.
+                                    (when (and loose-hletter (> (length k) 1)
+                                               (not (eql (aref k 0) loose-hletter))
+                                               (eql (aref k 1) loose-hletter)
+                                               lemma (>= (length lemma) 3)
+                                               (eql (aref lemma 0) (aref k 1))
+                                               (gethash (substring k 1) lc-vocab)
+                                               (not (gethash k lc-vocab)))
+                                      (setq k (substring k 1)))
                                     (when (and (>= (length k) 3)
                                                (not (gethash k caps)))
                                       (let* ((mismatch
@@ -2040,7 +2154,8 @@ and sending root lookups (e.g. ἵστημι) to the fallback body scan."
                                 seg-start (match-beginning 0)))
                          (core (diogenes-tgl--monotone-backbone
                                 (diogenes-tgl--page-candidates body))))
-                    (harvest-caps body pdfp (diogenes-tgl--header-letter body))
+                    (harvest-caps body pdfp (diogenes-tgl--header-letter body)
+                                  (diogenes-tgl--header-letter-loose body))
                     (when (>= (length core) 2)
                       (push (list :page pdfp
                                   :lo (car core)
@@ -2055,7 +2170,8 @@ and sending root lookups (e.g. ἵστημι) to the fallback body scan."
                      (body (buffer-substring-no-properties seg-start end))
                      (core (diogenes-tgl--monotone-backbone
                             (diogenes-tgl--page-candidates body))))
-                (harvest-caps body pdfp (diogenes-tgl--header-letter body))
+                (harvest-caps body pdfp (diogenes-tgl--header-letter body)
+                              (diogenes-tgl--header-letter-loose body))
                 (when (>= (length core) 2)
                   (push (list :page pdfp
                               :lo (car core)
@@ -3012,17 +3128,80 @@ lines carry no column and never resolve here."
       (when (and rec owner)
         ;; Keep only references in the word's own (letter-routed) volume.
         (let* ((same (cl-remove-if-not (lambda (r) (= (nth 0 r) owner)) rec))
-               (best (car (sort (copy-sequence same)
-                                (lambda (a b) (< (nth 1 a) (nth 1 b)))))))
+               (model (and same (diogenes-tgl--column-model
+                                  (diogenes-tgl--volume-text owner))))
+               ;; Page (with offset) each kept ref resolves to.
+               (cands (and model
+                           (delq nil
+                                 (mapcar
+                                  (lambda (r)
+                                    (let ((p (diogenes-tgl--column-to-page
+                                              (nth 1 r) model)))
+                                      (when p
+                                        (list :vol (nth 0 r) :col (nth 1 r)
+                                              :letter (nth 2 r)
+                                              :page (+ p diogenes-tgl-page-offset)))))
+                                  same))))
+               (best
+                (cond
+                 ((null cands) nil)
+                 ((= (length cands) 1) (car cands))
+                 (t
+                  ;; Several references for one key.  The naive "smallest
+                  ;; column is the entry opening" breaks when a GARBLED index
+                  ;; headword in a foreign alphabetical region injects a
+                  ;; spurious column onto this word (e.g. `Αὐτὸς,ibid.' misread
+                  ;; among the αἰπ- entries files αυτος at c.176 -> p144,
+                  ;; masking the real c.604 -> p358; and the outlier is not
+                  ;; always the smallest -- ἆθλος has a spurious LARGE column,
+                  ;; and ἀγανός a spurious c.7 at the very start of alpha).
+                  ;; Pick the reference the volume itself corroborates, in
+                  ;; order of decreasing reliability:
+                  ;;   1. a reference whose page carries KEY as an ALL-CAPS
+                  ;;      article header (`diogenes-tgl--caps-opening', the
+                  ;;      authoritative entry opening) -- exact and decisive;
+                  ;;   2. else the reference nearest KEY's running-header
+                  ;;      position (`diogenes-tgl--approx-locate'), which places
+                  ;;      the word alphabetically even without an all-caps head
+                  ;;      (e.g. αὐτός, printed mixed-case);
+                  ;;   3. else the smallest column (the usual opening).
+                  (let* ((caps-page
+                          (let ((cp (ignore-errors
+                                     (diogenes-tgl--caps-opening owner key))))
+                            (and cp (+ cp diogenes-tgl-page-offset))))
+                         (corrob (and caps-page
+                                      (cl-remove-if-not
+                                       (lambda (c) (<= (abs (- (plist-get c :page)
+                                                               caps-page)) 1))
+                                       cands)))
+                         (anchor (unless corrob
+                                   (let ((b (ignore-errors
+                                             (diogenes-tgl--approx-locate key))))
+                                     (and b (= (car b) owner) (cdr b))))))
+                    (cond
+                     (corrob
+                      (car (sort corrob
+                                 (lambda (a b) (< (plist-get a :col)
+                                                  (plist-get b :col))))))
+                     (anchor
+                      (car (sort (copy-sequence cands)
+                                 (lambda (a b)
+                                   (let ((da (abs (- (plist-get a :page) anchor)))
+                                         (db (abs (- (plist-get b :page) anchor))))
+                                     (if (= da db)
+                                         (< (plist-get a :col) (plist-get b :col))
+                                       (< da db)))))))
+                     (t
+                      (car (sort (copy-sequence cands)
+                                 (lambda (a b)
+                                   (< (plist-get a :col)
+                                      (plist-get b :col))))))))))))
           (when best
-            (cl-destructuring-bind (vol col letter) best
-              (let* ((txt (diogenes-tgl--volume-text vol))
-                     (page (and txt
-                                (diogenes-tgl--column-to-page
-                                 col (diogenes-tgl--column-model txt)))))
-                (when page
-                  (list vol (+ page diogenes-tgl-page-offset)
-                        col letter kind))))))))))
+            (list (plist-get best :vol)
+                  (plist-get best :page)
+                  (plist-get best :col)
+                  (plist-get best :letter)
+                  kind)))))))
 
 (defvar diogenes-tgl--index-pagekeys-cache (make-hash-table :test 'equal)
   "Cache mapping volume V's OCR cache-key to its (REPKEY . PAGE) sequence.")
@@ -3122,10 +3301,17 @@ resolver."
                              key coarse (plist-get data :perpage))
                             coarse)
                         diogenes-tgl-page-offset))))))
-            (candidate
-             ;; a harvested supplementary entry, or a t.5 reference page
-             (or (let ((e (diogenes-tgl--index-entry-locate key index)))
-                   (and e (cdr e)))
+            (candidate-exact
+             ;; A candidate strong enough to OVERRIDE the alphabetical
+             ;; estimate: an EXACT supplementary-entry match, or a t.5
+             ;; reference.  A *fuzzy* entry match is deliberately excluded
+             ;; here -- a 1-edit neighbour (e.g. `αυτον' for `αυτοσ') is
+             ;; often a different real word glossed in another part of the
+             ;; same letter, and must not displace a clean estimate.
+             (or (let ((entries (plist-get index :entries)))
+                   (and entries
+                        (let ((p (gethash key entries)))
+                          (and p (+ p diogenes-tgl-page-offset)))))
                  (let* ((rec (gethash key (plist-get index :refs)))
                         (five (cl-find 5 rec :key #'car)))
                    (when five
@@ -3133,19 +3319,27 @@ resolver."
                                    (diogenes-tgl--volume-text 5))))
                        (when model
                          (+ (diogenes-tgl--column-to-page (nth 1 five) model)
-                            diogenes-tgl-page-offset))))))))
+                            diogenes-tgl-page-offset)))))))
+            (candidate-any
+             ;; Any harvested page (exact OR fuzzy entry, or a t.5 ref),
+             ;; used ONLY as a last resort when there is no alphabetical
+             ;; estimate at all -- then even a fuzzy mention beats nothing.
+             (or (let ((e (diogenes-tgl--index-entry-locate key index)))
+                   (and e (cdr e)))
+                 candidate-exact)))
         (cond
-         ;; Trust the harvested page only when it sits in the estimate's
-         ;; neighbourhood (same letter region); otherwise it is an incidental
-         ;; mention and the alphabetical estimate is the right place.
-         ((and candidate estimate
-               (<= (abs (- candidate estimate))
+         ;; Trust the harvested page only when it is an EXACT entry/ref AND
+         ;; sits in the estimate's neighbourhood (same letter region);
+         ;; otherwise it is an incidental mention and the alphabetical
+         ;; estimate is the right place.
+         ((and candidate-exact estimate
+               (<= (abs (- candidate-exact estimate))
                    diogenes-tgl-index-entry-agree-window))
-          (cons 5 candidate))
+          (cons 5 candidate-exact))
          (estimate (cons 5 estimate))
-         ;; No estimate (letter absent from the index): fall back to the
+         ;; No estimate (letter absent from the index): fall back to any
          ;; harvested page if we have one -- better than nothing.
-         (candidate (cons 5 candidate))
+         (candidate-any (cons 5 candidate-any))
          (t nil))))))
 
 (defcustom diogenes-tgl-index-entry-agree-window 40
@@ -3698,11 +3892,16 @@ look-up instant, on any machine, without parsing the OCR at run time."
   :type 'string
   :group 'diogenes)
 
-(defconst diogenes-tgl--index-format-version 2
+(defconst diogenes-tgl--index-format-version 3
   "Bumped when the prebuilt-index structure changes, to invalidate old files.
 Version 2: the compound map now also harvests split-headword compounds
 \(e.g. `C.ΔΙΑ πράσω'), so a version-1 index (built before that) is
-rejected and rebuilt on demand.")
+rejected and rebuilt on demand.
+Version 3: the caps map now also harvests the caps-head-then-lowercase-
+lemma root form (e.g. `ΑΥΤΟΣ αὐτό, ...') and repairs a spurious leading
+capital on such a head when the article's own lemma confirms it (OCR
+`ΒΑΥΤΟΣ' -> ΑΥΤΟΣ, landing αὐτός on its true root page).  A version-2
+index (built before that) is rejected and rebuilt on demand.")
 
 (defun diogenes-tgl--prebuilt-index-file ()
   "Return the portable prebuilt-index path, or nil if the directory is unset."

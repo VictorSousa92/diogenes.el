@@ -226,6 +226,18 @@ Uses and populates `diogenes-old--index-cache'."
 ;;;; HEADWORD -> PAGE
 ;;;; --------------------------------------------------------------------
 
+(defconst diogenes-old--truncated-guide-min-length 5
+  "Minimum guide-word length for the truncated-guide-word fallback.
+A page's guide word is its last headword, but the OLD's OCR/bookmark
+text sometimes drops a headword's final letters (e.g. `uadimoni' for
+UADIMONIUM).  Such a clipped guide word sorts just before the full
+word, so the plain search steps past its page to the next one.  When
+the immediately preceding page's guide word is a prefix of the looked-up
+word and is at least this many characters long, we treat it as that
+headword truncated and return the preceding page.  The length floor
+keeps genuinely short, distinct guide words (`ua', `uir', `pes') from
+swallowing later words that merely share their opening letters.")
+
 (defun diogenes-old--page-for-word (word &optional file)
   "Return the OLD page number containing the entry for WORD.
 Each bookmark in the index is the *last* headword on its page, so
@@ -234,26 +246,88 @@ after WORD -- the earliest page whose running head has reached
 WORD.  When WORD is itself the last entry of a page and continues
 onto the next (so the same guide word heads two consecutive
 pages), this returns the earlier page, where the entry begins.
+
+If the preceding page's guide word is a truncation of WORD (a
+prefix of it, and long enough to be a clipped headword rather than
+a distinct short word -- see
+`diogenes-old--truncated-guide-min-length'), WORD is that page's
+spilled-over last entry, so the preceding page is returned.  This
+handles running heads whose final letters the OCR dropped (e.g.
+`uadimoni' for UADIMONIUM, the last entry of its page).
+
 Returns an integer page (with `diogenes-old-page-offset' applied),
 or the final page if WORD sorts after every guide word."
   (let* ((index (diogenes-old--index file))
          (key (diogenes-old--sort-key word))
-         (hit nil))
+         (hit nil)
+         (prev-key nil) (prev-page nil))
     ;; INDEX is sorted ascending by key, ties broken to the EARLIER page.
     ;; The first entry whose last-word key is >= WORD's key is the page
     ;; WORD falls on; because ties favour the earlier page, a word that
-    ;; heads two consecutive pages resolves to where it begins.
+    ;; heads two consecutive pages resolves to where it begins.  We also
+    ;; remember the entry just before the hit: if its guide word is a
+    ;; (substantial) prefix of KEY, that guide word is a truncated form of
+    ;; WORD and WORD is the spilled-over last entry of that earlier page.
     (cl-loop for (gkey . page) in index
              when (or (string< key gkey) (string= key gkey))
-             do (setq hit page) and return nil)
-    ;; If WORD sorts after every guide word, use the last page.
-    (let ((page (or hit (cdr (car (last index))))))
+             do (setq hit page) and return nil
+             do (setq prev-key gkey prev-page page))
+    (let* ((truncated
+            (and hit prev-key prev-page
+                 (not (string= prev-key key))
+                 (>= (length prev-key)
+                     diogenes-old--truncated-guide-min-length)
+                 (string-prefix-p prev-key key)))
+           (page (cond (truncated prev-page)
+                       (hit hit)
+                       ;; WORD sorts after every guide word: last page.
+                       (t (cdr (car (last index)))))))
       (when page
         (+ page diogenes-old-page-offset)))))
 
 ;;;; --------------------------------------------------------------------
 ;;;; OPENING THE PDF
 ;;;; --------------------------------------------------------------------
+
+(defcustom diogenes-old-pdf-viewer 'auto
+  "Which in-Emacs viewer opens a print dictionary at an entry's page.
+All the forward openers -- the dictionary keys (`o', `m', `b', ...) and
+the `diogenes-lookup-open-*' commands -- display their PDF through
+`diogenes-old--show-page', which honours this setting:
+
+  `auto'         Use `pdf-tools' if it is available, otherwise fall back
+                 to the built-in `doc-view'.  This is the default.
+  `pdf-tools'    Force `pdf-view-mode'.
+  `doc-view'     Force the built-in `doc-view-mode'.
+  `emacs-reader' Use the Emacs Reader (`reader-mode', the MuPDF-backed
+                 reader from https://codeberg.org/MonadicSheep/emacs-reader).
+
+All four are in-Emacs viewers, so window management (including
+`window-purpose') applies to their buffers normally.
+
+Note: the reverse in-PDF lookup, `diogenes-pdf-lookup-entry' (the `L'
+key), works only with `pdf-tools' (and, partially, `doc-view').  It
+reads the word under point from the PDF's text layer, which
+`emacs-reader' does not expose (it renders pages as images), so `L' is
+unavailable when the dictionary is open in the Emacs Reader.  The
+forward openers work with every viewer."
+  :type '(choice (const :tag "Auto (pdf-tools, else doc-view)" auto)
+                 (const :tag "pdf-tools" pdf-tools)
+                 (const :tag "doc-view" doc-view)
+                 (const :tag "Emacs Reader (reader-mode)" emacs-reader))
+  :group 'diogenes)
+
+(defun diogenes-old--resolved-viewer ()
+  "Return the concrete viewer to use: `pdf-tools', `doc-view', or `emacs-reader'.
+Resolves `diogenes-old-pdf-viewer', turning `auto' into `pdf-tools'
+when pdf-tools is available and `doc-view' otherwise."
+  (pcase diogenes-old-pdf-viewer
+    ('pdf-tools 'pdf-tools)
+    ('doc-view 'doc-view)
+    ('emacs-reader 'emacs-reader)
+    (_ (if (or (featurep 'pdf-tools) (fboundp 'pdf-view-mode))
+           'pdf-tools
+         'doc-view))))
 
 (defun diogenes-old--goto-page-in-window (buffer page)
   "Go to PAGE in the window that displays BUFFER, disturbing no other window.
@@ -262,7 +336,11 @@ window, so a jump that runs asynchronously (see
 `diogenes-old--goto-page-when-ready') could repage whatever PDF the
 user has since switched to.  Passing BUFFER's own window confines the
 jump; if BUFFER is not currently displayed, the jump is skipped rather
-than applied to the wrong window."
+than applied to the wrong window.
+
+Handles `pdf-view-mode', `doc-view-mode', and the Emacs Reader's
+`reader-mode' (via `reader-goto-page', clamped with
+`reader-current-doc-pagecount')."
   (when (buffer-live-p buffer)
     (let ((win (get-buffer-window buffer t)))
       (with-current-buffer buffer
@@ -276,24 +354,89 @@ than applied to the wrong window."
          ((derived-mode-p 'doc-view-mode)
           (when win
             (with-selected-window win
-              (doc-view-goto-page (max 1 page))))))))))
+              (doc-view-goto-page (max 1 page)))))
+         ((and (derived-mode-p 'reader-mode) (fboundp 'reader-goto-page))
+          (when win
+            (with-selected-window win
+              (let ((page (if (boundp 'reader-current-doc-pagecount)
+                              (max 1 (min page reader-current-doc-pagecount))
+                            (max 1 page))))
+                (reader-goto-page page))))))))))
+
+(defcustom diogenes-old-reader-jump-retries 40
+  "How many times to retry the Emacs Reader page jump while the doc loads.
+`reader-open-doc' returns before the document has finished rendering
+\(so `reader-current-pagenumber' is momentarily nil), and the Emacs
+Reader provides no \"document ready\" hook.  We therefore poll: attempt
+the jump, and if the reader is not ready yet, retry after
+`diogenes-old-reader-jump-retry-interval' seconds, up to this many
+times, then give up.  The cap guarantees the retries cannot loop
+forever."
+  :type 'integer
+  :group 'diogenes)
+
+(defcustom diogenes-old-reader-jump-retry-interval 0.1
+  "Seconds between retries of the Emacs Reader page jump.
+See `diogenes-old-reader-jump-retries'."
+  :type 'number
+  :group 'diogenes)
+
+(defun diogenes-old--reader-goto-when-ready (buffer page &optional attempt)
+  "Jump BUFFER's Emacs Reader to PAGE once the document is ready.
+Polls: the reader is considered ready once `reader-current-doc-pagecount'
+\(a buffer-local variable, safe to test even if the Reader's functions
+autoload lazily) is a positive number.  Until then, and on any error
+from the jump, reschedule via a timer, up to
+`diogenes-old-reader-jump-retries' attempts.  The jump is confined to
+BUFFER's own window and skipped if BUFFER is no longer displayed."
+  (let ((attempt (or attempt 0)))
+    (when (buffer-live-p buffer)
+      (let ((win (get-buffer-window buffer t)))
+        (when win
+          (let* ((ready
+                  (with-current-buffer buffer
+                    (and (boundp 'reader-current-doc-pagecount)
+                         (numberp reader-current-doc-pagecount)
+                         (> reader-current-doc-pagecount 0)
+                         (fboundp 'reader-goto-page))))
+                 (done
+                  (and ready
+                       (with-selected-window win
+                         (with-current-buffer buffer
+                           (let ((pg (if (numberp reader-current-doc-pagecount)
+                                         (max 1 (min page reader-current-doc-pagecount))
+                                       (max 1 page))))
+                             (ignore-errors (reader-goto-page pg) t)))))))
+            (unless done
+              (when (< attempt diogenes-old-reader-jump-retries)
+                (run-with-timer
+                 diogenes-old-reader-jump-retry-interval nil
+                 #'diogenes-old--reader-goto-when-ready
+                 buffer page (1+ attempt))))))))))
 
 (defun diogenes-old--goto-page-when-ready (buffer page)
-  "Jump to PAGE in BUFFER once its PDF viewer is ready.
+  "Jump to PAGE in BUFFER once its viewer is ready.
 Handles the asynchronous start-up of `pdf-view-mode': if the
 buffer is not yet displaying pages, the jump is deferred to
-`pdf-view-mode-hook'.  The jump is always confined to BUFFER's own
-window (see `diogenes-old--goto-page-in-window'), so it never changes
-the page of another PDF the user may have selected in the meantime."
+`pdf-view-mode-hook'.  `doc-view-mode' and the Emacs Reader's
+`reader-mode' are driven directly once present, with a `reader-mode-hook'
+deferral for a buffer still entering reader-mode.  The jump is always
+confined to BUFFER's own window (see
+`diogenes-old--goto-page-in-window'), so it never changes the page of
+another document the user may have selected in the meantime."
   (with-current-buffer buffer
     (cond
      ((derived-mode-p 'pdf-view-mode)
       (diogenes-old--goto-page-in-window buffer page))
      ((derived-mode-p 'doc-view-mode)
       (diogenes-old--goto-page-in-window buffer page))
+     ((derived-mode-p 'reader-mode)
+      ;; The Reader renders asynchronously and has no ready-hook, so poll.
+      (diogenes-old--reader-goto-when-ready buffer page))
      ((and (fboundp 'pdf-view-mode)
            buffer-file-name
-           (string-match-p "\\.pdf\\'" buffer-file-name))
+           (string-match-p "\\.pdf\\'" buffer-file-name)
+           (not (fboundp 'reader-goto-page)))
       ;; pdf-view-mode is available but the buffer hasn't finished
       ;; entering it yet.  Defer until it has.
       (let ((buf buffer) (pg page) fn)
@@ -305,19 +448,75 @@ the page of another PDF the user may have selected in the meantime."
                       (lambda ()
                         (diogenes-old--goto-page-in-window buf pg))))))
         (add-hook 'pdf-view-mode-hook fn nil t)))
+     ((fboundp 'reader-goto-page)
+      ;; The Emacs Reader is loaded; the buffer may still be entering
+      ;; `reader-mode' / rendering.  The poll waits for readiness.
+      (diogenes-old--reader-goto-when-ready buffer page))
      (t
-      (message "OLD entry is on page %d (couldn't drive the PDF viewer)" page)))))
+      (message "OLD entry is on page %d (couldn't drive the viewer)" page)))))
+
+(defun diogenes-old--open-buffer-in-viewer (file viewer)
+  "Return a buffer visiting FILE, opened in VIEWER's major mode.
+VIEWER is `pdf-tools', `doc-view', or `emacs-reader'.  If a buffer
+already visits FILE it is returned as-is (whatever viewer it is in),
+so we never open a second copy of a huge scan.  Otherwise the file is
+opened fresh and put into the requested viewer's mode.
+
+The Emacs Reader registers `.pdf' in `auto-mode-alist', so a plain
+`find-file-noselect' would always choose `reader-mode' once the Reader
+is loaded.  To honour the VIEWER choice we bind `auto-mode-alist' /
+`magic-mode-alist' appropriately for the fresh open, then explicitly
+switch to the target mode as a belt-and-suspenders."
+  (or (find-buffer-visiting file)
+      (let ((large-file-warning-threshold nil))  ; huge scans: open without prompt
+        (pcase viewer
+          ('emacs-reader
+           ;; `reader-open-doc' is the Emacs Reader's own entry point: it sets
+           ;; up the MuPDF document state and puts the buffer in `reader-mode'.
+           ;; Opening via `find-file-noselect' instead is wrong -- pdf-tools may
+           ;; win the major-mode race for `.pdf' and ingest the whole scan
+           ;; (slow), and switching an already-loaded buffer to `reader-mode'
+           ;; does not initialise the reader.  `reader-open-doc' selects the
+           ;; document as a side effect, so shield the window configuration and
+           ;; then locate the buffer it created for FILE.
+           (save-window-excursion
+             (reader-open-doc (expand-file-name file)))
+           (find-buffer-visiting file))
+          ('doc-view
+           ;; Keep the Reader's auto-mode entry from claiming the file.
+           (let* ((auto-mode-alist
+                   (cl-remove-if (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
+                                 auto-mode-alist))
+                  (magic-mode-alist
+                   (cl-remove-if (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
+                                 magic-mode-alist))
+                  (buffer (find-file-noselect file)))
+             (with-current-buffer buffer
+               (unless (derived-mode-p 'doc-view-mode)
+                 (when (fboundp 'doc-view-mode) (doc-view-mode))))
+             buffer))
+          (_  ; pdf-tools
+           (let* ((auto-mode-alist
+                   (cl-remove-if (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
+                                 auto-mode-alist))
+                  (magic-mode-alist
+                   (cl-remove-if (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
+                                 magic-mode-alist))
+                  (buffer (find-file-noselect file)))
+             (with-current-buffer buffer
+               (unless (derived-mode-p 'pdf-view-mode)
+                 (when (fboundp 'pdf-view-mode) (pdf-view-mode))))
+             buffer))))))
 
 (defun diogenes-old--show-page (page &optional file)
-  "Display the OLD PDF FILE at PAGE inside Emacs.
-Prefers `pdf-tools'; falls back to `doc-view' if pdf-tools is not
-available.  Honours `diogenes-old-display-in-other-window'."
+  "Display the dictionary PDF FILE at PAGE inside Emacs.
+Opens FILE in the viewer chosen by `diogenes-old-pdf-viewer' (see
+`diogenes-old--resolved-viewer': `pdf-tools', `doc-view', or the Emacs
+Reader `reader-mode'), reusing an already-open buffer for FILE if one
+exists.  Honours `diogenes-old-display-in-other-window'.  Returns PAGE."
   (let* ((file (or file diogenes-old-pdf-file))
-         (already (find-buffer-visiting file))
-         ;; TLL fascicles and OLD scans are hundreds of MB; opening one
-         ;; is deliberate here, so don't prompt about its size.
-         (large-file-warning-threshold nil)
-         (buffer (or already (find-file-noselect file)))
+         (viewer (diogenes-old--resolved-viewer))
+         (buffer (diogenes-old--open-buffer-in-viewer file viewer))
          (display (if diogenes-old-display-in-other-window
                       #'display-buffer
                     #'pop-to-buffer-same-window)))

@@ -64,6 +64,7 @@
 (require 'diogenes-tgl)
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)
+;(require 'diogenes-window)
 (require 'diogenes-legacy)
 
 (defgroup diogenes nil

@@ -534,10 +534,20 @@ while KEY-FN must return the key."
       ;; A fresh buffer either way (the previous entry is never destroyed);
       ;; `diogenes--lookup-same-window' only chooses WHERE to show it -- in
       ;; the calling window, or (default) via the usual `pop-to-buffer'.
+      ;;
+      ;; Turn the major mode ON BEFORE displaying: `display-buffer' (and the
+      ;; `pop-to-buffer' below) consult `display-buffer-alist', whose rules
+      ;; may dispatch on the buffer's major mode.  If the mode were switched
+      ;; on only afterwards, the buffer would still be in Fundamental mode at
+      ;; display time and such a rule could not recognise it as a Diogenes
+      ;; lookup.  `diogenes-lookup-mode' derives from `text-mode', so it runs
+      ;; `kill-all-local-variables'; the buffer-local settings below are
+      ;; therefore assigned AFTER it, as before.
+      (with-current-buffer lookup-buffer
+	(diogenes-lookup-mode))
       (if diogenes--lookup-same-window
 	  (pop-to-buffer-same-window lookup-buffer)
 	(pop-to-buffer lookup-buffer))
-      (diogenes-lookup-mode)
       (setq diogenes--lookup-file (diogenes--dict-file lang)
 	    diogenes--lookup-bufstart start
 	    diogenes--lookup-bufend end
