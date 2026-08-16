@@ -535,19 +535,39 @@ while KEY-FN must return the key."
       ;; `diogenes--lookup-same-window' only chooses WHERE to show it -- in
       ;; the calling window, or (default) via the usual `pop-to-buffer'.
       ;;
-      ;; Turn the major mode ON BEFORE displaying: `display-buffer' (and the
-      ;; `pop-to-buffer' below) consult `display-buffer-alist', whose rules
-      ;; may dispatch on the buffer's major mode.  If the mode were switched
-      ;; on only afterwards, the buffer would still be in Fundamental mode at
-      ;; display time and such a rule could not recognise it as a Diogenes
-      ;; lookup.  `diogenes-lookup-mode' derives from `text-mode', so it runs
-      ;; `kill-all-local-variables'; the buffer-local settings below are
-      ;; therefore assigned AFTER it, as before.
-      (with-current-buffer lookup-buffer
-	(diogenes-lookup-mode))
-      (if diogenes--lookup-same-window
-	  (pop-to-buffer-same-window lookup-buffer)
-	(pop-to-buffer lookup-buffer))
+      ;; The gate is whether the optional `diogenes-purpose' module is loaded
+      ;; -- NOT whether `purpose-mode' is on.  Spacemacs turns `purpose-mode'
+      ;; on for everyone, so keying on that would always fire; the real
+      ;; question is whether the user has opted in to giving the Diogenes
+      ;; buffers their own window-purposes by loading `diogenes-purpose'.
+      ;;
+      ;; * `diogenes-purpose' LOADED: set the major mode BEFORE displaying, so
+      ;;   purpose (whose action runs at display time and dispatches on the
+      ;;   major mode) classifies the buffer as a lookup and gives it the
+      ;;   lookup window instead of the browser/edit window.
+      ;;
+      ;; * `diogenes-purpose' NOT loaded: run the ORIGINAL sequence verbatim --
+      ;;   display first, then set the mode.  This is exactly the pre-existing
+      ;;   behaviour (reuse an existing window or open a new one from the
+      ;;   browser; show in place on a single-window frame), and it holds
+      ;;   whether or not `purpose-mode' happens to be on and whether or not
+      ;;   `pop-up-frames' is set.
+      ;;
+      ;; In both, `diogenes-lookup-mode' derives from `text-mode' and runs
+      ;; `kill-all-local-variables', so the buffer-locals are assigned after.
+      (if (featurep 'diogenes-purpose)
+          ;; --- diogenes-purpose active: mode before display ---
+          (progn
+            (with-current-buffer lookup-buffer
+              (diogenes-lookup-mode))
+            (if diogenes--lookup-same-window
+                (pop-to-buffer-same-window lookup-buffer)
+              (pop-to-buffer lookup-buffer)))
+        ;; --- otherwise: the original order, unchanged ---
+        (if diogenes--lookup-same-window
+            (pop-to-buffer-same-window lookup-buffer)
+          (pop-to-buffer lookup-buffer))
+        (diogenes-lookup-mode))
       (setq diogenes--lookup-file (diogenes--dict-file lang)
 	    diogenes--lookup-bufstart start
 	    diogenes--lookup-bufend end
