@@ -645,7 +645,7 @@ and at anyone who runs with
  
 which opens buffers in separate frames rather than splitting one frame
 into windows (common among users of tiling window managers such as i3,
-sway, Hyprland, and bspwm, who let the window manager tile the Emacs
+sway, Hyprland, and bspwm, or PlasmaZones for KDE, who let the window manager tile the Emacs
 frames).
  
 The problem it solves: **Spacemacs turns window-purpose
