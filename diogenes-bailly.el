@@ -60,6 +60,12 @@
 ;; match, on all 2 470 numbered heads); the number in a head serves only
 ;; as the anchor that separates its two lemmas.
 ;;
+;; A head counts as read only when both sides of its page number hold
+;; Greek lemmas in alphabetical order.  That is what keeps the front
+;; matter -- prefaces, the list of authors, where a page number sits amid
+;; prose -- out of the index, and what discards a page whose text came
+;; back with body matter attached instead of just the head.
+;;
 ;; The 24 pages that open a letter print a large "Α, α" instead of a
 ;; running head.  They need no special data: a page with no parsable head
 ;; is simply not a probe point, and a word sorting before the following
@@ -102,6 +108,12 @@
 ;; page: identical spelling, so no collation key could separate them, and
 ;; the reader arrives one page early with both in view.  Unlike the
 ;; scanned dictionaries, there is no OCR noise here to allow for.
+;;
+;; Poppler's `pdftotext' is preferred for reading a page, because its
+;; `-layout' output puts the running head on the first line; pdf-tools'
+;; `pdf-info-gettext' is the fallback, and on some versions returns more
+;; of the page than the strip asked for, in which case heads are refused
+;; rather than guessed at.  Set `diogenes-bailly-text-method' to override.
 ;;
 ;; Setup:
 ;;
@@ -149,13 +161,20 @@ is already a physical PDF page index.  See `diogenes-old-page-offset'."
 
 (defcustom diogenes-bailly-text-method 'auto
   "How to read the text of a single PDF page.
-`auto' prefers `pdf-info-gettext' (pdf-tools, no external process) and
-falls back to poppler's `pdftotext'.  Force one with `pdf-tools' or
-`pdftotext'.  Note that \\[diogenes-bailly-build-index] is much faster
-with `pdftotext', which reads every page in a single run."
-  :type '(choice (const :tag "Prefer pdf-tools, else pdftotext" auto)
-                 (const :tag "pdf-tools (pdf-info-gettext)" pdf-tools)
-                 (const :tag "The pdftotext program" pdftotext))
+`auto' prefers poppler's `pdftotext' and falls back to
+`pdf-info-gettext' (pdf-tools, no external process).  Force either with
+`pdftotext' or `pdf-tools'.
+
+`pdftotext' comes first deliberately.  Its `-layout' output puts a
+page's running head on the first line, exactly as printed, which is what
+the head parser wants; `pdf-info-gettext' asks for the top strip of the
+page but, depending on the pdf-tools version, may return a good deal
+more, in which case the head cannot be told from the body text following
+it and the page is skipped.  \\[diogenes-bailly-build-index] is also far
+faster with `pdftotext', which reads the whole dictionary in one run."
+  :type '(choice (const :tag "Prefer pdftotext, else pdf-tools" auto)
+                 (const :tag "The pdftotext program" pdftotext)
+                 (const :tag "pdf-tools (pdf-info-gettext)" pdf-tools))
   :group 'diogenes)
 
 (defcustom diogenes-bailly-pdftotext-program "pdftotext"
@@ -304,11 +323,6 @@ page is read.  Uses `pdf-info-gettext' or `pdftotext' according to
 exist or cannot be read."
   (let ((method diogenes-bailly-text-method))
     (cond
-     ((and (memq method '(auto pdf-tools)) (diogenes-bailly--pdf-tools-p))
-      (ignore-errors
-        (pdf-info-gettext page
-                          (list 0 0 1 (if whole-page 1 diogenes-bailly-head-strip))
-                          'line file)))
      ((and (memq method '(auto pdftotext)) (diogenes-bailly--pdftotext-p))
       (with-temp-buffer
         (when (zerop (call-process diogenes-bailly-pdftotext-program nil t nil
@@ -317,6 +331,11 @@ exist or cannot be read."
                                    "-l" (number-to-string page)
                                    file "-"))
           (buffer-string))))
+     ((and (memq method '(auto pdf-tools)) (diogenes-bailly--pdf-tools-p))
+      (ignore-errors
+        (pdf-info-gettext page
+                          (list 0 0 1 (if whole-page 1 diogenes-bailly-head-strip))
+                          'line file)))
      ((eq method 'pdf-tools)
       (user-error "pdf-tools is not installed, but `diogenes-bailly-text-method' \
 is set to `pdf-tools'"))
@@ -327,31 +346,86 @@ is set to `pdf-tools'"))
       (user-error "Bailly needs either pdf-tools or poppler's %s to read the \
 running heads" diogenes-bailly-pdftotext-program)))))
 
+(defun diogenes-bailly--lemma-token-p (token)
+  "Non-nil if TOKEN can be part of a lemma, i.e. it holds Greek letters.
+Tested through `diogenes-bailly--key', so a precomposed polytonic form
+\(ὁ, ᾧ) and the variant shapes (ϐ) count, and a French or Latin word
+does not."
+  (not (string-empty-p (diogenes-bailly--key token))))
+
+(defsubst diogenes-bailly--homograph-numeral-p (token)
+  "Non-nil if TOKEN is the small numeral that distinguishes homographs."
+  (string-match-p "\\`[1-9]\\'" token))
+
+(defun diogenes-bailly--lemma-before (tokens)
+  "Return the lemma that TOKENS end with, or an empty string.
+Walks back from the end while the tokens are lemma-like, so a
+two-word lemma (\"Διὸς ἱερόν\") and a numbered homograph (\"1 ἄν\") come
+back whole, while anything before them is left alone."
+  (let ((out nil))
+    (cl-loop for token in (reverse tokens)
+             while (or (diogenes-bailly--lemma-token-p token)
+                       (and out (diogenes-bailly--homograph-numeral-p token)))
+             do (push token out))
+    (if (cl-some #'diogenes-bailly--lemma-token-p out)
+        (mapconcat #'identity out " ")
+      "")))
+
+(defun diogenes-bailly--lemma-after (tokens)
+  "Return the lemma that TOKENS begin with, or an empty string.
+The mirror image of `diogenes-bailly--lemma-before'."
+  (let ((out nil))
+    (cl-loop for token in tokens
+             while (or (diogenes-bailly--lemma-token-p token)
+                       (and (null out)
+                            (diogenes-bailly--homograph-numeral-p token)))
+             do (setq out (append out (list token))))
+    (if (cl-some #'diogenes-bailly--lemma-token-p out)
+        (mapconcat #'identity out " ")
+      "")))
+
 (defun diogenes-bailly--split-at-number (line page)
   "Split LINE at its page-number token; return (FIRST . LAST) or nil.
 An entry page's head is \"<first lemma> <number> <last lemma>\", so the
-number is the anchor.  Every integer token in LINE is considered; the
-one nearest PAGE wins, provided it has text on both sides and lies
-within `diogenes-bailly-number-tolerance' of PAGE.  That rules out the
-numeral of a homograph lemma (a head can read \"1 ἄν  212  2 ἄν\") and
-stray numbers in body text."
-  (save-match-data
-    (let ((best nil) (start 0))
-      (while (string-match "\\(?:\\`\\|[^0-9]\\)\\([0-9]+\\)\\(?:[^0-9]\\|\\'\\)"
-                           line start)
-        (let* ((mb (match-beginning 1))
-               (me (match-end 1))
-               (n (string-to-number (match-string 1 line)))
-               (before (string-trim (substring line 0 mb)))
-               (after (string-trim (substring line me)))
-               (distance (abs (- n page))))
-          (when (and (not (string-empty-p before))
-                     (not (string-empty-p after))
-                     (<= distance diogenes-bailly-number-tolerance)
-                     (or (null best) (< distance (car best))))
-            (setq best (list distance before after)))
-          (setq start me)))
-      (when best (cons (nth 1 best) (nth 2 best))))))
+number is the anchor.  Integer tokens within
+`diogenes-bailly-number-tolerance' of PAGE are tried nearest first, and
+a split is accepted only when all three of these hold:
+
+  * the tokens immediately LEFT of the number end in a lemma, and
+  * the tokens immediately RIGHT of it begin with one -- both judged by
+    the presence of Greek letters, so French definition text abutting
+    the number is refused; and
+  * the two lemmas are in alphabetical order.
+
+Those conditions are what keep a page out of the index unless its head
+really was read.  They matter because the page text is not always just
+the head: `pdf-info-gettext' may hand back more of the page than the
+strip asked for, in which case the \"last lemma\" would otherwise be
+swallowed body text (\"κίρνημι 1329 lequel on mélange…\"), and a bogus
+interval like that misdirects the binary search across the whole
+dictionary.  They also stop the front matter -- prefaces and the list
+of authors, where a page number sits amid ordinary prose -- from
+looking like dictionary pages."
+  (let* ((tokens (split-string line nil t))
+         (candidates
+          (sort (cl-loop for token in tokens
+                         for i from 0
+                         for n = (and (string-match-p "\\`[0-9]+\\'" token)
+                                      (string-to-number token))
+                         when (and n (<= (abs (- n page))
+                                         diogenes-bailly-number-tolerance))
+                         collect (cons (abs (- n page)) i))
+                (lambda (a b) (< (car a) (car b))))))
+    (cl-loop for candidate in candidates
+             for i = (cdr candidate)
+             for first = (diogenes-bailly--lemma-before (seq-take tokens i))
+             for last = (diogenes-bailly--lemma-after (seq-drop tokens (1+ i)))
+             for key-first = (diogenes-bailly--key first)
+             for key-last = (diogenes-bailly--key last)
+             when (and (not (string-empty-p key-first))
+                       (not (string-empty-p key-last))
+                       (not (string< key-last key-first)))
+             return (cons first last))))
 
 (defun diogenes-bailly--parse-head (text page)
   "Parse the running head out of TEXT, the top of PAGE.
@@ -434,10 +508,29 @@ a genuinely different PDF is still caught."
     (list :heads table :min (plist-get data :min) :max (plist-get data :max))))
 
 (defun diogenes-bailly--index-file (file)
-  "Return the portable index path for the PDF FILE."
+  "Return the path \\[diogenes-bailly-build-index] writes for the PDF FILE.
+`<pdf-name>-index.eld' in the PDF's own folder, unless
+`diogenes-bailly-index-file' says otherwise."
   (or diogenes-bailly-index-file
       (expand-file-name (concat (file-name-base file) "-index.eld")
                         (file-name-directory (expand-file-name file)))))
+
+(defun diogenes-bailly--index-candidates (file)
+  "Return the index files worth trying for the PDF FILE, best first.
+The one \\[diogenes-bailly-build-index] would write, then any other
+`*-index.eld' sitting in the same folder.  So an index built elsewhere
+and dropped in beside the PDF is picked up whatever it is called, and
+the PDF may be renamed without losing it -- safely, because an index
+whose signature does not match the PDF is refused (see
+`diogenes-bailly--read-index')."
+  (let* ((primary (diogenes-bailly--index-file file))
+         (dir (file-name-directory (expand-file-name file)))
+         (others (and (file-directory-p dir)
+                      (directory-files dir t "-index\\.eld\\'"))))
+    (cons primary
+          (seq-remove (lambda (f) (string= (expand-file-name f)
+                                           (expand-file-name primary)))
+                      others))))
 
 (defun diogenes-bailly--disk-cache-file (key)
   "Return the fallback on-disk cache path for cache KEY, or nil if disabled."
@@ -449,11 +542,12 @@ a genuinely different PDF is still caught."
 
 (defun diogenes-bailly--read-index (path signature describe)
   "Read a stored state from PATH, or return nil.
-SIGNATURE is the PDF's current signature; when the stored one differs the
-PDF has changed since the index was written, so DESCRIBE (a string naming
-the file for the user) is used to warn -- the index is still used, since a
-stale index beats none and rebuilding is one command.  A missing, corrupt
-or wrong-version file is a silent miss."
+SIGNATURE is the PDF's current signature.  A stored index whose signature
+differs was built from a different PDF, and its page numbers would be
+quietly wrong for this one, so it is REFUSED (with a message naming
+DESCRIBE) rather than used: probing the PDF is cheap, a silently
+misdirected lookup is not.  A missing, corrupt or wrong-version file is a
+silent miss."
   (when (and path (file-readable-p path))
     (condition-case err
         (with-temp-buffer
@@ -464,10 +558,11 @@ or wrong-version file is a silent miss."
             (when (and (consp data)
                        (eq (car data) :diogenes-bailly-index)
                        (eq (nth 1 data) diogenes-bailly--cache-format-version))
-              (unless (equal (nth 2 data) signature)
-                (message "Bailly: %s may be stale (the PDF changed); \
-rebuild with M-x diogenes-bailly-build-index" describe))
-              (diogenes-bailly--state-from-serializable (nthcdr 3 data)))))
+              (if (equal (nth 2 data) signature)
+                  (diogenes-bailly--state-from-serializable (nthcdr 3 data))
+                (message "Bailly: ignoring %s -- it was built from a \
+different PDF; rebuild it with M-x diogenes-bailly-build-index" describe)
+                nil))))
       ;; A corrupt index must never break a lookup.
       (error (ignore err) nil))))
 
@@ -509,9 +604,10 @@ Resolution order, cheapest first:
         (signature (diogenes-bailly--signature file)))
     (or (gethash key diogenes-bailly--cache)
         (let ((loaded
-               (or (diogenes-bailly--read-index
-                    (diogenes-bailly--index-file file) signature
-                    (abbreviate-file-name (diogenes-bailly--index-file file)))
+               (or (cl-loop for path in (diogenes-bailly--index-candidates file)
+                            thereis (diogenes-bailly--read-index
+                                     path signature
+                                     (abbreviate-file-name path)))
                    (diogenes-bailly--read-index
                     (diogenes-bailly--disk-cache-file key) signature
                     "the cached head table"))))
@@ -557,18 +653,30 @@ do."
 ;;;; WHERE THE DICTIONARY BODY BEGINS AND ENDS
 ;;;; --------------------------------------------------------------------
 
+(defun diogenes-bailly--letter-bookmark-p (title)
+  "Non-nil if TITLE is a bookmark opening a letter of the dictionary.
+The Bailly 2020 outline titles those \"lettre Α, α\" -- but it also titles
+the sections of the front-matter list of authors \"Lettre A - Auteurs -
+ouvrages\", which is the same word followed by a LATIN letter.  Requiring
+a Greek letter after \"lettre\" separates them; taking the author list for
+the start of the dictionary would otherwise put the body\'s first page
+some sixty pages too early."
+  (save-match-data
+    (and (string-match "\\`[[:space:]]*lettre[[:space:]]+\\(.\\)"
+                       (downcase title))
+         (diogenes-bailly--lemma-token-p (match-string 1 (downcase title))))))
+
 (defun diogenes-bailly--letter-pages (file)
-  "Return the pages of FILE's \"lettre …\" outline bookmarks, ascending.
-Nil when pdf-tools is unavailable or the PDF has no such bookmarks.
-This edition bookmarks each letter of the dictionary as \"lettre Α, α\"."
+  "Return the pages of FILE's \"lettre <Greek letter>\" bookmarks, ascending.
+Nil when pdf-tools is unavailable or the PDF has no such bookmarks.  See
+`diogenes-bailly--letter-bookmark-p' for what counts as one."
   (when (or (fboundp 'pdf-info-outline) (require 'pdf-info nil t))
     (ignore-errors
       (sort (cl-loop for entry in (pdf-info-outline file)
                      for page = (alist-get 'page entry)
                      for title = (or (alist-get 'title entry) "")
                      when (and (integerp page) (> page 0)
-                               (string-match-p "\\`[[:space:]]*lettre\\b"
-                                               (downcase title)))
+                               (diogenes-bailly--letter-bookmark-p title))
                      collect page)
             #'<))))
 
