@@ -35,6 +35,7 @@
 
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus" (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
+(declare-function reader-fit-to-width "reader" ())
 (declare-function pdf-info-number-of-pages "pdf-info" (&optional file-or-buffer))
 (declare-function pdf-view-goto-page "pdf-view" (page &optional window))
 (declare-function pdf-view-mode "pdf-view" ())
@@ -99,21 +100,49 @@ only when `diogenes-old-display-in-other-window' is non-nil."
   :type 'sexp
   :group 'diogenes)
 
-(defcustom diogenes-old-reader-inhibit-pop-up-frames t
-  "When non-nil, keep the Emacs Reader from opening a dictionary in a new frame.
-The Reader's entry point `reader-open-doc' DISPLAYS the document as part
-of loading it, before Diogenes has had any say in where it goes.  With a
-non-nil `pop-up-frames' that display makes a new frame, and
-`save-window-excursion' cannot take it back -- it restores the window
-configuration of a frame, not the set of frames -- so every dictionary
-ends up in a frame of its own and `diogenes-old-reader-display-action'
-never gets to choose a window: by the time it runs, the buffer is
-already on screen and gets \"reused\" where it stands.
+(defcustom diogenes-old-reader-reuse-document-frame t
+  "When non-nil, a dictionary joins the window a document is already in.
+Concerns the Emacs Reader only, and leaves `pop-up-frames' alone until
+there is something to reuse: the FIRST dictionary opens wherever your
+`pop-up-frames' and `display-buffer-alist' would put it -- a frame of its
+own, if that is your setting -- and each dictionary after it replaces the
+page in that same window, for as long as some visible frame still shows a
+document buffer.  Close it and the next dictionary opens a fresh frame
+again.
 
-Binding `pop-up-frames' to nil for the open, and for the display that
-follows, keeps the dictionaries in one window as with pdf-tools.  Set
-this to nil to let your `pop-up-frames' apply to dictionaries too."
+Two things have to give way for that.  The Reader's entry point
+`reader-open-doc' DISPLAYS the document as part of loading it, before
+Diogenes has any say in where it goes, and `save-window-excursion' cannot
+take a new frame back -- it restores the window configuration of a frame,
+not the set of frames.  So when a document window exists, `pop-up-frames'
+is bound to nil for the duration of the open (the Reader\'s own display
+then lands on the selected frame, where `save-window-excursion' does undo
+it) and of the display that follows, which goes through
+`diogenes-old-reader-display-action'.
+
+Set this to nil to let `pop-up-frames' apply to every dictionary, giving
+each one its own frame."
   :type 'boolean
+  :group 'diogenes)
+
+(defcustom diogenes-old-reader-fit-to-width 'once
+  "Whether to fit a dictionary page to the window width in the Emacs Reader.
+`once' (the default) fits each document the first time Diogenes shows a
+page in it, and then leaves it alone, so a zoom level you set by hand
+survives the next lookup.  t re-fits on every jump.  nil never fits, and
+you press \\<reader-mode-map>\\[reader-fit-to-width] yourself.
+
+The fit is done from `diogenes-old--reader-goto-when-ready', at the one
+moment it can work: the Reader renders asynchronously, and
+`reader-fit-to-width' scales the page in the selected window, so it needs
+both a rendered document and a live window.  A `reader-mode-hook' runs too
+early for the first (nothing to scale yet) and not at all for a document
+whose buffer is merely redisplayed, which is why this is not a hook.
+
+Ignored under pdf-tools and doc-view, which have their own fit commands."
+  :type '(choice (const :tag "First page shown in each document" once)
+                 (const :tag "Every jump" t)
+                 (const :tag "Never" nil))
   :group 'diogenes)
 
 ;;;; --------------------------------------------------------------------
@@ -425,6 +454,30 @@ See `diogenes-old-reader-jump-retries'."
   :type 'number
   :group 'diogenes)
 
+(defvar-local diogenes-old--reader-fitted nil
+  "Non-nil once Diogenes has fitted this Reader document to the window width.
+Keeps `diogenes-old-reader-fit-to-width' set to `once' from undoing a zoom
+level the user chose after the document was first shown.")
+
+(defun diogenes-old--reader-maybe-fit-to-width (buffer window)
+  "Fit BUFFER's page to WINDOW's width, if `diogenes-old-reader-fit-to-width'.
+Called only once the page has been rendered and jumped to, since
+`reader-fit-to-width' needs a live document in the selected window.  Any
+error is ignored: a page that will not scale is not worth abandoning the
+lookup for."
+  (when (and diogenes-old-reader-fit-to-width
+             (fboundp 'reader-fit-to-width)
+             (buffer-live-p buffer)
+             (window-live-p window))
+    (with-current-buffer buffer
+      (when (or (eq diogenes-old-reader-fit-to-width t)
+                (not diogenes-old--reader-fitted))
+        (condition-case nil
+            (with-selected-window window
+              (reader-fit-to-width)
+              (setq diogenes-old--reader-fitted t))
+          (error nil))))))
+
 (defun diogenes-old--reader-goto-when-ready (buffer page &optional attempt)
   "Jump BUFFER's Emacs Reader to PAGE once the document can accept it.
 This affects the Emacs Reader (`reader-mode') ONLY; the pdf-tools and
@@ -442,7 +495,10 @@ treat the reader as not-ready-yet and retry after
 `diogenes-old-reader-jump-retry-interval', up to
 `diogenes-old-reader-jump-retries' times.  Subsequent documents reuse
 the initialised state and succeed on the first attempt.  The jump is
-confined to BUFFER's own window and skipped if BUFFER is not displayed."
+confined to BUFFER's own window and skipped if BUFFER is not displayed.
+
+A successful jump is also where the page is fitted to the window width,
+when `diogenes-old-reader-fit-to-width' asks for it."
   (let ((attempt (or attempt 0)))
     (when (buffer-live-p buffer)
       (let ((win (get-buffer-window buffer t)))
@@ -462,7 +518,10 @@ confined to BUFFER's own window and skipped if BUFFER is not displayed."
                             (condition-case nil
                                 (progn (reader-goto-page pg) t)
                               (error nil))))))))
-            (unless ok
+            (if ok
+                ;; The jump succeeded, so the document is rendered and WIN is
+                ;; live: the one moment a fit-to-width can work.
+                (diogenes-old--reader-maybe-fit-to-width buffer win)
               (when (< attempt diogenes-old-reader-jump-retries)
                 (run-with-timer
                  diogenes-old-reader-jump-retry-interval nil
@@ -519,6 +578,26 @@ Reader's `auto-mode-alist' entry from claiming the file."
        (cl-some (lambda (x) (and (consp x) (eq (cdr x) 'reader-mode)))
                 auto-mode-alist)))
 
+(defun diogenes-old--document-window ()
+  "Return a window on a visible frame showing a document buffer, or nil.
+A document buffer is one in `reader-mode', `pdf-view-mode' or
+`doc-view-mode' -- in practice, a dictionary already on screen.  Used to
+decide whether a dictionary should join it (see
+`diogenes-old-reader-reuse-document-frame') or open a window, or frame,
+of its own."
+  (cl-find-if (lambda (window)
+                (with-current-buffer (window-buffer window)
+                  (derived-mode-p 'reader-mode 'pdf-view-mode 'doc-view-mode)))
+              (window-list-1 nil nil 'visible)))
+
+(defun diogenes-old--reader-reuse-window ()
+  "Return the document window a dictionary should join, or nil.
+Nil when `diogenes-old-reader-reuse-document-frame' is nil, or when no
+document is on screen yet -- in which case the dictionary is displayed
+the ordinary way, `pop-up-frames' and all."
+  (and diogenes-old-reader-reuse-document-frame
+       (diogenes-old--document-window)))
+
 (defun diogenes-old--open-buffer-in-viewer (file viewer)
   "Return a buffer visiting FILE, opened in VIEWER's major mode.
 VIEWER is `pdf-tools', `doc-view', or `emacs-reader'.  If a buffer
@@ -543,12 +622,15 @@ already-loaded buffer is not equivalent)."
            ;; up the MuPDF document state and puts the buffer in `reader-mode'.
            ;; It DISPLAYS the document as a side effect, so shield the window
            ;; configuration and then locate the buffer it created for FILE.
-           ;; That display is also why `pop-up-frames' is bound here: a
-           ;; non-nil value would give each dictionary its own frame, and
-           ;; `save-window-excursion' restores a window configuration, not
-           ;; the set of frames, so it cannot undo one.  See
-           ;; `diogenes-old-reader-inhibit-pop-up-frames'.
-           (let ((pop-up-frames (unless diogenes-old-reader-inhibit-pop-up-frames
+           ;; That display is also why `pop-up-frames' is bound here: when a
+           ;; dictionary is already on screen we want this one to join it, and
+           ;; a new frame made during the open could not be undone --
+           ;; `save-window-excursion' restores a window configuration, not the
+           ;; set of frames.  With nothing to join, `pop-up-frames' is left
+           ;; alone and the first dictionary opens as usual.  See
+           ;; `diogenes-old-reader-reuse-document-frame'.
+           (let ((pop-up-frames (if (diogenes-old--reader-reuse-window)
+                                    nil
                                   pop-up-frames))
                  (display-buffer-overriding-action nil))
              (save-window-excursion
@@ -588,18 +670,20 @@ Taking purpose out of the loop costs one thing, though: it is purpose
 that otherwise keeps one dictionary after another in a single window,
 so without it each dictionary opened a new one.  The Reader case
 therefore displays through `diogenes-old-reader-display-action', which
-reuses a window already showing a document buffer, and binds
-`pop-up-frames' to nil (see
-`diogenes-old-reader-inhibit-pop-up-frames') so neither the Reader's
-own display nor this one puts each dictionary in a separate frame."
+reuses a window already showing a document buffer.  While a dictionary
+is on screen, `pop-up-frames' is bound to nil so that neither the
+Reader\'s own display nor this one moves the next dictionary to a frame
+of its own; with no document displayed yet, `pop-up-frames' is left
+alone and the first dictionary opens wherever your configuration puts
+it.  See `diogenes-old-reader-reuse-document-frame'."
   (let* ((file (or file diogenes-old-pdf-file))
          (viewer (diogenes-old--resolved-viewer)))
     (if (eq viewer 'emacs-reader)
         ;; Bypass purpose's display override so the Reader renders normally
         ;; (creating its overlay).  Covers both the open and the display.
-        (let ((display-buffer-overriding-action nil)
-              (pop-up-frames (unless diogenes-old-reader-inhibit-pop-up-frames
-                               pop-up-frames)))
+        (let* ((reuse (diogenes-old--reader-reuse-window))
+               (display-buffer-overriding-action nil)
+               (pop-up-frames (if reuse nil pop-up-frames)))
           (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer)))
             (if diogenes-old-display-in-other-window
                 (display-buffer buffer diogenes-old-reader-display-action)
