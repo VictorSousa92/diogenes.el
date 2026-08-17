@@ -25,6 +25,8 @@
 (declare-function diogenes-lookup-open-bailly "diogenes-bailly" (&optional word))
 (declare-function diogenes-lookup-gaffiot "diogenes-gaffiot" (&optional word))
 (declare-function diogenes-gaffiot-lookup-buffer-p "diogenes-gaffiot" ())
+(declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
+                  (&optional word))
 (declare-function diogenes-lookup-open-bdag "diogenes-bdag" (&optional word))
 (declare-function diogenes-lookup-open-passow "diogenes-passow" (&optional word))
 (declare-function diogenes-lookup-open-tgl "diogenes-tgl" (&optional word))
@@ -635,7 +637,8 @@ is raised."
 (defun diogenes--lookup-insert-dict-links (headword lang)
   "Insert clickable print-dictionary links for HEADWORD at point.
 For Latin (LANG \"latin\") this inserts [OLD], [TLL] and either [Gaffiot]
-or, when the entry shown IS Gaffiot, [Lewis & Short]; for Greek
+or, when the entry shown IS Gaffiot, [Lewis & Short] and [PDF] (the same
+page in the printed Gaffiot); for Greek
 it inserts [Montanari] [CGL] [BDAG] [Bailly] [Passow] [TGL].  Clicking a link
 \(or pressing RET on it) opens the corresponding PDF at the page
 containing HEADWORD.  The links are inserted AT POINT, so the caller
@@ -673,13 +676,24 @@ useful when its dictionary's path variable is set (`diogenes-old-pdf-file',
 		 ;; leads to Gaffiot, and from Gaffiot back again.
 		 (if (and (fboundp 'diogenes-gaffiot-lookup-buffer-p)
 			  (diogenes-gaffiot-lookup-buffer-p))
-		     (propertize "[Lewis & Short]"
-				 'font-lock-face 'link
-				 'keymap diogenes-perseus-action-map
-				 'action 'lewis
-				 'headword headword
-				 'help-echo (format "Show Lewis & Short's entry for \"%s\"" headword)
-				 'rear-nonsticky t)
+		     (concat
+		      (propertize "[Lewis & Short]"
+				  'font-lock-face 'link
+				  'keymap diogenes-perseus-action-map
+				  'action 'lewis
+				  'headword headword
+				  'help-echo (format "Show Lewis & Short's entry for \"%s\"" headword)
+				  'rear-nonsticky t)
+		      "  "
+		      ;; The same dictionary in print: the entry as Gaffiot set it,
+		      ;; with the illustrations the TEI does not carry.
+		      (propertize "[PDF]"
+				  'font-lock-face 'link
+				  'keymap diogenes-perseus-action-map
+				  'action 'gaffiot-pdf
+				  'headword headword
+				  'help-echo (format "Open the Gaffiot PDF at \"%s\"" headword)
+				  'rear-nonsticky t))
 		   (propertize "[Gaffiot]"
 			       'font-lock-face 'link
 			       'keymap diogenes-perseus-action-map
@@ -929,6 +943,7 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "b"                             #'diogenes-lookup-open-bdag)
     (keymap-set map "g"                             #'diogenes-lookup-gaffiot)
     (keymap-set map "l"                             #'diogenes-lookup-lewis)
+    (keymap-set map "P"                             #'diogenes-lookup-open-gaffiot-pdf)
     (keymap-set map "p"                             #'diogenes-lookup-open-passow)
     (keymap-set map "B"                             #'diogenes-lookup-open-bailly)
     (keymap-set map "q"                             #'diogenes--quit)
@@ -1420,6 +1435,8 @@ if nil, query interactively for their values"
       (tll (diogenes-lookup-open-tll (get-text-property char 'headword)))
       (gaffiot (diogenes-lookup-gaffiot (get-text-property char 'headword)))
       (lewis (diogenes-lookup-lewis (get-text-property char 'headword)))
+      (gaffiot-pdf (diogenes-lookup-open-gaffiot-pdf
+		    (get-text-property char 'headword)))
       (montanari (diogenes-lookup-open-montanari (get-text-property char 'headword)))
       (cambridge (diogenes-lookup-open-cambridge (get-text-property char 'headword)))
       (bdag (diogenes-lookup-open-bdag (get-text-property char 'headword)))

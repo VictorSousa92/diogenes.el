@@ -28,6 +28,15 @@
 ;;   * every entry opens in a fresh buffer, so the Lewis & Short entry you
 ;;     came from stays live and reachable.
 ;;
+;; Either source will do on its own, and together they divide the work:
+;;
+;;   * XML only -- entries for A-F, and a word past F reports that the TEI
+;;     goes no further;
+;;   * PDF only (`diogenes-gaffiot-pdf-file\') -- Gaffiot behaves like the
+;;     other print dictionaries, opening the page for any word;
+;;   * both -- the XML entry where there is one, the printed page for the
+;;     rest of the alphabet.
+;;
 ;; ---------------------------------------------------------------------
 ;; THE DICTIONARY FILE
 ;; ---------------------------------------------------------------------
@@ -69,13 +78,17 @@
                   (word lang sort-fn key-fn &optional file))
 (declare-function diogenes--ascii-sort-function "diogenes-perseus" (a b))
 (declare-function diogenes--xml-key-fn "diogenes-perseus" (buf))
-(declare-function diogenes--get-dict-line "diogenes-perseus"
-                  (file pos &optional file-length))
+(declare-function diogenes--binary-search "diogenes-perseus"
+                  (dict-file comp-fn key-fn word &optional start stop))
 (declare-function diogenes--lookup-headword-at-point "diogenes-perseus"
                   (&optional pos))
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus"
                   (expected dict-name))
 (declare-function diogenes--perseus-path "diogenes" ())
+(declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
+                  (&optional word))
+(defvar diogenes-gaffiot-pdf-fallback)
+(defvar diogenes-gaffiot-pdf-file)
 
 (defvar diogenes--lookup-headword)
 (defvar diogenes--lookup-file)
@@ -137,8 +150,13 @@ handlers in `diogenes--dict-handle-elt' already cover them.")
 ;;;; --------------------------------------------------------------------
 
 (defconst diogenes-gaffiot--ligatures
-  '((?æ . "ae") (?Æ . "Ae") (?œ . "oe") (?Œ . "Oe"))
-  "Ligatures spelt out, since a key holds plain ASCII letters only.")
+  '((?æ . "ae") (?Æ . "Ae") (?œ . "oe") (?Œ . "Oe")
+    ;; The 2016 typeset edition writes y-breve with a CYRILLIC у (U+0443),
+    ;; which decomposes to a letter no ASCII rule would keep, so Cўdōnēa
+    ;; would key as \"cdonea\" and sort away from cydonea.  Only its PDF
+    ;; bookmarks do this; the TEI has none.
+    (?у . "y") (?У . "Y"))
+  "Letters spelt out or transliterated, since a key holds ASCII letters only.")
 
 (defun diogenes-gaffiot--key (headword)
   "Return the ASCII key HEADWORD is filed under.
@@ -253,40 +271,51 @@ seconds for the 11 MB file."
     target))
 
 ;;;; --------------------------------------------------------------------
-;;;; WHAT THE FILE COVERS
+;;;; IS THE WORD IN THERE AT ALL?
 ;;;; --------------------------------------------------------------------
 
-(defvar diogenes-gaffiot--coverage-cache (make-hash-table :test 'equal)
-  "Cache mapping a dictionary file to the (FIRST-KEY . LAST-KEY) it spans.")
+(defun diogenes-gaffiot--entry-exists-p (key file)
+  "Non-nil if FILE holds an entry whose key is exactly KEY.
+The question a lookup has to answer, and it cannot be answered by the
+range the file spans: this dictionary ends on an entry filed under P
+\(\"pertinates\", printed inside F), so every word from g to p looks as
+though it were covered, and asking for one would show the nearest entry --
+the last of F -- as if it were a near miss.
 
-(defun diogenes-gaffiot--coverage (file)
-  "Return (FIRST-KEY . LAST-KEY) for the dictionary FILE, or nil.
-Read from the first and last line, so it costs two seeks, once per
-session.  The Gaffiot TEI in circulation stops at F, and a lookup beyond
-it would otherwise land on the last entry of F as if it were a near
-miss."
-  (let ((cache-key (cons (file-truename file)
-                         (file-attribute-modification-time
-                          (file-attributes file)))))
-    (or (gethash cache-key diogenes-gaffiot--coverage-cache)
-        (let* ((size (file-attribute-size (file-attributes file)))
-               (first (car (diogenes--get-dict-line file 0 size)))
-               (last (car (diogenes--get-dict-line file (max 0 (1- size)) size)))
-               (range
-                (and first last
-                     (cons (car (ignore-errors (diogenes--xml-key-fn first)))
-                           (car (ignore-errors (diogenes--xml-key-fn last)))))))
-          (when (and (car range) (cdr range))
-            (puthash cache-key range diogenes-gaffiot--coverage-cache))))))
+`diogenes--binary-search' reports an exact hit as the fourth element of
+its result, so ask it first and let the caller send a word it does not
+have to the printed dictionary instead."
+  (nth 3 (diogenes--binary-search file
+                                  #'diogenes--ascii-sort-function
+                                  #'diogenes--xml-key-fn
+                                  key)))
 
 ;;;; --------------------------------------------------------------------
 ;;;; THE LOOKUP
 ;;;; --------------------------------------------------------------------
 
+(defun diogenes-gaffiot--pdf-available-p ()
+  "Non-nil if the printed Gaffiot may be used to supplement the XML.
+True when `diogenes-gaffiot-pdf-fallback\' is set, `diogenes-gaffiot-pdf.el\'
+can be loaded, and `diogenes-gaffiot-pdf-file\' names a readable PDF.  The
+XML is proofread only to F, so beyond it the printed dictionary is all
+there is."
+  (and (or (not (boundp 'diogenes-gaffiot-pdf-fallback))
+           diogenes-gaffiot-pdf-fallback)
+       (require 'diogenes-gaffiot-pdf nil t)
+       (boundp 'diogenes-gaffiot-pdf-file)
+       diogenes-gaffiot-pdf-file
+       (file-readable-p diogenes-gaffiot-pdf-file)))
+
 (defun diogenes-gaffiot--file ()
-  "Return the dictionary file, building it if the user agrees.
-Signals a user-error when there is nothing to search and nothing to build
-it from."
+  "Return the converted dictionary file, or nil if there is none.
+Builds it, with the user\'s agreement, when `diogenes-gaffiot-source-file'
+names a TEI file and no converted dictionary exists yet.
+
+Returns NIL rather than signalling when nothing is converted: with only
+`diogenes-gaffiot-pdf-file' set, Gaffiot works like the other print
+dictionaries and no XML is wanted.  The caller decides what to do with
+nil -- see `diogenes-lookup-gaffiot'."
   (let ((file (diogenes-gaffiot--dictionary-file)))
     (cond
      ((file-readable-p file)
@@ -297,11 +326,7 @@ it from."
            (y-or-n-p (format "Gaffiot is not converted yet; build %s now? "
                              (abbreviate-file-name file))))
       (diogenes-gaffiot-build-dictionary diogenes-gaffiot-source-file file))
-     (t
-      (user-error "No Gaffiot dictionary at %s.  Set \
-`diogenes-gaffiot-source-file' to the TEI XML and run \
-M-x diogenes-gaffiot-build-dictionary"
-                  (abbreviate-file-name file))))))
+     (t nil))))
 
 (defun diogenes-gaffiot--assert-converted (file)
   "Signal a user-error unless FILE is a converted Gaffiot dictionary.
@@ -355,6 +380,11 @@ lookup: `C-c C-n' and `C-c C-p' walk the dictionary, `C-c C-c' on a Latin
 word returns to Lewis & Short and on a Greek one goes to the LSJ, and the
 \"[OLD] [TLL]\" banner opens the print dictionaries.
 
+A word the XML does not cover -- it is proofread only as far as F --
+opens the printed dictionary instead, when `diogenes-gaffiot-pdf-file' is
+set; see `diogenes-gaffiot-pdf-fallback'.  The two sources then cover the
+whole alphabet between them.
+
 Requires a converted dictionary file; see
 \\[diogenes-gaffiot-build-dictionary]."
   (interactive
@@ -365,31 +395,32 @@ Requires a converted dictionary file; see
              (diogenes-gaffiot--current-headword)))))
   (let* ((word (string-trim (or word (diogenes-gaffiot--current-headword))))
          (file (diogenes-gaffiot--file))
-         (key (diogenes-gaffiot--key word))
-         (coverage (diogenes-gaffiot--coverage file)))
+         (key (diogenes-gaffiot--key word)))
     (when (string-empty-p key)
       (user-error "Nothing to look up in \"%s\"" word))
-    ;; A word outside the file's range is not a near miss, so say so rather
-    ;; than showing the first or last entry as if it were one.
-    (when (and coverage
-               (or (string< key (car coverage))
-                   (string< (cdr coverage) key)))
-      (user-error "Gaffiot: \"%s\" is outside this file, which runs %s-%s \
-(the circulating TEI covers A-F)"
-                  word (car coverage) (cdr coverage)))
-    (let ((diogenes--lookup-same-window diogenes-gaffiot-display-in-same-window))
-      (diogenes--search-dict key "latin"
-                             #'diogenes--ascii-sort-function
-                             #'diogenes--xml-key-fn
-                             file))))
-
-;;;###autoload
-(defun diogenes-gaffiot-clear-cache ()
-  "Forget what Gaffiot dictionary file was found to cover.
-Call this after rebuilding the dictionary while Emacs is running."
-  (interactive)
-  (clrhash diogenes-gaffiot--coverage-cache)
-  (message "Diogenes Gaffiot cache cleared"))
+    (cond
+     ;; The converted XML has this word: show the entry.
+     ((and file (diogenes-gaffiot--entry-exists-p key file))
+      (let ((diogenes--lookup-same-window diogenes-gaffiot-display-in-same-window))
+        (diogenes--search-dict key "latin"
+                               #'diogenes--ascii-sort-function
+                               #'diogenes--xml-key-fn
+                               file)))
+     ;; It does not -- because the TEI is proofread only as far as F, or
+     ;; because there is no converted XML here at all.  The printed
+     ;; dictionary has the whole alphabet.
+     ((diogenes-gaffiot--pdf-available-p)
+      (diogenes-lookup-open-gaffiot-pdf word))
+     (file
+      (user-error "Gaffiot: no entry for \"%s\" in %s.  The proofread TEI \
+covers A-F only; set `diogenes-gaffiot-pdf-file' to a PDF of the printed \
+dictionary to reach the rest"
+                  word (abbreviate-file-name file)))
+     (t
+      (user-error "Gaffiot: nothing configured.  Set \
+`diogenes-gaffiot-pdf-file' to a PDF of the printed dictionary, or \
+`diogenes-gaffiot-source-file' to the TEI XML (which covers A-F) and run \
+M-x diogenes-gaffiot-build-dictionary")))))
 
 (with-eval-after-load 'diogenes-perseus
   (diogenes-gaffiot--install-xml-handlers))

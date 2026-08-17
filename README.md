@@ -454,6 +454,7 @@ must be set before use.
 | CGL | Cambridge Greek Lexicon | Gr | `diogenes-cambridge-pdf-file` | single PDF |
 | BDAG | Bauer/Danker Greek NT | Gr | `diogenes-bdag-pdf-file` | single PDF |
 | Bailly | Bailly, Dictionnaire grec-français | Gr | `diogenes-bailly-pdf-file` | single PDF |
+| Gaffiot | Gaffiot, Dictionnaire latin-français | La | `diogenes-gaffiot-pdf-file` | single PDF |
 | Passow | Passow's Handwörterbuch | Gr | `diogenes-passow-directory` | one folder per volume (PDF + OCR `.txt`) |
 | TGL | Estienne, Thesaurus Graecae Linguae | Gr | `diogenes-tgl-directory` | one folder per volume (PDF + OCR `.txt`) |
  
@@ -498,7 +499,17 @@ no converted file offers to do it for you). Leaving `diogenes-gaffiot-file`
 unset puts it beside the other Diogenes dictionaries.
 
 - Keys are the headword reduced to ASCII letters, so the macrons of `fŭtūtrīx`, the ligature in `cælum` and the homograph numeral of `1 ăbactus` do not stand between a Lewis & Short headword and its Gaffiot entry.
-- **Coverage:** the proofread Unicode TEI in circulation covers **A–F** only, about 28 000 entries. A word past that gets a plain message saying so rather than the last entry of F offered as a near miss.
+- **Coverage:** the proofread Unicode TEI in circulation covers **A–F** only, about 28 000 entries.
+
+For the rest of the alphabet, point `diogenes-gaffiot-pdf-file` at a PDF of the
+2016 typeset edition and `g` falls through to it: A–F gives you the XML entry in
+a lookup buffer, G–Z opens the printed page. That edition bookmarks the first
+headword of **every** page (1 379 of them), so the page is found by binary
+search with no interpolation; its 944 illustration bookmarks are indexed apart
+from the page guides, and when the word you looked up has a plate the echo area
+says which page it is on. Set `diogenes-gaffiot-pdf-fallback` to nil to keep the
+two apart, and `M-x diogenes-lookup-open-gaffiot-pdf` opens the PDF for any word
+regardless.
 
 ### Choosing the PDF viewer
  
@@ -545,7 +556,7 @@ The feature to wait for is `diogenes-old` (the module that defines the variable)
 by a links line:
  
 - Latin entries: `[OLD]` `[TLL]`
-- Latin entries also carry `[Gaffiot]`, which is not a PDF but another **lookup entry** (see below); inside a Gaffiot entry that link becomes `[Lewis & Short]`, leading back.
+- Latin entries also carry `[Gaffiot]`, which is not a PDF but another **lookup entry** (see below); inside a Gaffiot entry that link becomes `[Lewis & Short]`, leading back, joined by `[PDF]` for the same word in the printed Gaffiot (`P`).
 - Greek entries: `[Montanari]` `[CGL]` `[BDAG]` `[Bailly]` `[Passow]` `[TGL]`
 - Click or press RETURN to open that dictionary at the entry's page.
 - Works per entry: paging with `C-c C-n` / `C-c C-p` gives each entry its own links line and headword.
@@ -561,6 +572,7 @@ by a links line:
 | `B` | Bailly |
 | `g` | Gaffiot (a lookup entry, not a PDF) |
 | `l` | Lewis & Short (the way back from Gaffiot) |
+| `P` | The Gaffiot PDF at the same word |
 | `p` | Passow |
  
 **3. Search inside the open PDF** (see below). Best remedy for OCR/bookmark misses.

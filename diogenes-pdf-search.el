@@ -30,6 +30,7 @@
 ;;   CGL        Cambridge Greek Lexicon       (diogenes-cambridge)
 ;;   BDAG       Bauer (Danker) Gk NT lexicon  (diogenes-bdag)
 ;;   Bailly     Dictionnaire grec-français    (diogenes-bailly)
+;;   Gaffiot    Dictionnaire latin-français   (diogenes-gaffiot-pdf)
 ;;   Passow     Passow's Handwörterbuch       (diogenes-passow, multi-volume)
 ;;   TGL        Estienne, Thesaurus Gk Ling.  (diogenes-tgl, multi-volume)
 ;;
@@ -68,6 +69,7 @@
 (declare-function diogenes-cambridge--page-for-word  "diogenes-cambridge" (word &optional file))
 (declare-function diogenes-bdag--page-for-word       "diogenes-bdag"      (word &optional file))
 (declare-function diogenes-bailly--page-for-word     "diogenes-bailly"    (word &optional file))
+(declare-function diogenes-gaffiot-pdf--page-for-word "diogenes-gaffiot-pdf" (word &optional file))
 (declare-function diogenes-tll--file-for-word        "diogenes-tll"       (word))
 (declare-function diogenes-tll--page-for-word        "diogenes-tll"       (word file))
 (declare-function diogenes-passow--locate            "diogenes-passow"    (word))
@@ -88,6 +90,7 @@
 (defvar diogenes-cambridge-pdf-file)
 (defvar diogenes-bdag-pdf-file)
 (defvar diogenes-bailly-pdf-file)
+(defvar diogenes-gaffiot-pdf-file)
 (defvar diogenes-passow-directory)
 (defvar diogenes-tgl-directory)
 (defvar diogenes-old-display-in-other-window)
@@ -130,7 +133,7 @@ contains FILE, or nil.  Requires the `diogenes-tgl' module and its
 (defun diogenes-pdf-search--identify (file)
   "Identify which print dictionary the PDF FILE belongs to.
 Returns a symbol: `old', `tll', `montanari', `cambridge', `bdag',
-`bailly', `passow' or `tgl', or nil when FILE matches no configured
+`bailly', `gaffiot', `passow' or `tgl', or nil when FILE matches no configured
 dictionary path.  Each match `require's its module lazily so an
 unused dictionary need not be loaded.
 
@@ -155,6 +158,9 @@ Single-file dictionaries match by truename against their
    ((and (boundp 'diogenes-bailly-pdf-file)
          (diogenes-pdf-search--same-file-p file diogenes-bailly-pdf-file))
     (and (require 'diogenes-bailly nil t) 'bailly))
+   ((and (boundp 'diogenes-gaffiot-pdf-file)
+         (diogenes-pdf-search--same-file-p file diogenes-gaffiot-pdf-file))
+    (and (require 'diogenes-gaffiot-pdf nil t) 'gaffiot))
    ;; Passow: a parent folder of per-volume sub-directories, each with a PDF.
    ((and (boundp 'diogenes-passow-directory)
          (diogenes-pdf-search--under-dir-p file diogenes-passow-directory))
@@ -175,6 +181,7 @@ Single-file dictionaries match by truename against their
     (cambridge . "Cambridge Greek Lexicon")
     (bdag      . "BDAG")
     (bailly    . "Bailly")
+    (gaffiot   . "Gaffiot")
     (passow    . "Passow")
     (tgl       . "TGL"))
   "Alist mapping a dictionary symbol to its display name.")
@@ -235,6 +242,7 @@ logic, so results agree with that dictionary's link/opener command."
     ('cambridge (diogenes-cambridge--page-for-word word file))
     ('bdag      (diogenes-bdag--page-for-word word file))
     ('bailly    (diogenes-bailly--page-for-word word file))
+    ('gaffiot   (diogenes-gaffiot-pdf--page-for-word word file))
     ('passow
      ;; Passow is multi-volume; --locate returns (VOLUME . PAGE-PLIST),
      ;; where VOLUME is a plist carrying :pdf and PAGE-PLIST feeds
