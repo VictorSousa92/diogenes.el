@@ -65,11 +65,29 @@ pages away from the entry you wanted."
   :type 'integer
   :group 'diogenes)
 
-(defcustom diogenes-old-display-in-other-window t
-  "If non-nil, show the OLD PDF in another window, keeping the entry visible.
-This mirrors the behaviour of the original Diogenes desktop
-application, which shows the dictionary text and the PDF page side
-by side."
+(defcustom diogenes-old-display-in-other-window nil
+  "If non-nil, show the dictionary PDF in another window.
+The default is nil: the page appears in the window the lookup was made
+from, replacing the entry.  Closing the document buffer brings the entry
+back, so a lookup and the print dictionary it opens share one window
+instead of splitting the frame for a page you will read and close.
+
+A non-nil `pop-up-frames' overrides this: asking for a frame of its own
+is asking for another window, so the page is displayed rather than put in
+the entry\'s place, and lands in a new frame (the next dictionary then
+joins it -- see `diogenes-old-reader-reuse-document-frame').  Unset
+`pop-up-frames' and the page replaces the entry again.
+
+Set it to t for the side-by-side arrangement of the original Diogenes
+desktop application, which shows the dictionary text and the PDF page at
+once.  Which window, or frame, the page then goes to is decided by
+`diogenes-old-reader-display-action' and
+`diogenes-old-reader-reuse-document-frame' under the Emacs Reader, and by
+`display-buffer' (with window-purpose, if you use it) otherwise.
+
+Passow and the TGL bind this to their own equivalents; see
+`diogenes-passow-display-in-other-window' and
+`diogenes-tgl-display-in-other-window'."
   :type 'boolean
   :group 'diogenes)
 
@@ -121,7 +139,10 @@ it) and of the display that follows, which goes through
 `diogenes-old-reader-display-action'.
 
 Set this to nil to let `pop-up-frames' apply to every dictionary, giving
-each one its own frame."
+each one its own frame.  Consulted only when
+`diogenes-old-display-in-other-window' is non-nil; with the default nil
+the page replaces the entry in the lookup's own window and no second
+window is involved."
   :type 'boolean
   :group 'diogenes)
 
@@ -649,6 +670,44 @@ already-loaded buffer is not equivalent)."
              (find-file-noselect file)))
           (_ (find-file-noselect file))))))
 
+(defun diogenes-old--display-in-this-window (buffer)
+  "Show BUFFER in the selected window, and return BUFFER.
+`pop-to-buffer-same-window' is tried first, but it declines a window that
+something has dedicated -- window-purpose dedicates the lookup window to
+its purpose -- and then falls back to another window, which is how a
+dictionary ends up beside the entry instead of replacing it.  So if the
+polite route leaves the buffer elsewhere, undedicate the window and
+insist."
+  (let ((window (selected-window)))
+    (condition-case nil
+        (pop-to-buffer-same-window buffer)
+      (error nil))
+    (unless (eq (window-buffer window) buffer)
+      (when (window-live-p window)
+        (set-window-dedicated-p window nil)
+        (set-window-buffer window buffer)
+        (select-window window))))
+  buffer)
+
+(defun diogenes-old--display-other-window-p ()
+  "Non-nil if a dictionary page belongs in a window other than the entry\'s.
+True when `diogenes-old-display-in-other-window' asks for it, and also
+when `pop-up-frames' is set -- wanting a frame of its own is wanting
+another window.  Must be consulted BEFORE `diogenes-old--show-page' binds
+`pop-up-frames' for the Reader, since that binding is about where the
+frame may go, not about what the user asked for."
+  (or diogenes-old-display-in-other-window pop-up-frames))
+
+(defun diogenes-old--display-page-buffer (buffer action other-window)
+  "Display BUFFER and return it.
+With OTHER-WINDOW non-nil, hand it to `display-buffer\' with ACTION (nil
+for the ordinary rules); otherwise put the page in the selected window, in
+place of the entry the lookup was made from."
+  (if other-window
+      (display-buffer buffer action)
+    (diogenes-old--display-in-this-window buffer))
+  buffer)
+
 (defun diogenes-old--show-page (page &optional file)
   "Display the dictionary PDF FILE at PAGE inside Emacs.
 Opens FILE in the viewer chosen by `diogenes-old-pdf-viewer' (see
@@ -682,18 +741,16 @@ it.  See `diogenes-old-reader-reuse-document-frame'."
         ;; Bypass purpose's display override so the Reader renders normally
         ;; (creating its overlay).  Covers both the open and the display.
         (let* ((reuse (diogenes-old--reader-reuse-window))
+               (other-window (diogenes-old--display-other-window-p))
                (display-buffer-overriding-action nil)
                (pop-up-frames (if reuse nil pop-up-frames)))
           (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer)))
-            (if diogenes-old-display-in-other-window
-                (display-buffer buffer diogenes-old-reader-display-action)
-              (pop-to-buffer-same-window buffer))
+            (diogenes-old--display-page-buffer
+             buffer diogenes-old-reader-display-action other-window)
             (diogenes-old--goto-page-when-ready buffer page)))
-      (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer))
-            (display (if diogenes-old-display-in-other-window
-                         #'display-buffer
-                       #'pop-to-buffer-same-window)))
-        (funcall display buffer)
+      (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer)))
+        (diogenes-old--display-page-buffer
+         buffer nil (diogenes-old--display-other-window-p))
         (diogenes-old--goto-page-when-ready buffer page)))
     page))
 
