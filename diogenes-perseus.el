@@ -23,6 +23,8 @@
 (declare-function diogenes-lookup-open-montanari "diogenes-montanari" (&optional word))
 (declare-function diogenes-lookup-open-cambridge "diogenes-cambridge" (&optional word))
 (declare-function diogenes-lookup-open-bailly "diogenes-bailly" (&optional word))
+(declare-function diogenes-lookup-gaffiot "diogenes-gaffiot" (&optional word))
+(declare-function diogenes-gaffiot-lookup-buffer-p "diogenes-gaffiot" ())
 (declare-function diogenes-lookup-open-bdag "diogenes-bdag" (&optional word))
 (declare-function diogenes-lookup-open-passow "diogenes-passow" (&optional word))
 (declare-function diogenes-lookup-open-tgl "diogenes-tgl" (&optional word))
@@ -521,12 +523,19 @@ window while the previous entry's buffer remains live (reachable with
 the usual buffer/window history).  Bound by `diogenes-perseus-action';
 nil everywhere else keeps the old behaviour.")
 
-(defun diogenes--search-dict (word lang sort-fn key-fn)
+(defun diogenes--search-dict (word lang sort-fn key-fn &optional file)
   "Search for a word in a Diogenes dictionary.
 The lines in dictionary file must be sorted according to SORT-FN,
-while KEY-FN must return the key."
+while KEY-FN must return the key.
+
+FILE names the dictionary to search, defaulting to LANG\'s own
+\(`diogenes--dict-file\').  Another dictionary of the same language may be
+passed instead -- `diogenes-gaffiot.el\' passes Gaffiot for Latin -- and
+LANG then still says which language the ENTRIES are in, so `C-c C-c\',
+the print-dictionary banner and the rest behave as they do for the LSJ
+and Lewis & Short."
   (seq-let (xml-bytes start end exact-hit)
-      (diogenes--binary-search (diogenes--dict-file lang)
+      (diogenes--binary-search (or file (diogenes--dict-file lang))
 			       sort-fn key-fn word)
     (unless exact-hit (message "No results for %s! Showing nearest entry" word))
     (let* ((xml (decode-coding-string xml-bytes 'utf-8))
@@ -569,7 +578,7 @@ while KEY-FN must return the key."
             (pop-to-buffer-same-window lookup-buffer)
           (pop-to-buffer lookup-buffer))
         (diogenes-lookup-mode))
-      (setq diogenes--lookup-file (diogenes--dict-file lang)
+      (setq diogenes--lookup-file (or file (diogenes--dict-file lang))
 	    diogenes--lookup-bufstart start
 	    diogenes--lookup-bufend end
 	    diogenes--lookup-lang lang)
@@ -625,7 +634,8 @@ is raised."
 
 (defun diogenes--lookup-insert-dict-links (headword lang)
   "Insert clickable print-dictionary links for HEADWORD at point.
-For Latin (LANG \"latin\") this inserts [OLD] and [TLL]; for Greek
+For Latin (LANG \"latin\") this inserts [OLD], [TLL] and either [Gaffiot]
+or, when the entry shown IS Gaffiot, [Lewis & Short]; for Greek
 it inserts [Montanari] [CGL] [BDAG] [Bailly] [Passow] [TGL].  Clicking a link
 \(or pressing RET on it) opens the corresponding PDF at the page
 containing HEADWORD.  The links are inserted AT POINT, so the caller
@@ -656,6 +666,27 @@ useful when its dictionary's path variable is set (`diogenes-old-pdf-file',
 			     'headword headword
 			     'help-echo (format "Open the TLL at \"%s\"" headword)
 			     'rear-nonsticky t)
+		 "  "
+		 ;; The other electronic Latin dictionary.  Gaffiot and Lewis &
+		 ;; Short are not PDFs but lookup entries, so the link offers
+		 ;; whichever of the two we are NOT reading: from Lewis & Short it
+		 ;; leads to Gaffiot, and from Gaffiot back again.
+		 (if (and (fboundp 'diogenes-gaffiot-lookup-buffer-p)
+			  (diogenes-gaffiot-lookup-buffer-p))
+		     (propertize "[Lewis & Short]"
+				 'font-lock-face 'link
+				 'keymap diogenes-perseus-action-map
+				 'action 'lewis
+				 'headword headword
+				 'help-echo (format "Show Lewis & Short's entry for \"%s\"" headword)
+				 'rear-nonsticky t)
+		   (propertize "[Gaffiot]"
+			       'font-lock-face 'link
+			       'keymap diogenes-perseus-action-map
+			       'action 'gaffiot
+			       'headword headword
+			       'help-echo (format "Show Gaffiot's entry for \"%s\"" headword)
+			       'rear-nonsticky t))
 		 "  "))
 	("greek"
 	 (insert (propertize "[Montanari]"
@@ -755,6 +786,35 @@ the entry the buffer was first opened on."
     ("latin" (diogenes--search-dict word "latin"
 			 #'diogenes--ascii-sort-function
 			 #'diogenes--xml-key-fn))))
+
+(defun diogenes--lookup-current-headword ()
+  "Return the headword of the entry point is in, for the lookup commands."
+  (or (diogenes--lookup-headword-at-point)
+      (get-text-property (point) 'orth)
+      (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
+      (thing-at-point 'word t)
+      (user-error "No headword found at point")))
+
+;;;###autoload
+(defun diogenes-lookup-lewis (&optional word)
+  "Show Lewis & Short's entry for WORD in a lookup buffer.
+Interactively, WORD defaults to the headword of the Latin entry at point;
+with a prefix argument, prompt for it.  This is the way back from another
+Latin dictionary -- Gaffiot, say -- to the one Diogenes searches by
+default, and it is what the \"[Lewis & Short]\" link in a Gaffiot entry
+runs."
+  (interactive
+   (progn
+     (diogenes--lookup-assert-lang "latin" "Lewis & Short")
+     (list (if current-prefix-arg
+               (read-string "Look up in Lewis & Short: ")
+             (diogenes--lookup-current-headword)))))
+  (let ((word (string-trim (or word (diogenes--lookup-current-headword))))
+        (diogenes--lookup-same-window
+         (derived-mode-p 'diogenes-lookup-mode)))
+    (when (string-empty-p word)
+      (user-error "No word given"))
+    (diogenes--lookup-dict word "latin")))
 
 (defun diogenes-lookup-next (&optional n)
   "Find and show the next entry in the active dictionary.
@@ -867,6 +927,8 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "m"                             #'diogenes-lookup-open-montanari)
     (keymap-set map "c"                             #'diogenes-lookup-open-cambridge)
     (keymap-set map "b"                             #'diogenes-lookup-open-bdag)
+    (keymap-set map "g"                             #'diogenes-lookup-gaffiot)
+    (keymap-set map "l"                             #'diogenes-lookup-lewis)
     (keymap-set map "p"                             #'diogenes-lookup-open-passow)
     (keymap-set map "B"                             #'diogenes-lookup-open-bailly)
     (keymap-set map "q"                             #'diogenes--quit)
@@ -1356,6 +1418,8 @@ if nil, query interactively for their values"
 					    (get-text-property char 'bibl))))
       (old (diogenes-lookup-open-old (get-text-property char 'headword)))
       (tll (diogenes-lookup-open-tll (get-text-property char 'headword)))
+      (gaffiot (diogenes-lookup-gaffiot (get-text-property char 'headword)))
+      (lewis (diogenes-lookup-lewis (get-text-property char 'headword)))
       (montanari (diogenes-lookup-open-montanari (get-text-property char 'headword)))
       (cambridge (diogenes-lookup-open-cambridge (get-text-property char 'headword)))
       (bdag (diogenes-lookup-open-bdag (get-text-property char 'headword)))

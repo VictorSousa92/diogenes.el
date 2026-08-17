@@ -62,6 +62,7 @@
 (require 'diogenes-bdag)
 (require 'diogenes-passow)
 (require 'diogenes-bailly)
+(require 'diogenes-gaffiot)
 (require 'diogenes-tgl)
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)

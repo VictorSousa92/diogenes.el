@@ -1,10 +1,5 @@
 ;;; diogenes-bailly.el --- Open Bailly's Dictionnaire grec-français PDF -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024 Michael Neidhart
-;;
-;; Author: Michael Neidhart <mayhoth@gmail.com>
-;; Keywords: classics, tools, philology, humanities
-
 ;;; Commentary:
 
 ;; Jump from a Diogenes *Greek* dictionary entry (the buffer produced by

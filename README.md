@@ -474,6 +474,32 @@ variables at them. The TGL and Passow copies I tested are the OCR'd MDZ
 volumes (DAFO dataset) from the [Bavarian State Library's
 MDZ](https://www.digitale-sammlungen.de/en/).
  
+### Gaffiot (a lookup, not a PDF)
+
+Gaffiot's *Dictionnaire illustré latin-français* comes as TEI XML rather than
+a scan, so it is shown the way the LSJ and Lewis & Short are — as an entry in
+a Diogenes lookup buffer. From a Latin entry press `g` or click `[Gaffiot]`;
+from inside Gaffiot, `l` or `[Lewis & Short]` leads back. Everything else the
+lookup buffer does comes with it: `C-c C-n` / `C-c C-p` walk the dictionary,
+`C-c C-c` on a Latin word looks it up and on a Greek one goes to the LSJ, the
+`[OLD]` and `[TLL]` links open the print dictionaries, and each entry gets its
+own buffer, so the one you came from stays live.
+
+Setup — convert the TEI once into the one-entry-per-line form Diogenes
+searches:
+
+```elisp
+(setq diogenes-gaffiot-source-file "/path/to/gaffiot-unicode.xml")
+(setq diogenes-gaffiot-file "/path/to/gaffiot.xml")     ; the converted file
+```
+
+then `M-x diogenes-gaffiot-build-dictionary` (a few seconds; pressing `g` with
+no converted file offers to do it for you). Leaving `diogenes-gaffiot-file`
+unset puts it beside the other Diogenes dictionaries.
+
+- Keys are the headword reduced to ASCII letters, so the macrons of `fŭtūtrīx`, the ligature in `cælum` and the homograph numeral of `1 ăbactus` do not stand between a Lewis & Short headword and its Gaffiot entry.
+- **Coverage:** the proofread Unicode TEI in circulation covers **A–F** only, about 28 000 entries. A word past that gets a plain message saying so rather than the last entry of F offered as a near miss.
+
 ### Choosing the PDF viewer
  
 Every dictionary is opened by the same routine, and you choose which
@@ -519,6 +545,7 @@ The feature to wait for is `diogenes-old` (the module that defines the variable)
 by a links line:
  
 - Latin entries: `[OLD]` `[TLL]`
+- Latin entries also carry `[Gaffiot]`, which is not a PDF but another **lookup entry** (see below); inside a Gaffiot entry that link becomes `[Lewis & Short]`, leading back.
 - Greek entries: `[Montanari]` `[CGL]` `[BDAG]` `[Bailly]` `[Passow]` `[TGL]`
 - Click or press RETURN to open that dictionary at the entry's page.
 - Works per entry: paging with `C-c C-n` / `C-c C-p` gives each entry its own links line and headword.
@@ -532,6 +559,8 @@ by a links line:
 | `c` | CGL |
 | `b` | BDAG |
 | `B` | Bailly |
+| `g` | Gaffiot (a lookup entry, not a PDF) |
+| `l` | Lewis & Short (the way back from Gaffiot) |
 | `p` | Passow |
  
 **3. Search inside the open PDF** (see below). Best remedy for OCR/bookmark misses.
