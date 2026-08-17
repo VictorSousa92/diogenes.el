@@ -323,6 +323,32 @@ Uses and populates `diogenes-old--index-cache'."
 ;;;; HEADWORD -> PAGE
 ;;;; --------------------------------------------------------------------
 
+(defcustom diogenes-old-truncated-guide-detection 'verify
+  "How to treat a guide word that is a prefix of the word looked up.
+A page's guide word is its last headword, and the OLD\'s OCR sometimes
+drops a headword\'s final letters -- `uadimoni\' for UADIMONIUM -- so a
+clipped guide word sorts just before the full word and the plain search
+steps past its page.  But a guide word can also be a prefix of a later
+word by being a perfectly good headword in its own right: RECENS heads a
+page, RECENSEO begins the next, and nothing in the bookmark text tells
+the two cases apart.
+
+  `verify\' (the default) reads the candidate page and takes it only if
+    the word really is printed there.  One `pdf-info-gettext\' call, and
+    only when the question arises.
+  t          assumes a truncation, as this module always did: right for
+    UADIMONIUM, a page early for RECENSEO.
+  nil        never assumes one: right for RECENSEO, a page late for
+    UADIMONIUM.
+
+A page late or early is not fatal -- the running head tells you which way
+to step -- but `verify\' is right in both cases when the scan has a text
+layer to consult.  Fall back to t or nil if yours has none."
+  :type '(choice (const :tag "Check the page text" verify)
+                 (const :tag "Assume a truncated guide word" t)
+                 (const :tag "Never assume one" nil))
+  :group 'diogenes)
+
 (defconst diogenes-old--truncated-guide-min-length 5
   "Minimum guide-word length for the truncated-guide-word fallback.
 A page's guide word is its last headword, but the OLD's OCR/bookmark
@@ -335,6 +361,28 @@ headword truncated and return the preceding page.  The length floor
 keeps genuinely short, distinct guide words (`ua', `uir', `pes') from
 swallowing later words that merely share their opening letters.")
 
+(defun diogenes-old--word-on-page-p (word page file)
+  "Non-nil if WORD appears in the text of PAGE of FILE.
+Used to settle whether a guide word that is a prefix of WORD was a
+clipped headword -- in which case WORD is printed on that page -- or a
+complete headword of its own, in which case it is not.  See
+`diogenes-old-truncated-guide-detection\'.
+
+The OLD prints i/j and u/v as the classical i and u, and its OCR follows
+suit unevenly, so the search allows either letter at each such position.
+Returns nil when there is no text layer to search, which leaves the
+caller with its own judgement."
+  (when (and (require 'pdf-info nil t) (fboundp 'pdf-info-gettext))
+    (let* ((key (diogenes-old--sort-key word))
+           (pattern (mapconcat (lambda (c)
+                                 (cond ((memq c '(?i ?j)) "[ij]")
+                                       ((memq c '(?u ?v)) "[uv]")
+                                       (t (regexp-quote (string c)))))
+                               (append key nil)
+                               ""))
+           (text (ignore-errors (pdf-info-gettext page (list 0 0 1 1) 'word file))))
+      (and text (string-match-p pattern (downcase text))))))
+
 (defun diogenes-old--page-for-word (word &optional file)
   "Return the OLD page number containing the entry for WORD.
 Each bookmark in the index is the *last* headword on its page, so
@@ -344,13 +392,15 @@ WORD.  When WORD is itself the last entry of a page and continues
 onto the next (so the same guide word heads two consecutive
 pages), this returns the earlier page, where the entry begins.
 
-If the preceding page's guide word is a truncation of WORD (a
-prefix of it, and long enough to be a clipped headword rather than
-a distinct short word -- see
-`diogenes-old--truncated-guide-min-length'), WORD is that page's
-spilled-over last entry, so the preceding page is returned.  This
-handles running heads whose final letters the OCR dropped (e.g.
-`uadimoni' for UADIMONIUM, the last entry of its page).
+If the preceding page's guide word is a prefix of WORD, long enough
+to be a clipped headword rather than a distinct short word (see
+`diogenes-old--truncated-guide-min-length'), then WORD may be that
+page's spilled-over last entry -- a running head whose final letters
+the OCR dropped, `uadimoni' for UADIMONIUM.  But the guide word may
+equally be a complete headword that WORD merely extends: RECENS ends
+one page and RECENSEO begins the next.  Which it is is settled by
+`diogenes-old-truncated-guide-detection', by default by looking for
+WORD in the preceding page's text.
 
 Returns an integer page (with `diogenes-old-page-offset' applied),
 or the final page if WORD sorts after every guide word."
@@ -369,12 +419,22 @@ or the final page if WORD sorts after every guide word."
              when (or (string< key gkey) (string= key gkey))
              do (setq hit page) and return nil
              do (setq prev-key gkey prev-page page))
-    (let* ((truncated
+    (let* ((prefix-guide
             (and hit prev-key prev-page
                  (not (string= prev-key key))
                  (>= (length prev-key)
                      diogenes-old--truncated-guide-min-length)
                  (string-prefix-p prev-key key)))
+           ;; A guide word that is a prefix of WORD is either that headword
+           ;; clipped by the OCR or a shorter headword of its own; see
+           ;; `diogenes-old-truncated-guide-detection'.
+           (truncated
+            (and prefix-guide
+                 (pcase diogenes-old-truncated-guide-detection
+                   ('verify (diogenes-old--word-on-page-p
+                             word prev-page (or file diogenes-old-pdf-file)))
+                   ('nil nil)
+                   (_ t))))
            (page (cond (truncated prev-page)
                        (hit hit)
                        ;; WORD sorts after every guide word: last page.
