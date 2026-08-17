@@ -96,10 +96,12 @@ relies on a monotonic backbone of the guide words instead."
 
 (defun diogenes-cambridge--monotone-backbone (rows)
   "Return the longest non-decreasing subsequence of ROWS by key.
-ROWS is a list of (PAGE . KEY) in reading (page) order.  The CGL
-guide words ascend down the book; OCR errors (truncated or garbled
-words) show up as order-violating outliers, which this drops,
-leaving a clean monotonic guide-word list for binary search."
+ROWS is a list of (VALUE . KEY) in reading (page) order; only the KEY is
+compared and the rows come back untouched, so VALUE may be a page (as here)
+or anything else the caller wants back -- `diogenes-georges.el' passes a
+page and headword.  The words ascend down the book; OCR errors (truncated
+or garbled words) show up as order-violating outliers, which this drops,
+leaving a clean monotonic list for binary search."
   (let ((n (length rows)))
     (if (zerop n)
         nil
@@ -170,9 +172,11 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
 FILE defaults to `diogenes-cambridge-pdf-file'."
   (let ((file (or file diogenes-cambridge-pdf-file)))
     (unless file
-      (user-error "Set `diogenes-cambridge-pdf-file' to your Cambridge Greek Lexicon PDF first"))
+      (diogenes--require-path file 'diogenes-cambridge-pdf-file
+                              "The Cambridge Greek Lexicon" 'file))
     (unless (file-readable-p file)
-      (user-error "Cannot read Cambridge Greek Lexicon PDF at %s" file))
+      (diogenes--require-path file 'diogenes-cambridge-pdf-file
+                              "The Cambridge Greek Lexicon" 'file))
     (let ((key (diogenes-cambridge--cache-key file)))
       (or (gethash key diogenes-cambridge--index-cache)
           (setf (gethash key diogenes-cambridge--index-cache)

@@ -189,11 +189,8 @@ is it the Gaffiot PDF?" file))
 (defun diogenes-gaffiot-pdf--file ()
   "Return the configured Gaffiot PDF, or signal a user-error."
   (let ((file diogenes-gaffiot-pdf-file))
-    (unless file
-      (user-error "Set `diogenes-gaffiot-pdf-file' to your Gaffiot PDF first"))
-    (unless (file-readable-p file)
-      (user-error "Cannot read the Gaffiot PDF at %s" file))
-    file))
+    (diogenes--require-path file 'diogenes-gaffiot-pdf-file
+                            "The printed Gaffiot" 'file)))
 
 (defun diogenes-gaffiot-pdf--index (&optional file)
   "Return the cached page index for FILE, building it if need be."
@@ -262,6 +259,15 @@ Requires `diogenes-gaffiot-pdf-file', and `pdf-tools' (recommended) or
   (interactive
    (progn
      (diogenes--lookup-assert-lang "latin" "Gaffiot")
+     ;; `P' shows in print what the entry on screen gives electronically, so
+     ;; it belongs to a Gaffiot entry.  Elsewhere `g' is the way in -- and it
+     ;; comes here by itself for a word past F.  `C-u P' asks for a word and
+     ;; works anywhere.
+     (unless (or current-prefix-arg
+                 (and (fboundp 'diogenes-gaffiot-lookup-buffer-p)
+                      (diogenes-gaffiot-lookup-buffer-p)))
+       (user-error "`P' opens the printed Gaffiot for a Gaffiot entry; press \
+`g' first, or `C-u P' to name a word"))
      (list (if current-prefix-arg
                (read-string "Open the Gaffiot PDF at word: ")
              (diogenes-gaffiot--current-headword)))))

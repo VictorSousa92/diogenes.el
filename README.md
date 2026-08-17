@@ -330,6 +330,14 @@ real location on your machine.
   (setq diogenes-bdag-pdf-file       "/path/to/your/BDAG/file")
   (setq diogenes-passow-directory    "/path/to/your/Passow/master/directory")
   (setq diogenes-tgl-directory       "/path/to/your/TGL/master/directory")
+  (setq diogenes-bailly-pdf-file     "/path/to/your/Bailly/file")
+  (setq diogenes-gaffiot-source-file "/path/to/your/Gaffiot/TEI-compliant/unicode/XML/file")
+  (setq diogenes-gaffiot-file "/path/to/where/you/want/your/built/Gaffiot/xml/file")
+    (setq diogenes-gaffiot-pdf-file "/path/to/your/Gaffiot/file")
+    (setq diogenes-georges-directory "/path/to/your/Georges/directory")
+        :config
+    (setq diogenes-old-pdf-viewer 'auto)
+ viewer below for the options.
   :bind ("C-c d" . diogenes))
 ```
  
@@ -370,6 +378,8 @@ Look a word up:
 | `diogenes-lookup-latin` | Plain Lewis & Short lookup of a Latin headword |
 | `diogenes-parse-and-lookup-greek` | Analyse the inflected form first, then look up its lemma |
 | `diogenes-parse-and-lookup-latin` | Same, for Latin |
+| `diogenes-lookup-gaffiot` | Gaffiot's entry for a Latin headword, in a lookup buffer (`g`) |
+| `diogenes-lookup-lewis` | Back to Lewis & Short from another Latin dictionary (`l`) |
  
 - If there is no exact match, the nearest entry is shown (a message says so).
 - Use the parse-and-lookup commands for text you are reading (they handle inflected forms); use the plain ones when you already know the lemma.
@@ -377,7 +387,7 @@ Look a word up:
 The result opens in **Diogenes Lookup Mode**. What you get there:
  
 - The entry, formatted from its TEI XML.
-- A links line at the top for the print dictionaries (see below).
+- A links line at the top, each link naming its key: `[OLD (o)]` `[TLL (t)]` `[Georges (G)]` `[Gaffiot (g)]` for Latin, `[Montanari (m)]` `[CGL (c)]` `[BDAG (b)]` `[Bailly (B)]` `[Passow (p)]` `[TGL (t)]` for Greek (see below).
 - Clickable citations: press RETURN or double-click to open the cited text in Browser Mode.
 Looking words up while reading a text (Browser Mode):
  
@@ -393,11 +403,14 @@ Diogenes Lookup Mode keys:
 | `C-c C-n` | Next entry in the dictionary |
 | `C-c C-p` | Previous entry |
 | `n` / `p` arrows | Move by line (also load the next/previous entry at the buffer edges) |
-| `o` `t` `m` `c` `b` `p` | Open a print dictionary at the current entry (see table below) |
+| `o` `t` `g``G` | Open a print dictionary at the current entry — Latin (see table below) |
+| `m` `c` `b` `B` `p` | The same for Greek |
+| `g` `l` | Gaffiot and Lewis & Short as *lookup entries*, not PDFs |
 | `q` | Quit the window |
  
 - Paging with `C-c C-n` / `C-c C-p` stays in the same buffer and reformats in place.
 - The print-dictionary keys and links always act on the entry the cursor is currently in.
+- Two of the Latin dictionaries are electronic rather than scans: Gaffiot (`g`) and Lewis & Short (`l`) open as entries in a lookup buffer, so `C-c C-n`, `C-c C-c` and the rest work inside them, and each leads to the other. Each key acts only where it makes sense — `g` from any Latin entry but not from Gaffiot, `l` and `P` from a Gaffiot entry only — and `C-u` on any of them prompts for a word and works anywhere.
 ## `C-c C-c` on words inside dictionary entries
  
 This is the main way to move around while reading. Put the cursor on
@@ -431,6 +444,8 @@ Examples:
 - In an LSJ entry, cursor on a Greek quotation, `C-c C-c`: opens that Greek word's entry.
 - In a Lewis & Short entry, cursor on any Latin word in the definition, `C-c C-c`: opens that Latin word's entry.
 - In a Lewis & Short entry, cursor on a Greek word, `C-c C-c`: opens that word's LSJ (Greek) entry.
+- In a Gaffiot xml entry, cursor on any Latin word in the definition, `C-c C-c`: opens that Latin word's entry in Lewis & Short.
+- In a Gaffiot entry, cursor on a Greek word, `C-c C-c`: opens that word's LSJ (Greek) entry.
 - In an LSJ entry, cursor on an English word of the gloss: nothing happens.
 - Cursor on a `[Montanari]` link: opens Montanari, not a word lookup.
 **Same window option.** When you `C-c C-c` a word while already in a
@@ -448,13 +463,16 @@ must be set before use.
  
 | Abbr. | Dictionary | Lang | Path variable | Layout |
 | --- | --- | --- | --- | --- |
+| **Latin** | | | | |
 | OLD | Oxford Latin Dictionary | La | `diogenes-old-pdf-file` | single PDF |
 | TLL | Thesaurus Linguae Latinae | La | `diogenes-tll-pdf-directory` | folder of fascicles |
+| Gaffiot | Gaffiot, Dictionnaire latin-français | La | `diogenes-gaffiot-pdf-file` | single PDF |
+| Georges | Georges, Lateinisch-deutsches Handwörterbuch | La | `diogenes-georges-directory` | one folder, two volume PDFs |
+| **Greek** | | | | |
 | Montanari | Brill Dict. of Ancient Greek | Gr | `diogenes-montanari-pdf-file` | single PDF |
 | CGL | Cambridge Greek Lexicon | Gr | `diogenes-cambridge-pdf-file` | single PDF |
 | BDAG | Bauer/Danker Greek NT | Gr | `diogenes-bdag-pdf-file` | single PDF |
 | Bailly | Bailly, Dictionnaire grec-français | Gr | `diogenes-bailly-pdf-file` | single PDF |
-| Gaffiot | Gaffiot, Dictionnaire latin-français | La | `diogenes-gaffiot-pdf-file` | single PDF |
 | Passow | Passow's Handwörterbuch | Gr | `diogenes-passow-directory` | one folder per volume (PDF + OCR `.txt`) |
 | TGL | Estienne, Thesaurus Graecae Linguae | Gr | `diogenes-tgl-directory` | one folder per volume (PDF + OCR `.txt`) |
  
@@ -462,6 +480,7 @@ Notes on the data:
  
 - OLD, TLL, Montanari, CGL, BDAG: page index comes from each PDF's own bookmarks and embedded OCR layer. No extra files needed.
 - Bailly: its bookmarks name a word *somewhere* on the page rather than the page's bounds, so they give no page interval; the index comes from the **running heads** instead (`first lemma — page number — last lemma`), read from the PDF's text layer. No extra files needed, and nothing is built up front: a lookup reads only the dozen pages its binary search touches. Written for the freely available typeset edition *Bailly 2020 – Hugo Chávez* (http://gerardgreco.free.fr/spip.php?article24&lang=fr); optionally run `M-x diogenes-bailly-build-index` once to read every head and write a portable `<pdf-name>-index.eld` beside the PDF.
+- Georges: bookmarked once per page, and each bookmark names **every entry on that page** (`Bd1_Sp0005-0006_a-3_abacinus_abactio_…`), which gives some 43 000 headword-to-page pairs. A word among them lands on its exact page; one that is not — an entry a crowded bookmark could not list (those end in `ua13`, *und andere*), a spelling filed differently, or a word Georges lacks — lands where it would stand alphabetically, and the echo area says so. Volumes are routed by the letters each covers, read from its own bookmarks. No extra files needed.
 - Passow and TGL: each volume folder needs **two files**, the volume PDF and a plain-text OCR `.txt` of the same volume. Lookups run against the `.txt`, so it is required.
   - First `*.pdf` and first `*.txt` in the folder are used (override with `diogenes-passow-pdf-regexp` / `-text-regexp`, and the `diogenes-tgl-*` equivalents).
   - The OCR `.txt` must delimit pages with lines `----- N / TOTAL -----`.
@@ -526,7 +545,7 @@ in-Emacs viewer it uses with one variable, `diogenes-old-pdf-viewer`
  
 - All four are in-Emacs viewers, so ordinary window management applies to their buffers (including the window-purpose helper described later).
 - The Emacs Reader must be installed separately (see its Codeberg page); it needs MuPDF and a small C module built at install time.
-- One caveat with the Emacs Reader: it renders pages as images and exposes no text layer, so the in-PDF search (`L`, see below) still works but cannot pre-fill the prompt with the word under the cursor. Everything else (the links, the `o t m c b B p` keys, jumping to the right page) works with all three viewers.
+- One caveat with the Emacs Reader: it renders pages as images and exposes no text layer, so the in-PDF search (`L`, see below) still works but cannot pre-fill the prompt with the word under the cursor. Everything else (the links, the `o t m c b B p g G` keys, jumping to the right page) works with all three viewers.
 - The Emacs Reader has no "document ready" signal, so the jump to a page waits for the document to finish rendering by polling; if a very large volume ever loads too slowly for the default wait, raise `diogenes-old-reader-jump-retries` or `diogenes-old-reader-jump-retry-interval`.
 **Where to set it.** Unlike the path variables (which must be set **before** the package loads, hence in `:init`), `diogenes-old-pdf-viewer` is a `defcustom`, so it must be set **after** the package loads. A plain `setq` that runs before load is overwritten when the package loads and the `defcustom` installs its default value. This is true in both Spacemacs and regular Emacs; only the place you put the setting differs slightly. There are three equivalent ways, in rough order of convenience:
  
@@ -555,25 +574,30 @@ The feature to wait for is `diogenes-old` (the module that defines the variable)
 **1. Clickable links.** Every entry in Diogenes Lookup Mode is preceded
 by a links line:
  
-- Latin entries: `[OLD]` `[TLL]`
-- Latin entries also carry `[Gaffiot]`, which is not a PDF but another **lookup entry** (see below); inside a Gaffiot entry that link becomes `[Lewis & Short]`, leading back, joined by `[PDF]` for the same word in the printed Gaffiot (`P`).
-- Greek entries: `[Montanari]` `[CGL]` `[BDAG]` `[Bailly]` `[Passow]` `[TGL]`
+- Each link carries its key: `[TLL (t)]`, `[Georges (G)]`. The key is shown in the `help-key-binding` face, so it reads as a binding rather than as part of the name.
+- Latin entries: `[OLD (o)]` `[TLL (t)]` `[Georges (G)]` `[Gaffiot (g)]` — and inside a Gaffiot entry, `[Lewis & Short (l)]` `[PDF (P)]` in place of `[Gaffiot (g)]`
+- Latin entries also carry `[Georges]` and `[Gaffiot]`, which is not a PDF but another **lookup entry** (see below); inside a Gaffiot entry that link becomes `[Lewis & Short]`, leading back, joined by `[PDF]` for the same word in the printed Gaffiot (`P`).
+- Greek entries: `[Montanari (m)]` `[CGL (c)]` `[BDAG (b)]` `[Bailly (B)]` `[Passow (p)]` `[TGL (t)]`
 - Click or press RETURN to open that dictionary at the entry's page.
 - Works per entry: paging with `C-c C-n` / `C-c C-p` gives each entry its own links line and headword.
 **2. Single keys** (act on the entry the cursor is in, recomputed each keypress; prefix arg prompts for a word):
  
 | Key | Opens |
 | --- | --- |
+| **In a Latin entry** | |
 | `o` | OLD |
-| `t` | TLL (Latin entry) or TGL (Greek entry) |
+| `t` | TLL |
+| `g` | Gaffiot — the entry itself (a lookup buffer, not a PDF; the printed page beyond F) |
+| `P` | If pressed inside a Gaffiot lookup buffer, the printed page in Gaffiot, for the same word |
+| `G` | Georges |
+| `l` | Lewis & Short — the way back from a Gaffiot entry |
+| **In a Greek entry** | |
 | `m` | Montanari |
 | `c` | CGL |
 | `b` | BDAG |
 | `B` | Bailly |
-| `g` | Gaffiot (a lookup entry, not a PDF) |
-| `l` | Lewis & Short (the way back from Gaffiot) |
-| `P` | The Gaffiot PDF at the same word |
 | `p` | Passow |
+| `t` | TGL |
  
 **3. Search inside the open PDF** (see below). Best remedy for OCR/bookmark misses.
  
@@ -595,7 +619,7 @@ How reliable, by dictionary:
 What to do about it, as a user, when a jump lands you off:
  
 1. **Look nearby first.** The target is usually only a page or two away, so scroll a little before anything else. This alone resolves most misses.
-2. **Search inside the open PDF with `L`.** From the PDF, `L` re-looks-up an entry and jumps to it (see [Searching inside an open PDF](#searching-inside-an-open-pdf)); it is the best remedy for a link or `o t m c b B p` key that landed wrong.
+2. **Search inside the open PDF with `L`.** From the PDF, `L` re-looks-up an entry and jumps to it (see [Searching inside an open PDF](#searching-inside-an-open-pdf)); it is the best remedy for a link or `o t m c b B p g G` key that landed wrong.
 3. **For the TGL specifically**, reach a badly-OCR'd word by its **root** with `C-u L` (compounds and derivatives are often printed under the root, not as separate entries), or open volume V's index near the word with `i` (`diogenes-tgl-open-index-here`) and find it by eye. Once the index shows a reference like `t.3 c.746`, follow it with `C-u L` (choose the index-reference / other-tome option, give that tomus and column) and it jumps straight there.
 | Command / key | Does |
 | --- | --- |
@@ -648,7 +672,7 @@ More detail:
 `diogenes-pdf-lookup-entry` (bound to `L` in pdf-view-mode,
 doc-view-mode, and the Emacs Reader's reader-mode) looks up an entry
 from inside the PDF you already have open and jumps to its page. Best
-fix for a link or `o t m c b B p` key that landed you wrong.
+fix for a link or `o t m c b B p g G` key that landed you wrong.
  
 - Works for every print dictionary above; it detects which one from the visited file (prompt names it).
 - Default is the word at point or the current PDF text selection. (In the Emacs Reader there is no text layer, so no default is offered and the prompt starts empty; you type the word, exactly as `L` expects anyway.)

@@ -390,6 +390,10 @@ Requires a converted dictionary file; see
   (interactive
    (progn
      (diogenes--lookup-assert-lang "latin" "Gaffiot")
+     ;; Already here: `l' leads back and `P' to the printed page.
+     (when (and (not current-prefix-arg) (diogenes-gaffiot-lookup-buffer-p))
+       (user-error "This entry is Gaffiot already; `l' returns to Lewis & \
+Short, `P' opens the printed page, `C-u g' looks up another word here"))
      (list (if current-prefix-arg
                (read-string "Look up in Gaffiot: ")
              (diogenes-gaffiot--current-headword)))))
@@ -417,10 +421,11 @@ covers A-F only; set `diogenes-gaffiot-pdf-file' to a PDF of the printed \
 dictionary to reach the rest"
                   word (abbreviate-file-name file)))
      (t
-      (user-error "Gaffiot: nothing configured.  Set \
-`diogenes-gaffiot-pdf-file' to a PDF of the printed dictionary, or \
-`diogenes-gaffiot-source-file' to the TEI XML (which covers A-F) and run \
-M-x diogenes-gaffiot-build-dictionary")))))
+      (user-error "Gaffiot is not set up yet: set `diogenes-gaffiot-pdf-file' \
+to a PDF of the printed dictionary, or `diogenes-gaffiot-source-file' to the \
+TEI XML (which covers A-F) and run M-x diogenes-gaffiot-build-dictionary.  \
+Either in your init file before Diogenes loads, or through \
+M-x customize-variable")))))
 
 (with-eval-after-load 'diogenes-perseus
   (diogenes-gaffiot--install-xml-handlers))

@@ -451,10 +451,9 @@ Parsing the OCR is thus paid at most once, and with a prebuilt index
 never at lookup time at all."
   (let ((parent (or parent diogenes-passow-directory)))
     (unless parent
-      (user-error "Set `diogenes-passow-directory' to your Passow parent folder first"))
+      (diogenes--require-path parent 'diogenes-passow-directory
+                              "Passow" 'directory))
     (setq parent (file-name-as-directory (expand-file-name parent)))
-    (unless (file-directory-p parent)
-      (user-error "Passow directory %s does not exist" parent))
     (let ((key (diogenes-passow--dir-signature parent)))
       (or
        ;; 1. In-memory cache.
@@ -722,10 +721,11 @@ it also refreshes the in-memory and mtime caches so the current
 session benefits immediately."
   (interactive)
   (let ((parent (or diogenes-passow-directory
-                    (user-error "Set `diogenes-passow-directory' first"))))
+                    (diogenes--require-path nil 'diogenes-passow-directory
+                                            "Passow" 'directory))))
     (setq parent (file-name-as-directory (expand-file-name parent)))
-    (unless (file-directory-p parent)
-      (user-error "Passow directory %s does not exist" parent))
+    (diogenes--require-path parent 'diogenes-passow-directory
+                            "Passow" 'directory)
     (let* ((key (diogenes-passow--dir-signature parent))
            (file (diogenes-passow--prebuilt-index-file parent)))
       (message "Passow: building index from OCR (this may take a few seconds)...")

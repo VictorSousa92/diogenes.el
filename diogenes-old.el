@@ -32,6 +32,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'ucs-normalize)
+(require 'diogenes-lisp-utils)          ; diogenes--require-path
 
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus" (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
@@ -308,9 +309,11 @@ This feature needs an OLD PDF whose bookmarks are the page guide words"
 Uses and populates `diogenes-old--index-cache'."
   (let ((file (or file diogenes-old-pdf-file)))
     (unless file
-      (user-error "Set `diogenes-old-pdf-file' to the path of your OLD PDF first"))
+      (diogenes--require-path file 'diogenes-old-pdf-file
+                              "The Oxford Latin Dictionary" 'file))
     (unless (file-readable-p file)
-      (user-error "Cannot read OLD PDF at %s" file))
+      (diogenes--require-path file 'diogenes-old-pdf-file
+                              "The Oxford Latin Dictionary" 'file))
     (let ((key (diogenes-old--cache-key file)))
       (or (gethash key diogenes-old--index-cache)
           (setf (gethash key diogenes-old--index-cache)

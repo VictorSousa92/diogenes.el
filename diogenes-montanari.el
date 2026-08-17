@@ -246,9 +246,11 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
 FILE defaults to `diogenes-montanari-pdf-file'."
   (let ((file (or file diogenes-montanari-pdf-file)))
     (unless file
-      (user-error "Set `diogenes-montanari-pdf-file' to your Montanari PDF first"))
+      (diogenes--require-path file 'diogenes-montanari-pdf-file
+                              "Montanari" 'file))
     (unless (file-readable-p file)
-      (user-error "Cannot read Montanari PDF at %s" file))
+      (diogenes--require-path file 'diogenes-montanari-pdf-file
+                              "Montanari" 'file))
     (let ((key (diogenes-montanari--cache-key file)))
       (or (gethash key diogenes-montanari--index-cache)
           (setf (gethash key diogenes-montanari--index-cache)

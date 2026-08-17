@@ -1230,10 +1230,9 @@ ignored.  Signals a user-error if no volume folder is found."
   "Return the (cached) volume table for `diogenes-tgl-directory'."
   (let ((parent diogenes-tgl-directory))
     (unless parent
-      (user-error "Set `diogenes-tgl-directory' to your TGL parent folder first"))
+      (diogenes--require-path parent 'diogenes-tgl-directory
+                              "The Thesaurus Graecae Linguae" 'directory))
     (setq parent (file-name-as-directory (expand-file-name parent)))
-    (unless (file-directory-p parent)
-      (user-error "TGL directory %s does not exist" parent))
     (let ((key (diogenes-tgl--dir-signature parent)))
       (or (gethash key diogenes-tgl--volumes-cache)
           (setf (gethash key diogenes-tgl--volumes-cache)

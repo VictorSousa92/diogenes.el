@@ -160,9 +160,9 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
 FILE defaults to `diogenes-bdag-pdf-file'."
   (let ((file (or file diogenes-bdag-pdf-file)))
     (unless file
-      (user-error "Set `diogenes-bdag-pdf-file' to your BDAG PDF first"))
+      (diogenes--require-path file 'diogenes-bdag-pdf-file "BDAG" 'file))
     (unless (file-readable-p file)
-      (user-error "Cannot read BDAG PDF at %s" file))
+      (diogenes--require-path file 'diogenes-bdag-pdf-file "BDAG" 'file))
     (let ((key (diogenes-bdag--cache-key file)))
       (or (gethash key diogenes-bdag--index-cache)
           (setf (gethash key diogenes-bdag--index-cache)

@@ -27,6 +27,7 @@
 (declare-function diogenes-gaffiot-lookup-buffer-p "diogenes-gaffiot" ())
 (declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
                   (&optional word))
+(declare-function diogenes-lookup-open-georges "diogenes-georges" (&optional word))
 (declare-function diogenes-lookup-open-bdag "diogenes-bdag" (&optional word))
 (declare-function diogenes-lookup-open-passow "diogenes-passow" (&optional word))
 (declare-function diogenes-lookup-open-tgl "diogenes-tgl" (&optional word))
@@ -634,123 +635,131 @@ is raised."
                   (capitalize expected)
                   lang))))
 
+(defface diogenes-lookup-link-key
+  '((((background light)) :foreground "#a0522d" :weight bold :underline nil
+     :inherit nil)
+    (((background dark)) :foreground "#f0c674" :weight bold :underline nil
+     :inherit nil)
+    (t :weight bold :underline nil :inherit nil))
+  "Face for the key hint inside a print-dictionary link, the \"t\" of \"[TLL (t)]\".
+Deliberately NOT a blue: the link around it is already coloured, and a hint
+in a neighbouring shade of the same colour is no hint at all.  A warm
+foreground, bold, and no underline set it apart from the link whatever the
+theme does with links themselves -- sienna on a light background, a soft
+amber on a dark one.
+
+To suit it to your own theme:
+
+  M-x customize-face RET diogenes-lookup-link-key RET
+
+or, in your init file,
+
+  (set-face-attribute \\='diogenes-lookup-link-key nil
+                      :foreground \"orange red\" :weight \\='bold)"
+  :group 'diogenes)
+
+(defun diogenes--lookup-dict-link (name key action headword help)
+  "Return a clickable link reading \"[NAME (KEY)]\" for HEADWORD.
+ACTION is the symbol `diogenes-perseus-action' dispatches on, HELP a format
+string taking the headword, and KEY the key bound to the same command --
+shown in parentheses, in `diogenes-lookup-link-key', so the binding can be
+read off the entry instead of looked up.  KEY may be nil for a link with no
+key of its own."
+  (let* ((label (if key (format "[%s (%s)]" name key) (format "[%s]" name)))
+         (link (propertize label
+                           'font-lock-face 'link
+                           'keymap diogenes-perseus-action-map
+                           'action action
+                           'headword headword
+                           'help-echo (format help headword)
+                           'rear-nonsticky t)))
+    (when key
+      ;; The key sits between "(" and ")]", i.e. two characters from the end.
+      (put-text-property (- (length label) 2 (length key))
+                         (- (length label) 2)
+                         'font-lock-face 'diogenes-lookup-link-key
+                         link))
+    link))
+
+(defconst diogenes--lookup-greek-dict-links
+  '(("Montanari" "m" montanari "Open Montanari at \"%s\"")
+    ("CGL" "c" cambridge "Open the Cambridge Greek Lexicon at \"%s\"")
+    ("BDAG" "b" bdag "Open BDAG (Bauer) at \"%s\"")
+    ("Bailly" "B" bailly "Open Bailly at \"%s\"")
+    ("Passow" "p" passow "Open Passow at \"%s\"")
+    ("TGL" "t" tgl "Open Estienne's Thesaurus Graecae Linguae at \"%s\""))
+  "The print dictionaries offered on a Greek entry, in the order shown.
+Each element is (NAME KEY ACTION HELP); see `diogenes--lookup-dict-link'.")
+
+(defconst diogenes--lookup-latin-dict-links
+  '(("OLD" "o" old "Open the OLD at \"%s\"")
+    ("TLL" "t" tll "Open the TLL at \"%s\"")
+    ("Georges" "G" georges "Open Georges at \"%s\""))
+  "The print dictionaries offered on any Latin entry, in the order shown.
+The electronic Latin dictionaries -- Gaffiot and Lewis & Short -- are added
+per entry by `diogenes--lookup-insert-dict-links', which offers whichever
+of the two is not the one being read.")
+
 (defun diogenes--lookup-insert-dict-links (headword lang)
   "Insert clickable print-dictionary links for HEADWORD at point.
-For Latin (LANG \"latin\") this inserts [OLD], [TLL] and either [Gaffiot]
-or, when the entry shown IS Gaffiot, [Lewis & Short] and [PDF] (the same
-page in the printed Gaffiot); for Greek
-it inserts [Montanari] [CGL] [BDAG] [Bailly] [Passow] [TGL].  Clicking a link
-\(or pressing RET on it) opens the corresponding PDF at the page
-containing HEADWORD.  The links are inserted AT POINT, so the caller
-positions to the top of the entry the links belong to; the initial
-lookup and each `diogenes-lookup-next' / `-previous' step do this once
-per entry, so every entry carries its own banner.  Each link is only
-useful when its dictionary's path variable is set (`diogenes-old-pdf-file',
-`diogenes-tll-pdf-directory', `diogenes-montanari-pdf-file',
+Each link reads \"[NAME (KEY)]\", the key being the one bound to the same
+command in `diogenes-lookup-mode-map'.
+
+For Latin: [OLD], [TLL] and [Georges], then either [Gaffiot] -- an entry in
+a lookup buffer, not a PDF -- or, when the entry shown IS Gaffiot,
+[Lewis & Short] leading back and [PDF] for the same page in print.  For
+Greek: [Montanari], [CGL], [BDAG], [Bailly], [Passow] and [TGL].
+
+Clicking a link (or pressing RET on it) opens that dictionary at the page
+holding HEADWORD.  The links are inserted AT POINT, so the caller positions
+to the top of the entry they belong to; the initial lookup and each
+`diogenes-lookup-next' / `-previous' step do this once per entry, so every
+entry carries its own banner.  A link is only useful when its dictionary's
+path variable is set (`diogenes-old-pdf-file', `diogenes-tll-pdf-directory',
+`diogenes-georges-directory', `diogenes-gaffiot-file',
+`diogenes-gaffiot-pdf-file', `diogenes-montanari-pdf-file',
 `diogenes-cambridge-pdf-file', `diogenes-bdag-pdf-file',
 `diogenes-bailly-pdf-file', `diogenes-passow-directory',
-`diogenes-tgl-directory')."
-  (let ((inhibit-read-only t))
-    (save-excursion
-      (pcase lang
-	("latin"
-	 (insert (propertize "[OLD]"
-			     'font-lock-face 'link
-			     'keymap diogenes-perseus-action-map
-			     'action 'old
-			     'headword headword
-			     'help-echo (format "Open the OLD at \"%s\"" headword)
-			     'rear-nonsticky t)
-		 "  "
-		 (propertize "[TLL]"
-			     'font-lock-face 'link
-			     'keymap diogenes-perseus-action-map
-			     'action 'tll
-			     'headword headword
-			     'help-echo (format "Open the TLL at \"%s\"" headword)
-			     'rear-nonsticky t)
-		 "  "
-		 ;; The other electronic Latin dictionary.  Gaffiot and Lewis &
-		 ;; Short are not PDFs but lookup entries, so the link offers
-		 ;; whichever of the two we are NOT reading: from Lewis & Short it
-		 ;; leads to Gaffiot, and from Gaffiot back again.
-		 (if (and (fboundp 'diogenes-gaffiot-lookup-buffer-p)
-			  (diogenes-gaffiot-lookup-buffer-p))
-		     (concat
-		      (propertize "[Lewis & Short]"
-				  'font-lock-face 'link
-				  'keymap diogenes-perseus-action-map
-				  'action 'lewis
-				  'headword headword
-				  'help-echo (format "Show Lewis & Short's entry for \"%s\"" headword)
-				  'rear-nonsticky t)
-		      "  "
-		      ;; The same dictionary in print: the entry as Gaffiot set it,
-		      ;; with the illustrations the TEI does not carry.
-		      (propertize "[PDF]"
-				  'font-lock-face 'link
-				  'keymap diogenes-perseus-action-map
-				  'action 'gaffiot-pdf
-				  'headword headword
-				  'help-echo (format "Open the Gaffiot PDF at \"%s\"" headword)
-				  'rear-nonsticky t))
-		   (propertize "[Gaffiot]"
-			       'font-lock-face 'link
-			       'keymap diogenes-perseus-action-map
-			       'action 'gaffiot
-			       'headword headword
-			       'help-echo (format "Show Gaffiot's entry for \"%s\"" headword)
-			       'rear-nonsticky t))
-		 "  "))
-	("greek"
-	 (insert (propertize "[Montanari]"
-			     'font-lock-face 'link
-			     'keymap diogenes-perseus-action-map
-			     'action 'montanari
-			     'headword headword
-			     'help-echo (format "Open Montanari at \"%s\"" headword)
-			     'rear-nonsticky t)
-		 "  "
-		 (propertize "[CGL]"
-			     'font-lock-face 'link
-			     'keymap diogenes-perseus-action-map
-			     'action 'cambridge
-			     'headword headword
-			     'help-echo (format "Open the Cambridge Greek Lexicon at \"%s\"" headword)
-			     'rear-nonsticky t)
-		 "  "
-		 (propertize "[BDAG]"
-			     'font-lock-face 'link
-			     'keymap diogenes-perseus-action-map
-			     'action 'bdag
-			     'headword headword
-			     'help-echo (format "Open BDAG (Bauer) at \"%s\"" headword)
-			     'rear-nonsticky t)
-		 "  "
-		 (propertize "[Bailly]"
-			     'font-lock-face 'link
-			     'keymap diogenes-perseus-action-map
-			     'action 'bailly
-			     'headword headword
-			     'help-echo (format "Open Bailly at \"%s\"" headword)
-			     'rear-nonsticky t)
-		 "  "
-		 (propertize "[Passow]"
-			     'font-lock-face 'link
-			     'keymap diogenes-perseus-action-map
-			     'action 'passow
-			     'headword headword
-			     'help-echo (format "Open Passow at \"%s\"" headword)
-			     'rear-nonsticky t)
-		 "  "
-		 (propertize "[TGL]"
-			     'font-lock-face 'link
-			     'keymap diogenes-perseus-action-map
-			     'action 'tgl
-			     'headword headword
-			     'help-echo (format "Open Estienne's Thesaurus Graecae Linguae at \"%s\"" headword)
-			     'rear-nonsticky t)
-		 "  "))))))
+`diogenes-tgl-directory'); each says how to set it when pressed."
+  (let ((inhibit-read-only t)
+        (specs
+         (pcase lang
+           ("latin"
+            (append diogenes--lookup-latin-dict-links
+                    (if (and (fboundp 'diogenes-gaffiot-lookup-buffer-p)
+                             (diogenes-gaffiot-lookup-buffer-p))
+                        '(("Lewis & Short" "l" lewis
+                           "Show Lewis & Short's entry for \"%s\"")
+                          ("PDF" "P" gaffiot-pdf
+                           "Open the printed Gaffiot at \"%s\""))
+                      '(("Gaffiot" "g" gaffiot
+                         "Show Gaffiot's entry for \"%s\"")))))
+           ("greek" diogenes--lookup-greek-dict-links))))
+    (when specs
+      (save-excursion
+        (let ((links (mapcar (lambda (spec)
+                               (seq-let (name key action help) spec
+                                 (diogenes--lookup-dict-link name key action
+                                                             headword help)))
+                             specs))
+              ;; Six Greek dictionaries do not fit one line at most widths, and
+              ;; letting them run on wraps a link across two lines and pushes
+              ;; the entry itself onto the end of the banner.  So break between
+              ;; links, never inside one, and close with a newline of its own so
+              ;; the headword always starts a line.
+              (width (max 20 (or fill-column 70)))
+              (column 0))
+          (dolist (link links)
+            (let ((len (string-width link)))
+              (cond ((zerop column))               ; first link on a line
+                    ((> (+ column 2 len) width)
+                     (insert "\n")
+                     (setq column 0))
+                    (t (insert "  ")
+                       (setq column (+ column 2))))
+              (insert link)
+              (setq column (+ column len))))
+          (insert "\n"))))))
 
 (defun diogenes--lookup-first-headword ()
   "Return the first entry headword in the current lookup buffer.
@@ -801,6 +810,19 @@ the entry the buffer was first opened on."
 			 #'diogenes--ascii-sort-function
 			 #'diogenes--xml-key-fn))))
 
+(defun diogenes--lookup-own-dictionary-p ()
+  "Non-nil if this lookup buffer shows the language\'s own Diogenes dictionary.
+That is the LSJ for Greek and Lewis & Short for Latin -- what
+`diogenes--lookup-dict' searches -- as opposed to another dictionary shown
+through the same machinery, such as Gaffiot.  Compared by file, since that
+is what a lookup buffer records."
+  (and (derived-mode-p 'diogenes-lookup-mode)
+       (boundp 'diogenes--lookup-file) diogenes--lookup-file
+       (boundp 'diogenes--lookup-lang) diogenes--lookup-lang
+       (ignore-errors
+         (string= (file-truename diogenes--lookup-file)
+                  (file-truename (diogenes--dict-file diogenes--lookup-lang))))))
+
 (defun diogenes--lookup-current-headword ()
   "Return the headword of the entry point is in, for the lookup commands."
   (or (diogenes--lookup-headword-at-point)
@@ -820,6 +842,12 @@ runs."
   (interactive
    (progn
      (diogenes--lookup-assert-lang "latin" "Lewis & Short")
+     ;; `l' is the way BACK from another Latin dictionary; in Lewis & Short
+     ;; itself it would look up the entry already on screen.
+     (unless (or current-prefix-arg
+                 (not (diogenes--lookup-own-dictionary-p)))
+       (user-error "This entry is Lewis & Short already; `g' opens Gaffiot, \
+`C-u l' looks up another word here"))
      (list (if current-prefix-arg
                (read-string "Look up in Lewis & Short: ")
              (diogenes--lookup-current-headword)))))
@@ -944,6 +972,7 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "g"                             #'diogenes-lookup-gaffiot)
     (keymap-set map "l"                             #'diogenes-lookup-lewis)
     (keymap-set map "P"                             #'diogenes-lookup-open-gaffiot-pdf)
+    (keymap-set map "G"                             #'diogenes-lookup-open-georges)
     (keymap-set map "p"                             #'diogenes-lookup-open-passow)
     (keymap-set map "B"                             #'diogenes-lookup-open-bailly)
     (keymap-set map "q"                             #'diogenes--quit)
@@ -1437,6 +1466,7 @@ if nil, query interactively for their values"
       (lewis (diogenes-lookup-lewis (get-text-property char 'headword)))
       (gaffiot-pdf (diogenes-lookup-open-gaffiot-pdf
 		    (get-text-property char 'headword)))
+      (georges (diogenes-lookup-open-georges (get-text-property char 'headword)))
       (montanari (diogenes-lookup-open-montanari (get-text-property char 'headword)))
       (cambridge (diogenes-lookup-open-cambridge (get-text-property char 'headword)))
       (bdag (diogenes-lookup-open-bdag (get-text-property char 'headword)))

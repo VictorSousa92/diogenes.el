@@ -474,11 +474,7 @@ a genuinely different PDF is still caught."
 (defun diogenes-bailly--file ()
   "Return the configured Bailly PDF, or signal a user-error."
   (let ((file diogenes-bailly-pdf-file))
-    (unless file
-      (user-error "Set `diogenes-bailly-pdf-file' to your Bailly PDF first"))
-    (unless (file-readable-p file)
-      (user-error "Cannot read the Bailly PDF at %s" file))
-    file))
+    (diogenes--require-path file 'diogenes-bailly-pdf-file "Bailly" 'file)))
 
 (defun diogenes-bailly--new-state ()
   "Return an empty state plist."

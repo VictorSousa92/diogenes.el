@@ -159,10 +159,12 @@ See `diogenes-tll-interval-regexp'"
   "Return the parsed, cached fascicle list for `diogenes-tll-pdf-directory'."
   (let ((dir diogenes-tll-pdf-directory))
     (unless dir
-      (user-error "Set `diogenes-tll-pdf-directory' to your TLL PDF folder first"))
+      (diogenes--require-path dir 'diogenes-tll-pdf-directory
+                              "The Thesaurus Linguae Latinae" 'directory))
     (setq dir (expand-file-name dir))
     (unless (file-directory-p dir)
-      (user-error "TLL directory does not exist: %s" dir))
+      (diogenes--require-path dir 'diogenes-tll-pdf-directory
+                              "The Thesaurus Linguae Latinae" 'directory))
     (let ((key (diogenes-tll--dir-cache-key dir)))
       (or (gethash key diogenes-tll--fascicle-cache)
           (setf (gethash key diogenes-tll--fascicle-cache)

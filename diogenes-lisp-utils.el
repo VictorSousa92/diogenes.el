@@ -89,6 +89,37 @@ The value is actually the first element of ALIST whose car equals KEY."
 		    (point-min))))
     (list start end)))
 
+(defun diogenes--require-path (value variable dictionary kind)
+  "Return VALUE, or explain how to set VARIABLE if it will not serve.
+The dictionaries each need a path from the user, and a missing one should
+say what to set and how rather than failing somewhere downstream.  VALUE is
+what the option currently holds, VARIABLE its symbol, DICTIONARY the name to
+call it by in the message, and KIND either `file' or `directory'.
+
+Set as an ordinary variable, before Diogenes loads, or through Customize;
+either way the value survives the `defcustom'."
+  (let ((name (symbol-name variable)))
+    (cond
+     ((or (null value) (and (stringp value) (string-empty-p value)))
+      (user-error "%s is not set up yet: `%s' must name %s.  \
+Put (setq %s \"/path/to/%s\") in your init file before Diogenes loads, or \
+run M-x customize-variable RET %s RET"
+                  dictionary name
+                  (if (eq kind 'directory) "a directory" "a file")
+                  name
+                  (if (eq kind 'directory) "folder/" "file.pdf")
+                  name))
+     ((eq kind 'directory)
+      (unless (file-directory-p value)
+        (user-error "%s: `%s' is %s, which is not an existing directory"
+                    dictionary name value))
+      value)
+     (t
+      (unless (file-readable-p value)
+        (user-error "%s: `%s' is %s, which cannot be read"
+                    dictionary name value))
+      value))))
+
 (defun diogenes--ascii-alpha-p (letter)
   (or (<= 65 letter 90)
       (<= 97 letter 122)))

@@ -31,6 +31,7 @@
 ;;   BDAG       Bauer (Danker) Gk NT lexicon  (diogenes-bdag)
 ;;   Bailly     Dictionnaire grec-français    (diogenes-bailly)
 ;;   Gaffiot    Dictionnaire latin-français   (diogenes-gaffiot-pdf)
+;;   Georges    Lat.-deutsches Handwörterbuch (diogenes-georges, 2 vols.)
 ;;   Passow     Passow's Handwörterbuch       (diogenes-passow, multi-volume)
 ;;   TGL        Estienne, Thesaurus Gk Ling.  (diogenes-tgl, multi-volume)
 ;;
@@ -70,6 +71,7 @@
 (declare-function diogenes-bdag--page-for-word       "diogenes-bdag"      (word &optional file))
 (declare-function diogenes-bailly--page-for-word     "diogenes-bailly"    (word &optional file))
 (declare-function diogenes-gaffiot-pdf--page-for-word "diogenes-gaffiot-pdf" (word &optional file))
+(declare-function diogenes-georges--locate            "diogenes-georges"   (word))
 (declare-function diogenes-tll--file-for-word        "diogenes-tll"       (word))
 (declare-function diogenes-tll--page-for-word        "diogenes-tll"       (word file))
 (declare-function diogenes-passow--locate            "diogenes-passow"    (word))
@@ -91,6 +93,7 @@
 (defvar diogenes-bdag-pdf-file)
 (defvar diogenes-bailly-pdf-file)
 (defvar diogenes-gaffiot-pdf-file)
+(defvar diogenes-georges-directory)
 (defvar diogenes-passow-directory)
 (defvar diogenes-tgl-directory)
 (defvar diogenes-old-display-in-other-window)
@@ -133,7 +136,7 @@ contains FILE, or nil.  Requires the `diogenes-tgl' module and its
 (defun diogenes-pdf-search--identify (file)
   "Identify which print dictionary the PDF FILE belongs to.
 Returns a symbol: `old', `tll', `montanari', `cambridge', `bdag',
-`bailly', `gaffiot', `passow' or `tgl', or nil when FILE matches no configured
+`bailly', `gaffiot', `georges', `passow' or `tgl', or nil when FILE matches no configured
 dictionary path.  Each match `require's its module lazily so an
 unused dictionary need not be loaded.
 
@@ -161,6 +164,10 @@ Single-file dictionaries match by truename against their
    ((and (boundp 'diogenes-gaffiot-pdf-file)
          (diogenes-pdf-search--same-file-p file diogenes-gaffiot-pdf-file))
     (and (require 'diogenes-gaffiot-pdf nil t) 'gaffiot))
+   ;; Georges: a folder holding the two volumes' PDFs.
+   ((and (boundp 'diogenes-georges-directory)
+         (diogenes-pdf-search--under-dir-p file diogenes-georges-directory))
+    (and (require 'diogenes-georges nil t) 'georges))
    ;; Passow: a parent folder of per-volume sub-directories, each with a PDF.
    ((and (boundp 'diogenes-passow-directory)
          (diogenes-pdf-search--under-dir-p file diogenes-passow-directory))
@@ -182,6 +189,7 @@ Single-file dictionaries match by truename against their
     (bdag      . "BDAG")
     (bailly    . "Bailly")
     (gaffiot   . "Gaffiot")
+    (georges   . "Georges")
     (passow    . "Passow")
     (tgl       . "TGL"))
   "Alist mapping a dictionary symbol to its display name.")
@@ -243,6 +251,17 @@ logic, so results agree with that dictionary's link/opener command."
     ('bdag      (diogenes-bdag--page-for-word word file))
     ('bailly    (diogenes-bailly--page-for-word word file))
     ('gaffiot   (diogenes-gaffiot-pdf--page-for-word word file))
+    ('georges
+     ;; Two volumes, and the word chooses which; open the sibling when it is
+     ;; not the one on screen.
+     (let ((hit (diogenes-georges--locate word)))
+       (unless hit
+         (user-error "Could not locate \"%s\" in Georges" word))
+       (let ((other (nth 0 hit))
+             (page (nth 1 hit)))
+         (if (diogenes-pdf-search--same-file-p other file)
+             page
+           (cons page other)))))
     ('passow
      ;; Passow is multi-volume; --locate returns (VOLUME . PAGE-PLIST),
      ;; where VOLUME is a plist carrying :pdf and PAGE-PLIST feeds
