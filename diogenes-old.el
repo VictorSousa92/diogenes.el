@@ -72,6 +72,26 @@ by side."
   :type 'boolean
   :group 'diogenes)
 
+(defcustom diogenes-old-reader-display-action
+  '((display-buffer-reuse-window
+     display-buffer-reuse-mode-window
+     display-buffer-use-some-window)
+    (mode . (reader-mode pdf-view-mode doc-view-mode))
+    (inhibit-same-window . t))
+  "`display-buffer' ACTION for showing a dictionary in the Emacs Reader.
+The Reader needs `display-buffer-overriding-action' bound to nil (see
+`diogenes-old--show-page'), which also takes window-purpose out of the
+picture -- and with it the behaviour that keeps one dictionary after
+another in a single window.  Reusing a window that already shows a
+document buffer restores it, so opening one dictionary after another
+replaces the page on screen instead of splitting the frame again.
+
+Used for the Reader only: with pdf-tools and doc-view, purpose's own
+overriding action is left in place and already does this.  Consulted
+only when `diogenes-old-display-in-other-window' is non-nil."
+  :type 'sexp
+  :group 'diogenes)
+
 ;;;; --------------------------------------------------------------------
 ;;;; HEADWORD NORMALIZATION
 ;;;; --------------------------------------------------------------------
@@ -530,18 +550,23 @@ created and every `reader-goto-page' fails with `(wrong-type-argument
 overlayp nil)'.  Letting the Reader display through the normal path
 fixes that.  This binding is scoped to the Reader case only, so
 pdf-tools, doc-view, and window-purpose's handling of every other
-buffer (lookups, browser) are unaffected."
+buffer (lookups, browser) are unaffected.
+
+Taking purpose out of the loop costs one thing, though: it is purpose
+that otherwise keeps one dictionary after another in a single window,
+so without it each dictionary opened a new one.  The Reader case
+therefore displays through `diogenes-old-reader-display-action', which
+reuses a window already showing a document buffer."
   (let* ((file (or file diogenes-old-pdf-file))
          (viewer (diogenes-old--resolved-viewer)))
     (if (eq viewer 'emacs-reader)
         ;; Bypass purpose's display override so the Reader renders normally
         ;; (creating its overlay).  Covers both the open and the display.
         (let ((display-buffer-overriding-action nil))
-          (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer))
-                (display (if diogenes-old-display-in-other-window
-                             #'display-buffer
-                           #'pop-to-buffer-same-window)))
-            (funcall display buffer)
+          (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer)))
+            (if diogenes-old-display-in-other-window
+                (display-buffer buffer diogenes-old-reader-display-action)
+              (pop-to-buffer-same-window buffer))
             (diogenes-old--goto-page-when-ready buffer page)))
       (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer))
             (display (if diogenes-old-display-in-other-window
