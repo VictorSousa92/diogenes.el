@@ -31,6 +31,9 @@
 (declare-function diogenes-lookup-open-bdag "diogenes-bdag" (&optional word))
 (declare-function diogenes-lookup-open-passow "diogenes-passow" (&optional word))
 (declare-function diogenes-lookup-open-tgl "diogenes-tgl" (&optional word))
+(declare-function diogenes-lookup-pape "diogenes-pape" (&optional word))
+(declare-function diogenes-lookup-lsj "diogenes-pape" (&optional word))
+(declare-function diogenes-pape-lookup-buffer-p "diogenes-pape" ())
 
 ;;;; --------------------------------------------------------------------
 ;;;; UTILITIES
@@ -734,7 +737,17 @@ path variable is set (`diogenes-old-pdf-file', `diogenes-tll-pdf-directory',
                            "Open the printed Gaffiot at \"%s\""))
                       '(("Gaffiot" "g" gaffiot
                          "Show Gaffiot's entry for \"%s\"")))))
-           ("greek" diogenes--lookup-greek-dict-links))))
+           ("greek"
+            ;; The same arrangement as for Latin: offer whichever of the
+            ;; two electronic Greek dictionaries is NOT the one on
+            ;; screen, so the link always leads somewhere else.
+            (append diogenes--lookup-greek-dict-links
+                    (if (and (fboundp 'diogenes-pape-lookup-buffer-p)
+                             (diogenes-pape-lookup-buffer-p))
+                        '(("LSJ" "l" lsj
+                           "Show the LSJ entry for \"%s\""))
+                      '(("Pape" "P" pape
+                         "Show Pape's entry for \"%s\""))))))))
     (when specs
       (save-excursion
         (let ((links (mapcar (lambda (spec)
@@ -1473,6 +1486,8 @@ if nil, query interactively for their values"
       (bailly (diogenes-lookup-open-bailly (get-text-property char 'headword)))
       (passow (diogenes-lookup-open-passow (get-text-property char 'headword)))
       (tgl (diogenes-lookup-open-tgl (get-text-property char 'headword)))
+      (pape (diogenes-lookup-pape (get-text-property char 'headword)))
+      (lsj (diogenes-lookup-lsj (get-text-property char 'headword)))
       (lookup (diogenes--lookup-dict (get-text-property char 'lemma)
 				     (get-text-property char 'lang)))
       (forms (diogenes--show-all-forms (get-text-property char 'lemma)
