@@ -61,6 +61,7 @@
 (require 'diogenes-cambridge)
 (require 'diogenes-bdag)
 (require 'diogenes-passow)
+(require 'diogenes-bailly)
 (require 'diogenes-tgl)
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)

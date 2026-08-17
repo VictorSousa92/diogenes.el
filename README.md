@@ -453,12 +453,14 @@ must be set before use.
 | Montanari | Brill Dict. of Ancient Greek | Gr | `diogenes-montanari-pdf-file` | single PDF |
 | CGL | Cambridge Greek Lexicon | Gr | `diogenes-cambridge-pdf-file` | single PDF |
 | BDAG | Bauer/Danker Greek NT | Gr | `diogenes-bdag-pdf-file` | single PDF |
+| Bailly | Bailly, Dictionnaire grec-français | Gr | `diogenes-bailly-pdf-file` | single PDF |
 | Passow | Passow's Handwörterbuch | Gr | `diogenes-passow-directory` | one folder per volume (PDF + OCR `.txt`) |
 | TGL | Estienne, Thesaurus Graecae Linguae | Gr | `diogenes-tgl-directory` | one folder per volume (PDF + OCR `.txt`) |
  
 Notes on the data:
  
 - OLD, TLL, Montanari, CGL, BDAG: page index comes from each PDF's own bookmarks and embedded OCR layer. No extra files needed.
+- Bailly: its bookmarks name a word *somewhere* on the page rather than the page's bounds, so they give no page interval; the index comes from the **running heads** instead (`first lemma — page number — last lemma`), read from the PDF's text layer. No extra files needed, and nothing is built up front: a lookup reads only the dozen pages its binary search touches. Written for the freely available typeset edition *Bailly 2020 – Hugo Chávez*; optionally run `M-x diogenes-bailly-build-index` once to read every head and write a portable `<pdf-name>-index.eld` beside the PDF.
 - Passow and TGL: each volume folder needs **two files**, the volume PDF and a plain-text OCR `.txt` of the same volume. Lookups run against the `.txt`, so it is required.
   - First `*.pdf` and first `*.txt` in the folder are used (override with `diogenes-passow-pdf-regexp` / `-text-regexp`, and the `diogenes-tgl-*` equivalents).
   - The OCR `.txt` must delimit pages with lines `----- N / TOTAL -----`.
@@ -486,7 +488,7 @@ in-Emacs viewer it uses with one variable, `diogenes-old-pdf-viewer`
  
 - All four are in-Emacs viewers, so ordinary window management applies to their buffers (including the window-purpose helper described later).
 - The Emacs Reader must be installed separately (see its Codeberg page); it needs MuPDF and a small C module built at install time.
-- One caveat with the Emacs Reader: it renders pages as images and exposes no text layer, so the in-PDF search (`L`, see below) still works but cannot pre-fill the prompt with the word under the cursor. Everything else (the links, the `o t m c b p` keys, jumping to the right page) works with all three viewers.
+- One caveat with the Emacs Reader: it renders pages as images and exposes no text layer, so the in-PDF search (`L`, see below) still works but cannot pre-fill the prompt with the word under the cursor. Everything else (the links, the `o t m c b B p` keys, jumping to the right page) works with all three viewers.
 - The Emacs Reader has no "document ready" signal, so the jump to a page waits for the document to finish rendering by polling; if a very large volume ever loads too slowly for the default wait, raise `diogenes-old-reader-jump-retries` or `diogenes-old-reader-jump-retry-interval`.
 **Where to set it.** Unlike the path variables (which must be set **before** the package loads, hence in `:init`), `diogenes-old-pdf-viewer` is a `defcustom`, so it must be set **after** the package loads. A plain `setq` that runs before load is overwritten when the package loads and the `defcustom` installs its default value. This is true in both Spacemacs and regular Emacs; only the place you put the setting differs slightly. There are three equivalent ways, in rough order of convenience:
  
@@ -516,7 +518,7 @@ The feature to wait for is `diogenes-old` (the module that defines the variable)
 by a links line:
  
 - Latin entries: `[OLD]` `[TLL]`
-- Greek entries: `[Montanari]` `[CGL]` `[BDAG]` `[Passow]` `[TGL]`
+- Greek entries: `[Montanari]` `[CGL]` `[BDAG]` `[Bailly]` `[Passow]` `[TGL]`
 - Click or press RETURN to open that dictionary at the entry's page.
 - Works per entry: paging with `C-c C-n` / `C-c C-p` gives each entry its own links line and headword.
 **2. Single keys** (act on the entry the cursor is in, recomputed each keypress; prefix arg prompts for a word):
@@ -528,6 +530,7 @@ by a links line:
 | `m` | Montanari |
 | `c` | CGL |
 | `b` | BDAG |
+| `B` | Bailly |
 | `p` | Passow |
  
 **3. Search inside the open PDF** (see below). Best remedy for OCR/bookmark misses.
@@ -544,13 +547,13 @@ page.
  
 How reliable, by dictionary:
  
-- Most reliable: OLD, BDAG, Montanari, CGL (modern typeset).
+- Most reliable: Bailly (a modern re-typesetting, so no OCR at all), then OLD, BDAG, Montanari, CGL (modern typeset).
 - Less so: Passow.
 - Least reliable: TGL (16th-century, dense multi-column, heavy ligatures).
 What to do about it, as a user, when a jump lands you off:
  
 1. **Look nearby first.** The target is usually only a page or two away, so scroll a little before anything else. This alone resolves most misses.
-2. **Search inside the open PDF with `L`.** From the PDF, `L` re-looks-up an entry and jumps to it (see [Searching inside an open PDF](#searching-inside-an-open-pdf)); it is the best remedy for a link or `o t m c b p` key that landed wrong.
+2. **Search inside the open PDF with `L`.** From the PDF, `L` re-looks-up an entry and jumps to it (see [Searching inside an open PDF](#searching-inside-an-open-pdf)); it is the best remedy for a link or `o t m c b B p` key that landed wrong.
 3. **For the TGL specifically**, reach a badly-OCR'd word by its **root** with `C-u L` (compounds and derivatives are often printed under the root, not as separate entries), or open volume V's index near the word with `i` (`diogenes-tgl-open-index-here`) and find it by eye. Once the index shows a reference like `t.3 c.746`, follow it with `C-u L` (choose the index-reference / other-tome option, give that tomus and column) and it jumps straight there.
 | Command / key | Does |
 | --- | --- |
@@ -564,10 +567,13 @@ to understand *why* a TGL jump usually lands well (and why
 `diogenes-tgl-page-offset` normally stays 0), see
 [Appendix: how TGL lookups stay on target](#appendix-how-tgl-lookups-stay-on-target).
  
-### Prebuilt indexes (Passow and TGL)
+### Prebuilt indexes (Passow, TGL, Bailly)
  
 Passow and the TGL build their lookup index by parsing every volume's
-OCR, which takes a few seconds the first time in a session.
+OCR, which takes a few seconds the first time in a session. Bailly is
+different in kind -- it never needs a full pass, since each lookup reads
+only the pages its binary search probes -- but it can store one all the
+same, which removes even that per-lookup reading.
  
 **Highly recommended: build the index once, up front.** Doing this makes
 every subsequent Passow/TGL lookup start instantly instead of paying the
@@ -580,6 +586,7 @@ parse on the first lookup of a session. To do it:
 | --- | --- |
 | `M-x diogenes-passow-build-index` | `passow-index.eld` in the Passow folder |
 | `M-x diogenes-tgl-build-index` | `tgl-index.eld` in the TGL folder |
+| `M-x diogenes-bailly-build-index` | `<pdf-name>-index.eld` beside the Bailly PDF |
  
 Each command parses the volumes once (a few seconds) and writes a small
 `.eld` index file next to them. From then on lookups load that file
@@ -591,14 +598,15 @@ More detail:
 - Even without building it by hand, the parse result is cached in memory for the session and on disk (keyed by the OCR files' modification times), so it is paid at most once per machine and redone only if you re-OCR a volume. Building it explicitly with the commands above just gets that cost out of the way before your first lookup rather than during it.
 - The `.eld` file is **portable**: commit it alongside the volumes and other users skip the parse entirely.
 - Rebuild after adding or re-OCRing a volume (the file records a signature and warns when stale).
-- `diogenes-passow-clear-cache` / `diogenes-tgl-clear-cache` discard the caches to force a rebuild.
+- `diogenes-passow-clear-cache` / `diogenes-tgl-clear-cache` / `diogenes-bailly-clear-cache` discard the caches to force a rebuild.
+- Bailly's index is optional and quick: with poppler's `pdftotext` the whole dictionary is read in one pass in a few seconds (with pdf-tools alone it goes page by page and takes longer). If the PDF's folder is not writable the table is saved under `diogenes-bailly-cache-directory` instead.
 - `diogenes-passow-cache-directory` (and the TGL equivalent) sets where the session cache lives.
 ## Searching inside an open PDF
  
 `diogenes-pdf-lookup-entry` (bound to `L` in pdf-view-mode,
 doc-view-mode, and the Emacs Reader's reader-mode) looks up an entry
 from inside the PDF you already have open and jumps to its page. Best
-fix for a link or `o t m c b p` key that landed you wrong.
+fix for a link or `o t m c b B p` key that landed you wrong.
  
 - Works for every print dictionary above; it detects which one from the visited file (prompt names it).
 - Default is the word at point or the current PDF text selection. (In the Emacs Reader there is no text layer, so no default is offered and the prompt starts empty; you type the word, exactly as `L` expects anyway.)

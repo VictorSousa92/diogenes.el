@@ -22,6 +22,7 @@
 (declare-function diogenes-lookup-open-tll "diogenes-tll" (&optional word))
 (declare-function diogenes-lookup-open-montanari "diogenes-montanari" (&optional word))
 (declare-function diogenes-lookup-open-cambridge "diogenes-cambridge" (&optional word))
+(declare-function diogenes-lookup-open-bailly "diogenes-bailly" (&optional word))
 (declare-function diogenes-lookup-open-bdag "diogenes-bdag" (&optional word))
 (declare-function diogenes-lookup-open-passow "diogenes-passow" (&optional word))
 (declare-function diogenes-lookup-open-tgl "diogenes-tgl" (&optional word))
@@ -625,7 +626,7 @@ is raised."
 (defun diogenes--lookup-insert-dict-links (headword lang)
   "Insert clickable print-dictionary links for HEADWORD at point.
 For Latin (LANG \"latin\") this inserts [OLD] and [TLL]; for Greek
-it inserts [Montanari] [CGL] [BDAG] [Passow] [TGL].  Clicking a link
+it inserts [Montanari] [CGL] [BDAG] [Bailly] [Passow] [TGL].  Clicking a link
 \(or pressing RET on it) opens the corresponding PDF at the page
 containing HEADWORD.  The links are inserted AT POINT, so the caller
 positions to the top of the entry the links belong to; the initial
@@ -634,7 +635,8 @@ per entry, so every entry carries its own banner.  Each link is only
 useful when its dictionary's path variable is set (`diogenes-old-pdf-file',
 `diogenes-tll-pdf-directory', `diogenes-montanari-pdf-file',
 `diogenes-cambridge-pdf-file', `diogenes-bdag-pdf-file',
-`diogenes-passow-directory', `diogenes-tgl-directory')."
+`diogenes-bailly-pdf-file', `diogenes-passow-directory',
+`diogenes-tgl-directory')."
   (let ((inhibit-read-only t))
     (save-excursion
       (pcase lang
@@ -678,6 +680,14 @@ useful when its dictionary's path variable is set (`diogenes-old-pdf-file',
 			     'action 'bdag
 			     'headword headword
 			     'help-echo (format "Open BDAG (Bauer) at \"%s\"" headword)
+			     'rear-nonsticky t)
+		 "  "
+		 (propertize "[Bailly]"
+			     'font-lock-face 'link
+			     'keymap diogenes-perseus-action-map
+			     'action 'bailly
+			     'headword headword
+			     'help-echo (format "Open Bailly at \"%s\"" headword)
 			     'rear-nonsticky t)
 		 "  "
 		 (propertize "[Passow]"
@@ -858,6 +868,7 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "c"                             #'diogenes-lookup-open-cambridge)
     (keymap-set map "b"                             #'diogenes-lookup-open-bdag)
     (keymap-set map "p"                             #'diogenes-lookup-open-passow)
+    (keymap-set map "B"                             #'diogenes-lookup-open-bailly)
     (keymap-set map "q"                             #'diogenes--quit)
     map)
   "Basic mode map for the Diogenes Lookup Mode.")
@@ -1348,6 +1359,7 @@ if nil, query interactively for their values"
       (montanari (diogenes-lookup-open-montanari (get-text-property char 'headword)))
       (cambridge (diogenes-lookup-open-cambridge (get-text-property char 'headword)))
       (bdag (diogenes-lookup-open-bdag (get-text-property char 'headword)))
+      (bailly (diogenes-lookup-open-bailly (get-text-property char 'headword)))
       (passow (diogenes-lookup-open-passow (get-text-property char 'headword)))
       (tgl (diogenes-lookup-open-tgl (get-text-property char 'headword)))
       (lookup (diogenes--lookup-dict (get-text-property char 'lemma)
