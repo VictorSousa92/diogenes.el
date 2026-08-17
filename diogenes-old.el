@@ -323,7 +323,7 @@ Uses and populates `diogenes-old--index-cache'."
 ;;;; HEADWORD -> PAGE
 ;;;; --------------------------------------------------------------------
 
-(defcustom diogenes-old-truncated-guide-detection 'verify
+(defcustom diogenes-old-truncated-guide-detection 'dictionary
   "How to treat a guide word that is a prefix of the word looked up.
 A page's guide word is its last headword, and the OLD\'s OCR sometimes
 drops a headword\'s final letters -- `uadimoni\' for UADIMONIUM -- so a
@@ -333,18 +333,26 @@ word by being a perfectly good headword in its own right: RECENS heads a
 page, RECENSEO begins the next, and nothing in the bookmark text tells
 the two cases apart.
 
-  `verify\' (the default) reads the candidate page and takes it only if
-    the word really is printed there.  One `pdf-info-gettext\' call, and
-    only when the question arises.
+  `dictionary\' (the default) asks Lewis & Short whether the guide word is
+    itself a headword.  RECENS is; the clipped `uadimoni\' is not.  This
+    needs no text layer in the scan -- only the electronic dictionary
+    Diogenes already searches -- and costs one binary search.
+  `verify\'     reads the candidate page and takes it only if the word is
+    printed there.  Decisive when the scan HAS a text layer, useless when
+    it has none (it then behaves as nil).
   t          assumes a truncation, as this module always did: right for
     UADIMONIUM, a page early for RECENSEO.
   nil        never assumes one: right for RECENSEO, a page late for
     UADIMONIUM.
 
 A page late or early is not fatal -- the running head tells you which way
-to step -- but `verify\' is right in both cases when the scan has a text
-layer to consult.  Fall back to t or nil if yours has none."
-  :type '(choice (const :tag "Check the page text" verify)
+to step -- but the first two settings are right in both cases, as far as
+their evidence reaches.  A guide word Lewis & Short happens not to carry
+\(a rare word, a proper name) is read as a truncation under `dictionary\',
+which lands a page early, as t always did."
+  :type '(choice (const :tag "Ask Lewis & Short if the guide word is a word"
+                        dictionary)
+                 (const :tag "Check the page text" verify)
                  (const :tag "Assume a truncated guide word" t)
                  (const :tag "Never assume one" nil))
   :group 'diogenes)
@@ -360,6 +368,38 @@ word and is at least this many characters long, we treat it as that
 headword truncated and return the preceding page.  The length floor
 keeps genuinely short, distinct guide words (`ua', `uir', `pes') from
 swallowing later words that merely share their opening letters.")
+
+(declare-function diogenes--binary-search "diogenes-perseus"
+                  (dict-file comp-fn key-fn word &optional start stop))
+(declare-function diogenes--ascii-sort-function "diogenes-perseus" (a b))
+(declare-function diogenes--xml-key-fn "diogenes-perseus" (buf))
+(declare-function diogenes--dict-file "diogenes" (lang))
+
+(defun diogenes-old--headword-p (guide)
+  "Non-nil if GUIDE is a Latin headword in its own right.
+Asked of Lewis & Short, the dictionary Diogenes searches, to tell a
+complete guide word from one the OCR clipped: RECENS has an entry,
+`uadimoni\' has none.  The OLD folds i/j and u/v together and prints the
+classical letters, while Lewis & Short spells its lemmata with j and v,
+so the u and i spellings are tried as well.
+
+Returns nil when the dictionary is unavailable, which leaves the caller
+to fall back on assuming a truncation."
+  (when (and (fboundp 'diogenes--binary-search)
+             (fboundp 'diogenes--dict-file))
+    (let ((file (ignore-errors (diogenes--dict-file "latin"))))
+      (when (and file (file-readable-p file))
+        (cl-some (lambda (spelling)
+                   (nth 3 (ignore-errors
+                            (diogenes--binary-search
+                             file
+                             #'diogenes--ascii-sort-function
+                             #'diogenes--xml-key-fn
+                             spelling))))
+                 (delete-dups
+                  (list guide
+                        (replace-regexp-in-string "u" "v" guide)
+                        (replace-regexp-in-string "i" "j" guide))))))))
 
 (defun diogenes-old--word-on-page-p (word page file)
   "Non-nil if WORD appears in the text of PAGE of FILE.
@@ -431,6 +471,8 @@ or the final page if WORD sorts after every guide word."
            (truncated
             (and prefix-guide
                  (pcase diogenes-old-truncated-guide-detection
+                   ;; A guide word that IS a Latin headword was not clipped.
+                   ('dictionary (not (diogenes-old--headword-p prev-key)))
                    ('verify (diogenes-old--word-on-page-p
                              word prev-page (or file diogenes-old-pdf-file)))
                    ('nil nil)
