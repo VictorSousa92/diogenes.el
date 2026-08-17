@@ -94,8 +94,11 @@ of front matter."
   :type 'regexp
   :group 'diogenes)
 
-(defcustom diogenes-passow-display-in-other-window t
-  "If non-nil, show the Passow PDF in another window."
+(defcustom diogenes-passow-display-in-other-window nil
+  "If non-nil, show the Passow PDF in another window.
+Bound to `diogenes-old-display-in-other-window' for the duration of the
+display, and defaults to nil for the same reason: the page appears in the
+window the lookup was made from, replacing the entry."
   :type 'boolean
   :group 'diogenes)
 

@@ -671,22 +671,27 @@ already-loaded buffer is not equivalent)."
           (_ (find-file-noselect file))))))
 
 (defun diogenes-old--display-in-this-window (buffer)
-  "Show BUFFER in the selected window, and return BUFFER.
-`pop-to-buffer-same-window' is tried first, but it declines a window that
-something has dedicated -- window-purpose dedicates the lookup window to
-its purpose -- and then falls back to another window, which is how a
-dictionary ends up beside the entry instead of replacing it.  So if the
-polite route leaves the buffer elsewhere, undedicate the window and
-insist."
+  "Put BUFFER in the selected window, and only there; return BUFFER.
+`pop-to-buffer-same-window' is deliberately not used.  It declines a
+window that something has dedicated -- window-purpose dedicates the
+lookup and browser windows to their purposes -- and silently displays the
+buffer in ANOTHER window instead, so the page appeared in the browser's
+window as well as the entry's.  With the Emacs Reader that is doubly
+confusing, since it keeps the current page per WINDOW: the copy Diogenes
+had jumped showed the entry, while the stray one sat on page 1.
+
+So the selected window is undedicated if need be and set directly, and
+any other window on this frame that shows BUFFER is handed back its
+previous buffer."
   (let ((window (selected-window)))
-    (condition-case nil
-        (pop-to-buffer-same-window buffer)
-      (error nil))
-    (unless (eq (window-buffer window) buffer)
-      (when (window-live-p window)
-        (set-window-dedicated-p window nil)
-        (set-window-buffer window buffer)
-        (select-window window))))
+    (when (window-live-p window)
+      (when (window-dedicated-p window)
+        (set-window-dedicated-p window nil))
+      (set-window-buffer window buffer)
+      (select-window window)
+      (dolist (other (get-buffer-window-list buffer nil (window-frame window)))
+        (unless (eq other window)
+          (switch-to-prev-buffer other)))))
   buffer)
 
 (defun diogenes-old--display-other-window-p ()

@@ -467,6 +467,7 @@ Notes on the data:
   - TGL volume folders **must be named by Roman numeral** (`I`, `II`, `III`, `IIII`, `V`); the name is the tomus number. Volume V's `.txt` holds the comprehensive index, the TGL's main lookup path.
   - Passow folder names do not matter; letter ranges are detected from the OCR.
 - pdf-tools is used when available; otherwise doc-view. A third option, the Emacs Reader, is described just below.
+- A dictionary opens in the window the lookup was made from, replacing the entry; close the document buffer to get the entry back. For the side-by-side arrangement of the original Diogenes desktop application, set `diogenes-old-display-in-other-window` to t (and `diogenes-passow-display-in-other-window` / `diogenes-tgl-display-in-other-window` for those two).
 - If your copy is paginated differently, set the per-dictionary `*-page-offset` to shift every jump by a constant.
 diogenes.el ships none of these PDFs; supply your own and point the path
 variables at them. The TGL and Passow copies I tested are the OCR'd MDZ

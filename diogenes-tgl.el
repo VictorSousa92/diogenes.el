@@ -237,8 +237,11 @@ integer to pin it if a particular scan defeats detection."
   :type 'regexp
   :group 'diogenes)
 
-(defcustom diogenes-tgl-display-in-other-window t
-  "If non-nil, show the TGL PDF in another window, keeping the entry visible."
+(defcustom diogenes-tgl-display-in-other-window nil
+  "If non-nil, show the TGL PDF in another window, keeping the entry visible.
+Bound to `diogenes-old-display-in-other-window' for the duration of the
+display, and defaults to nil for the same reason: the page appears in the
+window the lookup was made from, replacing the entry."
   :type 'boolean
   :group 'diogenes)
 
