@@ -99,6 +99,23 @@ only when `diogenes-old-display-in-other-window' is non-nil."
   :type 'sexp
   :group 'diogenes)
 
+(defcustom diogenes-old-reader-inhibit-pop-up-frames t
+  "When non-nil, keep the Emacs Reader from opening a dictionary in a new frame.
+The Reader's entry point `reader-open-doc' DISPLAYS the document as part
+of loading it, before Diogenes has had any say in where it goes.  With a
+non-nil `pop-up-frames' that display makes a new frame, and
+`save-window-excursion' cannot take it back -- it restores the window
+configuration of a frame, not the set of frames -- so every dictionary
+ends up in a frame of its own and `diogenes-old-reader-display-action'
+never gets to choose a window: by the time it runs, the buffer is
+already on screen and gets \"reused\" where it stands.
+
+Binding `pop-up-frames' to nil for the open, and for the display that
+follows, keeps the dictionaries in one window as with pdf-tools.  Set
+this to nil to let your `pop-up-frames' apply to dictionaries too."
+  :type 'boolean
+  :group 'diogenes)
+
 ;;;; --------------------------------------------------------------------
 ;;;; HEADWORD NORMALIZATION
 ;;;; --------------------------------------------------------------------
@@ -524,10 +541,18 @@ already-loaded buffer is not equivalent)."
           ('emacs-reader
            ;; `reader-open-doc' is the Emacs Reader's own entry point: it sets
            ;; up the MuPDF document state and puts the buffer in `reader-mode'.
-           ;; It selects the document as a side effect, so shield the window
+           ;; It DISPLAYS the document as a side effect, so shield the window
            ;; configuration and then locate the buffer it created for FILE.
-           (save-window-excursion
-             (reader-open-doc (expand-file-name file)))
+           ;; That display is also why `pop-up-frames' is bound here: a
+           ;; non-nil value would give each dictionary its own frame, and
+           ;; `save-window-excursion' restores a window configuration, not
+           ;; the set of frames, so it cannot undo one.  See
+           ;; `diogenes-old-reader-inhibit-pop-up-frames'.
+           (let ((pop-up-frames (unless diogenes-old-reader-inhibit-pop-up-frames
+                                  pop-up-frames))
+                 (display-buffer-overriding-action nil))
+             (save-window-excursion
+               (reader-open-doc (expand-file-name file))))
            (find-buffer-visiting file))
           ((or 'pdf-tools 'doc-view)
            (if (diogenes-old--reader-installed-p)
@@ -563,13 +588,18 @@ Taking purpose out of the loop costs one thing, though: it is purpose
 that otherwise keeps one dictionary after another in a single window,
 so without it each dictionary opened a new one.  The Reader case
 therefore displays through `diogenes-old-reader-display-action', which
-reuses a window already showing a document buffer."
+reuses a window already showing a document buffer, and binds
+`pop-up-frames' to nil (see
+`diogenes-old-reader-inhibit-pop-up-frames') so neither the Reader's
+own display nor this one puts each dictionary in a separate frame."
   (let* ((file (or file diogenes-old-pdf-file))
          (viewer (diogenes-old--resolved-viewer)))
     (if (eq viewer 'emacs-reader)
         ;; Bypass purpose's display override so the Reader renders normally
         ;; (creating its overlay).  Covers both the open and the display.
-        (let ((display-buffer-overriding-action nil))
+        (let ((display-buffer-overriding-action nil)
+              (pop-up-frames (unless diogenes-old-reader-inhibit-pop-up-frames
+                               pop-up-frames)))
           (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer)))
             (if diogenes-old-display-in-other-window
                 (display-buffer buffer diogenes-old-reader-display-action)
