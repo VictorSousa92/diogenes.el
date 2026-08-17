@@ -1495,6 +1495,7 @@ if nil, query interactively for their values"
       (t (let* ((prop-lang (get-text-property char 'lang))
 		(buf-lang (and (boundp 'diogenes--lookup-lang)
 			       diogenes--lookup-lang))
+		(word (thing-at-point 'word t))
 		;; The text-property language is only useful when it is
 		;; actually a lookup language.  In a Latin (Lewis & Short)
 		;; entry the definition prose is tagged "english", so a
@@ -1502,9 +1503,22 @@ if nil, query interactively for their values"
 		;; nil -- which is why keying on the property alone failed.
 		;; Treat only "greek"/"latin" as usable, and otherwise fall
 		;; back to the language of the entry we are reading.
-		(lang (if (member prop-lang '("greek" "latin"))
-			  prop-lang
-			buf-lang)))
+		(lang (cond
+		       ((member prop-lang '("greek" "latin")) prop-lang)
+		       ;; ...but not blindly.  Where the element says the text
+		       ;; is neither Greek nor Latin -- the German definitions
+		       ;; of Pape, the English glosses of the LSJ -- falling
+		       ;; back to a Greek entry's language would parse a word
+		       ;; of prose as Greek and answer with whatever sorts
+		       ;; nearest.  A Greek lemma is written in Greek letters,
+		       ;; so Latin script under the cursor is prose and there
+		       ;; is nothing to look up.  Greek inside that prose is
+		       ;; still recognised, tagged or not.
+		       ((and prop-lang
+			     (equal buf-lang "greek")
+			     (not (and word (string-match-p "\\cg" word))))
+			nil)
+		       (t buf-lang))))
 	   (pcase lang
 	     ((or "greek" "latin")
 	      ;; Looking up a word opens its dictionary entry.  When we are
@@ -1518,7 +1532,7 @@ if nil, query interactively for their values"
 		     (and (derived-mode-p 'diogenes-lookup-mode)
 			  (or (= (count-windows) 1)
 			      (y-or-n-p "Open the result in this same window? ")))))
-		(diogenes--parse-and-lookup (thing-at-point 'word) lang)))
+		(diogenes--parse-and-lookup (or word (thing-at-point 'word)) lang)))
 	     (_ (message "C-c C-c cannot do anything useful here!"))))))))
 
 (defun diogenes-lookup-open-tll-or-tgl ()
