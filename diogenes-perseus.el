@@ -128,6 +128,35 @@ If file-length is not supplied, it will be determined."
 	  ((string-greaterp word-b word-a) 'b)
 	  (t nil))))
 
+;; C, i.e. raw byte order
+(defun diogenes--c-sort-function (a b)
+  "Compare A and B as `LC_ALL=C sort' ordered them: by character code.
+The comparator a binary search is given must agree with the order of the
+file it walks, and for the analyses and lemmata files that order is over
+the RAW beta-code keys, in which `)', `(' and `/' precede every letter:
+
+    o)mi/xlh   o)mi/xlhn   o)mi/xlhs   o)mi/xlh|   o)mi/xlh|sin
+
+`diogenes--ascii-sort-function' cannot be used on them, because it
+compares `diogenes--ascii-alpha-only' -- accents and breathings thrown
+away -- and the two orders disagree wherever one key accents an earlier
+syllable than another: the file puts `o)mi/xlh' before `o)mikro/n', while
+letters-only makes `omikron' the lesser of the two.  A search then walks
+into the wrong half and reports no hit, so a form that IS in the file
+fails to parse and the caller falls back to searching the dictionary for
+the inflected form itself -- which lands on whatever sorts nearest, one
+entry or so away from the word wanted.
+
+The failure is per-bucket, which is what makes it look arbitrary: the
+three-character bucket `lo/\=' holds keys accented alike and parses
+correctly, while `o)m\=' holds `o)mi/xl-\=', `o)mikr-\=', `o)mo/-\=' and
+`o)moi-\=' together and had 55 inversions under the wrong comparator.
+
+These keys are pure ASCII, so `string>' is byte order."
+  (cond ((string> a b) 'a)
+        ((string> b a) 'b)
+        (t nil)))
+
 (defcustom diogenes-latin-fold-letters '((?j . ?i))
   "Initial letters folded together when searching the Latin dictionary.
 An alist of (FROM . TO) characters, applied to the FIRST letter of both the
@@ -1377,7 +1406,7 @@ Returns the nearest hit to the query."
 	 (end (or (cdr (assoc key (plist-get index :index-end)))
 		  (plist-get index :index-max))))
     (let ((result (diogenes--binary-search analyses-file
-					   #'diogenes--ascii-sort-function
+					   #'diogenes--c-sort-function
 					   #'diogenes--tab-key-fn
 					   normalized
 					   start end)))
@@ -1662,7 +1691,7 @@ computed looks in the wrong bucket and can never match `Itys'."
 	 (end (or (cdr (assoc key (plist-get index :index-end)))
 		  (plist-get index :index-max)))
 	 (result (diogenes--binary-search analyses-file
-					  #'diogenes--ascii-sort-function
+					  #'diogenes--c-sort-function
 					  #'diogenes--tab-key-fn
 					  word
 					  start end)))
