@@ -518,6 +518,23 @@ properties."
 
 
 
+(defcustom diogenes-lookup-show-all-entries t
+  "Whether a parse shows every dictionary entry it found.
+Non-nil reproduces the Diogenes application: all distinct entries named in
+the analyses record are shown one after another in a single lookup buffer.
+When nil, the lemmata are offered through `completing-read' and only the
+chosen one is shown, though still fetched by offset rather than by a
+headword search."
+  :type 'boolean
+  :group 'diogenes)
+
+(defcustom diogenes-lookup-show-analysis t
+  "Whether to head a parsed lookup with its morphological analysis.
+Non-nil reproduces the application, which prints \"Perseus analysis of X\"
+and the lemmata above the dictionary entries."
+  :type 'boolean
+  :group 'diogenes)
+
 (defvar diogenes--lookup-same-window nil
   "When non-nil, show a looked-up entry in the CURRENT window.
 `diogenes--search-dict' normally opens each entry in a fresh
@@ -539,11 +556,56 @@ FILE names the dictionary to search, defaulting to LANG\'s own
 passed instead -- `diogenes-gaffiot.el\' passes Gaffiot for Latin -- and
 LANG then still says which language the ENTRIES are in, so `C-c C-c\',
 the print-dictionary banner and the rest behave as they do for the LSJ
-and Lewis & Short."
+and Lewis & Short.
+
+NB. This finds an entry by where its key SORTS, so it is only as good as
+the file\'s order.  The Lewis & Short that comes with Diogenes is ordered
+by the i-spelling of its headwords while the `key\' attributes retain the
+j-spelling (the entry displayed as `iacio\' has key=\"ja^ci^o\"), so no
+j-lemma can be reached this way.  This is `$do_lookup\' in Perseus.pm and
+it has the same flaw there; the parse path avoids it by using the byte
+offset recorded in the analyses file -- see
+`diogenes--lookup-dict-offset\'."
   (seq-let (xml-bytes start end exact-hit)
       (diogenes--binary-search (or file (diogenes--dict-file lang))
 			       sort-fn key-fn word)
     (unless exact-hit (message "No results for %s! Showing nearest entry" word))
+    (diogenes--show-dict-entry xml-bytes start end lang file)))
+
+(defun diogenes--dict-offset (nr)
+  "Return NR as a usable dictionary offset, or nil.
+NR is the first field of an analyses entry or the second of a lemmata
+entry -- a byte offset into the dictionary, as a number or a string.  Zero
+is make_latin_lemmata.pl\'s \"no entry\" marker rather than an offset, so it
+counts as nil."
+  (let ((n (cond ((integerp nr) nr)
+		 ((and (stringp nr)
+		       (string-match-p "\\`[[:space:]]*[0-9]+[[:space:]]*\\'"
+				       nr))
+		  (string-to-number nr)))))
+    (and n (> n 0) n)))
+
+(defun diogenes--lookup-dict-offset (offset lang &optional file)
+  "Show the dictionary entry that begins OFFSET bytes into the dictionary.
+This is how Diogenes itself reaches an entry after a parse: the offset
+comes from the analyses or the lemmata file, so the entry is the one the
+morphological data was built against, with no headword to get wrong.
+LANG is the language of the entry; FILE defaults to LANG\'s own
+dictionary."
+  (let ((dict (or file (diogenes--dict-file lang))))
+    (seq-let (xml-bytes start end) (diogenes--get-dict-line dict offset)
+      (unless xml-bytes
+	(error "No dictionary entry at offset %d of %s" offset dict))
+      (diogenes--show-dict-entry xml-bytes start end lang file))))
+
+(defun diogenes--show-dict-entry (xml-bytes start end lang &optional file)
+  "Show the dictionary entry in XML-BYTES in a fresh lookup buffer.
+START and END are its offsets in the dictionary file, as returned by
+`diogenes--binary-search\' or `diogenes--get-dict-line\'; they are what
+`diogenes-lookup-next\' and `-previous\' walk from.  LANG says which
+language the ENTRY is in, FILE which dictionary it came from.
+
+Returns the lookup buffer."
     (let* ((xml (decode-coding-string xml-bytes 'utf-8))
 	   (formatted (diogenes--dict-parse-xml xml start end))
 	   (lookup-buffer (diogenes--get-fresh-buffer "lookup")))
@@ -598,7 +660,8 @@ and Lewis & Short."
 	    (diogenes--lookup-first-headword))
       (save-excursion
 	(goto-char (point-min))
-	(diogenes--lookup-insert-entry-links lang)))))
+	(diogenes--lookup-insert-entry-links lang))
+      lookup-buffer))
 
 (defun diogenes--lookup-insert-entry-links (lang &optional pos)
   "Insert the print-dictionary link banner for the entry at POS (point default).
@@ -1205,45 +1268,287 @@ Unless specified, filter defaults to string-equal."
       (mapcar (lambda (l) (diogenes--process-lemma (cadr l) lang))
 	      entries))))
 
+;;; Parse and look up -- a port of Perseus.pm's $do_parse / $format_analysis
+;;
+;; An analyses record looks like this (one line of latin-analyses.txt, for
+;; the form `iacio'):
+;;
+;;   iacio<TAB>{34221511 9 jacio_,jacio<TAB> <TAB>pres ind act 1st sg}
+;;
+;; The first number of each {...} group is the BYTE OFFSET of the entry in
+;; the dictionary, computed at build time by make_latin_analyses.pl through
+;; a hash lookup against index_lewis.pl's key index; the second is a
+;; confidence, 9 for an exact match down to 0 for "this is merely where the
+;; headword would sort".  Diogenes seeks to the offset and reads a line:
+;;
+;;   seek $dict_fh, $dict, 0;  my $entry = <$dict_fh>;
+;;
+;; and so never compares the lemma against anything.  That matters, because
+;; the lemma keeps Lewis & Short's j-spelling while the dictionary is
+;; ordered by the i-spelling: `jacio' cannot be found by
+;; `diogenes--binary-search', but offset 34221511 is exact.  Searching for
+;; the lemma is only the fallback for a form that would not parse at all.
+
+(defconst diogenes--analysis-group-re
+  "{\\([^}]+\\)}\\(\\(?:\\[[0-9]+\\]\\)*\\)"
+  "One analysis group of a record, with its supplementary offsets.
+Mirrors Perl's m/{([^\\}]+)}((?:\\[\\d+\\])*)/g.  The bracketed numbers
+that may follow the closing brace are further dictionary offsets --
+supplementary prefix entries -- and are captured, not discarded.")
+
+(defconst diogenes--analysis-fields-re
+  "\\`\\([0-9]+\\) \\([0-9]\\) \\([^\t]*\\)\t\\([^\t]*\\)\t\\(.*\\)\\'"
+  "The fields inside one analysis: OFFSET CONF LEMMA<TAB>TRANS<TAB>INFO.")
+
+(defun diogenes--munge-ls-lemma (lemma lang)
+  "Render a raw lemma from the analyses file for display.
+Mirrors Perl's $munge_ls_lemma for Latin -- the vowel-quantity markers
+become combining diacritics and a trailing homograph numeral is set off
+by a space -- and beta-code conversion for Greek."
+  (if (string= lang "greek")
+      (diogenes--perseus-ensure-utf8 lemma lang)
+    (diogenes--replace-regexes-in-string
+	(diogenes--perseus-ensure-utf8
+	 (replace-regexp-in-string "#?\\([0-9]\\)\\'" " \\1" lemma)
+	 lang)
+      ("&lt;" "<")
+      ("&gt;" ">"))))
+
+(defun diogenes--parse-analyses-record (encoded-str lang)
+  "Parse the raw analyses record in ENCODED-STR.
+Returns a plist (:analyses ANALYSES :suppl OFFSETS), where each analysis
+is itself a plist
+
+  (:offset N :conf N :lemma RAW :display SHOWN :trans TRANS :info INFO)
+
+in the order the record gives them.  Nothing is dropped and nothing is
+merged; grouping is `diogenes--analyses-dicts''s job."
+  (let* ((str (decode-coding-string encoded-str 'utf-8))
+	 (body (or (cadr (diogenes--split-once "\t+" str)) ""))
+	 (pos 0)
+	 analyses suppl)
+    (while (string-match diogenes--analysis-group-re body pos)
+      (let ((group (match-string 1 body))
+	    (extra (match-string 2 body)))
+	(setq pos (match-end 0))
+	(if (not (string-match diogenes--analysis-fields-re group))
+	    (message "Diogenes: bad analysis: %s" group)
+	  (push (list :offset (string-to-number (match-string 1 group))
+		      :conf (string-to-number (match-string 2 group))
+		      :lemma (match-string 3 group)
+		      :display (diogenes--munge-ls-lemma
+				(match-string 3 group) lang)
+		      :trans (string-trim (match-string 4 group))
+		      :info (string-trim (match-string 5 group)))
+		analyses))
+	(let ((p 0))
+	  (while (string-match "\\[\\([0-9]+\\)\\]" extra p)
+	    (push (string-to-number (match-string 1 extra)) suppl)
+	    (setq p (match-end 0))))))
+    (list :analyses (nreverse analyses)
+	  :suppl (delete-dups (nreverse suppl)))))
+
+(defun diogenes--analyses-dicts (record)
+  "Return the entries to show for RECORD, as an alist of (OFFSET . CONF).
+Offsets keep their first-seen order and occur only once; CONF is the SUM
+of the confidences of the analyses pointing there, as in Perl's %conf, so
+several exact analyses of one entry raise it well clear of the caveat
+thresholds.  Supplementary offsets are appended with a CONF of -1 unless
+they already occur among the analyses."
+  (let (dicts)
+    (dolist (a (plist-get record :analyses))
+      (let* ((offset (plist-get a :offset))
+	     (cell (assq offset dicts)))
+	(if cell
+	    (cl-incf (cdr cell) (plist-get a :conf))
+	  (push (cons offset (plist-get a :conf)) dicts))))
+    (setq dicts (nreverse dicts))
+    (dolist (offset (plist-get record :suppl))
+      (unless (assq offset dicts)
+	(setq dicts (nconc dicts (list (cons offset -1))))))
+    dicts))
+
+(defun diogenes--analysis-caveat (conf)
+  "The note to print above an entry whose summed confidence is CONF.
+Diogenes' own wording."
+  (cond ((= conf -1) "Supplementary prefix entry:")
+	((= conf 0) "(NB. Could not find dictionary headword; \
+this is around the spot it should appear.)")
+	((<= conf 2) "(NB. This dictionary headword is a guess.)")))
+
+(defun diogenes--lookup-append-entry (xml-bytes start end &optional note)
+  "Append the entry in XML-BYTES to the current lookup buffer.
+The body of `diogenes-lookup-next' minus the reading, plus an optional
+NOTE above the entry.  Stacks the several entries of one analysis the way
+the application does."
+  (let* ((xml (decode-coding-string xml-bytes 'utf-8))
+	 (formatted (diogenes--dict-parse-xml xml start end))
+	 (inhibit-read-only t))
+    (setq diogenes--lookup-bufend end)
+    (goto-char (point-max))
+    (diogenes--lookup-print-separator)
+    (when note
+      (insert (propertize (concat note "\n\n") 'font-lock-face 'italic)))
+    (let ((entry-start (point)))
+      (if formatted
+	  (diogenes--lookup-insert-and-format formatted)
+	(diogenes--lookup-insert-xml xml start end (current-buffer)))
+      (diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))))
+
+(defun diogenes--lookup-insert-at-top (text)
+  "Insert TEXT at the top of the current lookup buffer."
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (goto-char (point-min))
+      (insert text))))
+
+(defun diogenes--format-analysis-header (query lang record)
+  "The analysis header for QUERY, as the application prints it."
+  (let ((analyses (plist-get record :analyses)))
+    (cl-labels ((line (a)
+		  (concat (plist-get a :display)
+			  (let ((trans (plist-get a :trans)))
+			    (if (string-blank-p trans)
+				""
+			      (format " (%s)" trans)))
+			  ": " (plist-get a :info))))
+      (concat
+       (propertize (format "Perseus analys%s of %s:\n\n"
+			   (if (= 1 (length analyses)) "is" "es")
+			   (if (string= lang "greek")
+			       (diogenes--perseus-ensure-utf8 query lang)
+			     query))
+		   'font-lock-face 'shr-h2)
+       (if (= 1 (length analyses))
+	   (concat (line (car analyses)) "\n")
+	 (cl-loop for a in analyses
+		  for i from 1
+		  concat (format "%2d. %s\n" i (line a))))
+       "\n"))))
+
+(defun diogenes--show-analysis-entries (dicts lang &optional file)
+  "Show the entries named by DICTS, an alist of (OFFSET . CONF).
+The first goes into a fresh lookup buffer and the rest are appended to
+it, as `$format_analysis' stacks them.  Returns that buffer."
+  (unless dicts (error "No dictionary entries to show"))
+  (let ((dict (or file (diogenes--dict-file lang)))
+	(buffer nil))
+    (cl-loop for (offset . conf) in dicts
+	     for note = (diogenes--analysis-caveat conf)
+	     do (seq-let (xml-bytes start end)
+		    (diogenes--get-dict-line dict offset)
+		  (cond
+		   ((not xml-bytes)
+		    (message "Diogenes: no dictionary entry at offset %d"
+			     offset))
+		   ((not buffer)
+		    (setq buffer (diogenes--show-dict-entry
+				  xml-bytes start end lang file))
+		    (when note
+		      (with-current-buffer buffer
+			(diogenes--lookup-insert-at-top
+			 (propertize (concat note "\n\n")
+				     'font-lock-face 'italic)))))
+		   (t
+		    (with-current-buffer buffer
+		      (diogenes--lookup-append-entry
+		       xml-bytes start end note))))))
+    (or buffer (error "None of the offsets could be read"))))
+
+(defun diogenes--try-parse (word lang)
+  "Look WORD up in LANG's analyses file; return the raw record or nil.
+`$try_parse': the .idt index gives the byte range of the bucket for the
+first three characters of WORD and the binary search is confined to it.
+WORD is used AS GIVEN -- make_index.pl keys the buckets on the raw prefix
+and the file is LC_ALL=C sorted, so a query downcased before the key is
+computed looks in the wrong bucket and can never match `Itys'."
+  (let* ((analyses-file (file-name-concat (diogenes--perseus-path)
+					  (concat lang "-analyses.txt")))
+	 (index (diogenes--get-analyses-index lang))
+	 (key (if (> (length word) 3) (substring word 0 3) word))
+	 (start (let ((s (cdr (assoc key (plist-get index :index-start)))))
+		  (if s (- s 2) 0)))
+	 (end (or (cdr (assoc key (plist-get index :index-end)))
+		  (plist-get index :index-max)))
+	 (result (diogenes--binary-search analyses-file
+					  #'diogenes--ascii-sort-function
+					  #'diogenes--tab-key-fn
+					  word
+					  start end)))
+    (and (nth 3 result) (car result))))
+
+(defun diogenes--do-parse (word lang)
+  "Return the raw analyses record for WORD in LANG, or nil.
+`$do_parse': the form is tried as it stands and a capitalised Latin form
+is then retried in lower case -- Diogenes' \"Fixed parsing of capitalized
+Latin words\".  The reshuffling of diacritics after a beta-code asterisk
+that $do_parse also does for Greek capitals is not attempted here."
+  (let ((word (diogenes--beta-normalize-gravis
+	       (diogenes--greek-ensure-beta word))))
+    (or (diogenes--try-parse word lang)
+	(and (string-match-p "[[:upper:]]" word)
+	     (diogenes--try-parse (downcase word) lang)))))
+
+(defun diogenes--choose-analysis (record dicts word)
+  "Ask which lemma of RECORD to show; return its (OFFSET . CONF) alone.
+Used when `diogenes-lookup-show-all-entries' is nil."
+  (let* ((alist (cl-loop
+		 with seen = nil
+		 for a in (plist-get record :analyses)
+		 for label = (format "%s (%s)"
+				     (plist-get a :display)
+				     (if (string-blank-p (plist-get a :trans))
+					 "No translation available"
+				       (plist-get a :trans)))
+		 unless (member label seen)
+		 collect (progn (push label seen)
+				(list label
+				      (plist-get a :offset)
+				      (concat "\t" (plist-get a :info))))))
+	 (completion-extra-properties
+	  '(:annotation-function
+	    (lambda (s) (caddr (assoc s minibuffer-completion-table)))))
+	 (offset (if (= 1 (length alist))
+		     (cadr (car alist))
+		   (cadr (assoc (completing-read
+				 (format "Choose a lemma for %s: " word)
+				 alist)
+				alist)))))
+    (if offset
+	(list (or (assq offset dicts) (cons offset 9)))
+      dicts)))
+
 (defun diogenes--parse-and-lookup (word lang)
   "Try to parse a word by looking it up in the morphological files,
-and show the entry for it in the lexica. Dispatcher function."
-  (seq-let (analyses start stop exact-hit) (diogenes--parse-word word lang)
-    (cond
-     (exact-hit
-      (let* ((lemmata (diogenes--assign-parse-result-to-lemmata analyses))
-	     (lemma
-	      (if (= 1 (length lemmata))
-		  (caar lemmata)
-		(let ((alist
-		       (cl-loop
-			for lemma in lemmata
-			for (word nr translation analyses-entries) = lemma
-			for analyses = (mapcar #'cdr analyses-entries)
-			collect
-			(list (format "%s (%s)"
-				      (diogenes--perseus-ensure-utf8
-				       word lang)
-				      translation)
-			      word
-			      (concat "\t"
-				      (string-join analyses ",")))))
-		      (completion-extra-properties
-		       '(:annotation-function
-			 (lambda (s)
-			   (caddr (assoc s minibuffer-completion-table))))))
-		  (cadr (assoc (completing-read
-				(format "Choose a lemma for %s: "
-					word)
-				alist)
-			       alist))))))
-	(cond (lemma (diogenes--lookup-dict lemma lang))
-	      (t (message "Trying to look %s up in the dictionaries!" wor
-			  d)
-		 (diogenes--lookup-dict word lang)))))
-     (t (message "No results for %s, trying to look it up in the dictionaries!"
-		 word)
-	(diogenes--lookup-dict word lang)))))
+and show the entry for it in the lexica. Dispatcher function.
+
+A port of `$do_parse' followed by `$format_analysis': every entry named
+in the analyses record is fetched from the byte offset recorded there.
+Only a form that will not parse falls back on searching the dictionary by
+headword, exactly as the application does."
+  (let ((raw (diogenes--do-parse word lang)))
+    (if (not raw)
+	(progn
+	  (message "No results for %s, trying to look it up in the dictionaries!"
+		   word)
+	  (diogenes--lookup-dict word lang))
+      (let* ((record (diogenes--parse-analyses-record raw lang))
+	     (dicts (diogenes--analyses-dicts record)))
+	(if (null dicts)
+	    (progn
+	      (message "No dictionary entry for %s; searching by headword" word)
+	      (diogenes--lookup-dict word lang))
+	  (let ((buffer (diogenes--show-analysis-entries
+			 (if diogenes-lookup-show-all-entries
+			     dicts
+			   (diogenes--choose-analysis record dicts word))
+			 lang)))
+	    (when diogenes-lookup-show-analysis
+	      (with-current-buffer buffer
+		(diogenes--lookup-insert-at-top
+		 (diogenes--format-analysis-header word lang record))
+		(goto-char (point-min))))
+	    buffer))))))
 
 (defun diogenes--add-parse-entry ()
   "Get or create an Diogenes Analysis buffer, and begin a new entry."
@@ -1488,8 +1793,19 @@ if nil, query interactively for their values"
       (tgl (diogenes-lookup-open-tgl (get-text-property char 'headword)))
       (pape (diogenes-lookup-pape (get-text-property char 'headword)))
       (lsj (diogenes-lookup-lsj (get-text-property char 'headword)))
-      (lookup (diogenes--lookup-dict (get-text-property char 'lemma)
-				     (get-text-property char 'lang)))
+      ;; The `lemma-nr' property is the byte offset of the entry in the
+      ;; dictionary -- the first field of the analyses record, or the second
+      ;; of a lemmata record, where make_latin_lemmata.pl writes 0 for "no
+      ;; entry".  Seek to it when there is one; the headword search is only
+      ;; the fallback (see `diogenes--search-dict' on why it cannot be
+      ;; trusted for Latin j-lemmata).
+      (lookup (let ((offset (diogenes--dict-offset
+			     (get-text-property char 'lemma-nr)))
+		    (lang (get-text-property char 'lang)))
+		(if offset
+		    (diogenes--lookup-dict-offset offset lang)
+		  (diogenes--lookup-dict (get-text-property char 'lemma)
+					 lang))))
       (forms (diogenes--show-all-forms (get-text-property char 'lemma)
 				       (get-text-property char 'lang)))
       (t (let* ((prop-lang (get-text-property char 'lang))
