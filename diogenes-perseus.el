@@ -128,6 +128,47 @@ If file-length is not supplied, it will be determined."
 	  ((string-greaterp word-b word-a) 'b)
 	  (t nil))))
 
+(defcustom diogenes-latin-fold-letters '((?j . ?i))
+  "Letters folded together when searching the Latin dictionary by headword.
+An alist of (FROM . TO) characters, applied to both the search word and
+the dictionary key before they are compared.
+
+The Lewis & Short that comes with Diogenes files its entries under the
+classical i but leaves the `key\\=' attributes spelt with j: the entry
+displayed as `iacio\\=' has key=\"ja^ci^o\", and the keys along that stretch
+of the file run i, j, jabolenus, iacchus, jacea, jaceo, jacetani, jacio.
+That sequence is monotonic only once j counts as i, and a binary search
+over an order it does not share cannot find anything reliably -- looking up
+`iacio\\=' used to land between the two letter articles, and `jacio\\=' past
+the whole block.
+
+Only j is folded by default.  The u/v distinction is NOT folded, because
+this dictionary does keep separate U and V sections, and folding them
+would break the searches that currently work.  Set to nil to compare the
+keys literally, as Diogenes\\=' own `$do_lookup\\=' does."
+  :type '(alist :key-type character :value-type character)
+  :group 'diogenes)
+
+(defun diogenes--latin-fold-key (str)
+  "Reduce STR to the letters the Latin dictionary is ordered by.
+ASCII letters only, downcased, with `diogenes-latin-fold-letters' applied."
+  (let ((key (downcase (diogenes--ascii-alpha-only str))))
+    (if (not diogenes-latin-fold-letters)
+	key
+      (concat (mapcar (lambda (c)
+			(or (cdr (assq c diogenes-latin-fold-letters)) c))
+		      key)))))
+
+(defun diogenes--latin-sort-function (a b)
+  "Compare two Lewis & Short keys as the dictionary itself orders them.
+`diogenes--ascii-sort-function' with `diogenes-latin-fold-letters' applied
+to both sides; see that variable for why the Latin dictionary needs it."
+  (let ((word-a (diogenes--latin-fold-key a))
+	(word-b (diogenes--latin-fold-key b)))
+    (cond ((string-greaterp word-a word-b) 'a)
+	  ((string-greaterp word-b word-a) 'b)
+	  (t nil))))
+
 (defconst diogenes--beta-code-alphabet
   [?0 ?a ?b ?g ?d ?e ?v ?z ?h ?q
       ?i ?k ?l ?m ?n ?c ?o ?p
@@ -883,7 +924,7 @@ the entry the buffer was first opened on."
 				      #'diogenes--beta-sort-function
 				      #'diogenes--xml-key-fn)))
     ("latin" (diogenes--search-dict word "latin"
-			 #'diogenes--ascii-sort-function
+			 #'diogenes--latin-sort-function
 			 #'diogenes--xml-key-fn))))
 
 (defun diogenes--lookup-own-dictionary-p ()
@@ -1477,17 +1518,37 @@ computed looks in the wrong bucket and can never match `Itys'."
 					  start end)))
     (and (nth 3 result) (car result))))
 
+(defun diogenes--latin-form-variants (word)
+  "Spelling variants of WORD to try in the analyses file, WORD first.
+The Latin wordlists Morpheus was run over spell consonantal i as i, so a
+form typed or copied with j -- `jacio\\=', `jactatus\\=' -- is not a key in
+`latin-analyses.txt\\=' at all, and the parse would fail and fall through to
+a headword search.  Swapping j for i (and, for a form taken from a text
+that prints the classical spelling, i for j) gives it a second chance.
+Only initial and intervocalic positions could bear a consonantal i, but
+trying the whole word costs one more binary search and misses nothing."
+  (delete-dups
+   (list word
+	 (replace-regexp-in-string "j" "i" (replace-regexp-in-string "J" "I" word))
+	 (replace-regexp-in-string "i" "j" word))))
+
 (defun diogenes--do-parse (word lang)
   "Return the raw analyses record for WORD in LANG, or nil.
 `$do_parse': the form is tried as it stands and a capitalised Latin form
 is then retried in lower case -- Diogenes' \"Fixed parsing of capitalized
 Latin words\".  The reshuffling of diacritics after a beta-code asterisk
-that $do_parse also does for Greek capitals is not attempted here."
+that $do_parse also does for Greek capitals is not attempted here.
+
+Beyond the application, a Latin form is also tried with j and i exchanged;
+see `diogenes--latin-form-variants'."
   (let ((word (diogenes--beta-normalize-gravis
 	       (diogenes--greek-ensure-beta word))))
-    (or (diogenes--try-parse word lang)
-	(and (string-match-p "[[:upper:]]" word)
-	     (diogenes--try-parse (downcase word) lang)))))
+    (cl-loop for variant in (if (string= lang "latin")
+				(diogenes--latin-form-variants word)
+			      (list word))
+	     thereis (or (diogenes--try-parse variant lang)
+			 (and (string-match-p "[[:upper:]]" variant)
+			      (diogenes--try-parse (downcase variant) lang))))))
 
 (defun diogenes--choose-analysis (record dicts word)
   "Ask which lemma of RECORD to show; return its (OFFSET . CONF) alone.
