@@ -797,34 +797,194 @@ key of its own."
                          link))
     link))
 
-(defconst diogenes--lookup-greek-dict-links
-  '(("Montanari" "m" montanari "Open Montanari at \"%s\"")
-    ("CGL" "c" cambridge "Open the Cambridge Greek Lexicon at \"%s\"")
-    ("BDAG" "b" bdag "Open BDAG (Bauer) at \"%s\"")
-    ("Bailly" "B" bailly "Open Bailly at \"%s\"")
-    ("Passow" "p" passow "Open Passow at \"%s\"")
-    ("TGL" "t" tgl "Open Estienne's Thesaurus Graecae Linguae at \"%s\""))
-  "The print dictionaries offered on a Greek entry, in the order shown.
-Each element is (NAME KEY ACTION HELP); see `diogenes--lookup-dict-link'.")
+(defvar diogenes--lookup-dictionaries nil
+  "Every dictionary that may appear in an entry's link banner.
+A list of plists, one per dictionary, in the order they are offered.  Built
+by `diogenes-lookup-register-dictionary', which is how a dictionary module
+announces itself: adding a dictionary to Diogenes takes no edit to this
+file, and a dictionary whose module is not loaded is simply not registered
+and not offered.
 
-(defconst diogenes--lookup-latin-dict-links
-  '(("OLD" "o" old "Open the OLD at \"%s\"")
-    ("TLL" "t" tll "Open the TLL at \"%s\"")
-    ("Georges" "G" georges "Open Georges at \"%s\""))
-  "The print dictionaries offered on any Latin entry, in the order shown.
-The electronic Latin dictionaries -- Gaffiot and Lewis & Short -- are added
-per entry by `diogenes--lookup-insert-dict-links', which offers whichever
-of the two is not the one being read.")
+Before this existed, three separate places here had to be taught about
+each new dictionary -- the two link lists, the per-entry choice among them,
+and the action dispatch that ran a link.  A module that forgot one of the
+three failed in a different way each time.")
+
+(cl-defun diogenes-lookup-register-dictionary
+    (id &key name lang key command help (show 'always) buffer-p of
+             available-p (order 50) bind)
+  "Register the dictionary ID for the entry link banner.  Idempotent.
+Registering an ID already present replaces it, so a module may be reloaded.
+
+ID is the symbol the link carries as its `action' property and the symbol
+`diogenes-perseus-action' dispatches on; keep it unique.  NAME is the label
+shown in brackets, KEY the key bound to the same command -- shown after the
+name, so the binding can be read off the entry -- and HELP a format string
+taking the headword, for the echo area.  LANG is \"greek\" or \"latin\": the
+language of entry the dictionary is offered on.  COMMAND is called with the
+headword as its only argument.
+
+SHOW says when the dictionary appears, and is the whole of the arrangement
+the banner used to spell out by hand:
+
+  `always'         -- a print dictionary: always offered, and it explains
+                     itself when pressed if its path variable is unset.
+  `unless-current' -- an electronic dictionary: offered except in its own
+                     lookup buffer, where the link would lead nowhere.
+                     Needs BUFFER-P, a predicate that is non-nil when the
+                     current buffer is showing this dictionary.  The way
+                     back to a language's own dictionary -- the LSJ, Lewis
+                     & Short -- is this with `diogenes--lookup-own-dictionary-p'.
+  `when-current'   -- offered ONLY inside another dictionary's buffer,
+                     named by OF.  This is how a printed companion to an
+                     electronic dictionary is reached: Gaffiot's PDF from a
+                     Gaffiot entry, Bailly's from a Bailly entry.
+
+AVAILABLE-P, if given, is called with no arguments and must return non-nil
+for the dictionary to be offered at all -- for a PDF companion that has no
+PDF configured, where an unset path is a reason to hide the link rather
+than to explain it.
+
+ORDER sorts the banner, low to high; the shipped dictionaries leave gaps to
+sort between.  BIND, if non-nil, binds KEY to COMMAND in
+`diogenes-lookup-mode-map'.  A key that must serve both languages cannot be
+bound this way -- it needs a command that dispatches on
+`diogenes--lookup-lang', as `diogenes-lookup-pape-or-gaffiot-pdf' does --
+so such modules leave BIND nil and bind the key themselves."
+  (let ((entry (list :id id :name name :lang lang :key key
+                     :command command :help help :show show
+                     :buffer-p buffer-p :of of
+                     :available-p available-p :order order)))
+    (setq diogenes--lookup-dictionaries
+          (append (cl-remove id diogenes--lookup-dictionaries
+                             :key (lambda (e) (plist-get e :id)))
+                  (list entry)))
+    (when (and bind key command (boundp 'diogenes-lookup-mode-map))
+      (keymap-set diogenes-lookup-mode-map key command))
+    id))
+
+(defun diogenes--lookup-dictionary (id)
+  "Return the registration plist of dictionary ID, or nil."
+  (cl-find id diogenes--lookup-dictionaries
+           :key (lambda (e) (plist-get e :id))))
+
+(defun diogenes--lookup-install-registered-keys ()
+  "Bind the keys of dictionaries registered with a non-nil BIND.
+Called once `diogenes-lookup-mode-map' exists, for modules that registered
+before it did; `diogenes-lookup-register-dictionary' binds directly when it
+can.  Re-registering is idempotent, so doing both is harmless."
+  (dolist (entry diogenes--lookup-dictionaries)
+    (let ((key (plist-get entry :key))
+          (command (plist-get entry :command)))
+      (when (and (plist-get entry :bind) key command)
+        (keymap-set diogenes-lookup-mode-map key command)))))
+
+(defun diogenes--lookup-dict-in-buffer-p (id)
+  "Non-nil if the current lookup buffer is showing dictionary ID.
+Asks that dictionary's own BUFFER-P predicate, which knows how to
+recognise itself -- usually by comparing `diogenes--lookup-file' with the
+dictionary it converted."
+  (let* ((entry (diogenes--lookup-dictionary id))
+         (predicate (and entry (plist-get entry :buffer-p))))
+    (and predicate (funcall predicate) t)))
+
+(defun diogenes--lookup-dict-visible-p (entry)
+  "Non-nil if ENTRY should be offered on the entry now on screen.
+See `diogenes-lookup-register-dictionary' for what the SHOW values mean."
+  (let ((available (plist-get entry :available-p)))
+    (and (or (null available) (funcall available))
+         (pcase (plist-get entry :show)
+           ('always t)
+           ('unless-current
+            (let ((predicate (plist-get entry :buffer-p)))
+              (not (and predicate (funcall predicate)))))
+           ('when-current
+            (diogenes--lookup-dict-in-buffer-p (plist-get entry :of)))
+           (_ t)))))
+
+(defun diogenes--lookup-dict-specs (lang)
+  "Return (NAME KEY ID HELP) for each dictionary offered on a LANG entry.
+Sorted by the registrations' ORDER; `sort' is stable, so dictionaries
+sharing an order keep the sequence they were registered in, which is the
+order their modules were loaded."
+  (let ((entries (seq-filter
+                  (lambda (e)
+                    (and (equal (plist-get e :lang) lang)
+                         (diogenes--lookup-dict-visible-p e)))
+                  diogenes--lookup-dictionaries)))
+    (mapcar (lambda (e)
+              (list (plist-get e :name) (plist-get e :key)
+                    (plist-get e :id) (plist-get e :help)))
+            (sort entries (lambda (a b) (< (plist-get a :order)
+                                           (plist-get b :order)))))))
+
+(defun diogenes--lookup-register-shipped-dictionaries ()
+  "Register the dictionaries that come with Diogenes itself.
+The print dictionaries, whose modules only open a PDF and have nothing else
+to say here, and the two dictionaries Diogenes searches by default -- the
+LSJ and Lewis & Short -- which are the way back from any other dictionary
+of their language.  Everything else registers itself: see
+`diogenes-gaffiot.el', `diogenes-pape.el' and `diogenes-bailly.el'."
+  ;; Greek, print
+  (diogenes-lookup-register-dictionary
+   'montanari :lang "greek" :name "Montanari" :key "m" :order 10
+   :command #'diogenes-lookup-open-montanari
+   :help "Open Montanari at \\"%s\\"")
+  (diogenes-lookup-register-dictionary
+   'cambridge :lang "greek" :name "CGL" :key "c" :order 20
+   :command #'diogenes-lookup-open-cambridge
+   :help "Open the Cambridge Greek Lexicon at \\"%s\\"")
+  (diogenes-lookup-register-dictionary
+   'bdag :lang "greek" :name "BDAG" :key "b" :order 30
+   :command #'diogenes-lookup-open-bdag
+   :help "Open BDAG (Bauer) at \\"%s\\"")
+  (diogenes-lookup-register-dictionary
+   'passow :lang "greek" :name "Passow" :key "p" :order 40
+   :command #'diogenes-lookup-open-passow
+   :help "Open Passow at \\"%s\\"")
+  (diogenes-lookup-register-dictionary
+   'tgl :lang "greek" :name "TGL" :key "t" :order 50
+   :command #'diogenes-lookup-open-tgl
+   :help "Open Estienne's Thesaurus Graecae Linguae at \\"%s\\"")
+  ;; Latin, print
+  (diogenes-lookup-register-dictionary
+   'old :lang "latin" :name "OLD" :key "o" :order 10
+   :command #'diogenes-lookup-open-old
+   :help "Open the OLD at \\"%s\\"")
+  (diogenes-lookup-register-dictionary
+   'tll :lang "latin" :name "TLL" :key "t" :order 20
+   :command #'diogenes-lookup-open-tll
+   :help "Open the TLL at \\"%s\\"")
+  (diogenes-lookup-register-dictionary
+   'georges :lang "latin" :name "Georges" :key "G" :order 30
+   :command #'diogenes-lookup-open-georges
+   :help "Open Georges at \\"%s\\"")
+  ;; Lewis & Short: the way back to the Latin dictionary Diogenes searches
+  ;; by default, so offered in any Latin entry that is not itself one.
+  (diogenes-lookup-register-dictionary
+   'lewis :lang "latin" :name "Lewis & Short" :key "l" :order 70
+   :command #'diogenes-lookup-lewis
+   :show 'unless-current
+   :buffer-p #'diogenes--lookup-own-dictionary-p
+   :help "Show Lewis & Short's entry for \\"%s\\""))
+
+(diogenes--lookup-register-shipped-dictionaries)
+
 
 (defun diogenes--lookup-insert-dict-links (headword lang)
   "Insert clickable print-dictionary links for HEADWORD at point.
 Each link reads \"[NAME (KEY)]\", the key being the one bound to the same
 command in `diogenes-lookup-mode-map'.
 
-For Latin: [OLD], [TLL] and [Georges], then either [Gaffiot] -- an entry in
-a lookup buffer, not a PDF -- or, when the entry shown IS Gaffiot,
-[Lewis & Short] leading back and [PDF] for the same page in print.  For
-Greek: [Montanari], [CGL], [BDAG], [Bailly], [Passow] and [TGL].
+Which dictionaries those are is not decided here: each is registered by its
+own module through `diogenes-lookup-register-dictionary', and
+`diogenes--lookup-dict-specs' picks the ones this entry should offer.  For
+Latin that is normally [OLD], [TLL] and [Georges], then either [Gaffiot]
+-- an entry in a lookup buffer, not a PDF -- or, when the entry shown IS
+Gaffiot, [Lewis & Short] leading back and [PDF] for the same page in
+print; for Greek [Montanari], [CGL], [BDAG], [Passow] and [TGL], then
+whichever of [Pape], [Bailly] and [LSJ] is not on screen, and [PDF] inside
+Bailly.
 
 Clicking a link (or pressing RET on it) opens that dictionary at the page
 holding HEADWORD.  The links are inserted AT POINT, so the caller positions
@@ -838,29 +998,7 @@ path variable is set (`diogenes-old-pdf-file', `diogenes-tll-pdf-directory',
 `diogenes-bailly-pdf-file', `diogenes-passow-directory',
 `diogenes-tgl-directory'); each says how to set it when pressed."
   (let ((inhibit-read-only t)
-        (specs
-         (pcase lang
-           ("latin"
-            (append diogenes--lookup-latin-dict-links
-                    (if (and (fboundp 'diogenes-gaffiot-lookup-buffer-p)
-                             (diogenes-gaffiot-lookup-buffer-p))
-                        '(("Lewis & Short" "l" lewis
-                           "Show Lewis & Short's entry for \"%s\"")
-                          ("PDF" "P" gaffiot-pdf
-                           "Open the printed Gaffiot at \"%s\""))
-                      '(("Gaffiot" "g" gaffiot
-                         "Show Gaffiot's entry for \"%s\"")))))
-           ("greek"
-            ;; The same arrangement as for Latin: offer whichever of the
-            ;; two electronic Greek dictionaries is NOT the one on
-            ;; screen, so the link always leads somewhere else.
-            (append diogenes--lookup-greek-dict-links
-                    (if (and (fboundp 'diogenes-pape-lookup-buffer-p)
-                             (diogenes-pape-lookup-buffer-p))
-                        '(("LSJ" "l" lsj
-                           "Show the LSJ entry for \"%s\""))
-                      '(("Pape" "P" pape
-                         "Show Pape's entry for \"%s\""))))))))
+        (specs (diogenes--lookup-dict-specs lang)))
     (when specs
       (save-excursion
         (let ((links (mapcar (lambda (spec)
@@ -1100,10 +1238,13 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "P"                             #'diogenes-lookup-open-gaffiot-pdf)
     (keymap-set map "G"                             #'diogenes-lookup-open-georges)
     (keymap-set map "p"                             #'diogenes-lookup-open-passow)
-    (keymap-set map "B"                             #'diogenes-lookup-open-bailly)
+    ;; `B' is bound by `diogenes-bailly.el', which registers itself with
+    ;; :bind t -- as any dictionary module may.
     (keymap-set map "q"                             #'diogenes--quit)
     map)
   "Basic mode map for the Diogenes Lookup Mode.")
+
+(diogenes--lookup-install-registered-keys)
 
 (define-derived-mode diogenes-lookup-mode text-mode "Diogenes Lookup"
   "Major mode to browse databases."
@@ -1844,25 +1985,17 @@ if nil, query interactively for their values"
 (defun diogenes-perseus-action (char)
   "Callback for the links in Diogenes Lookup and Analysis Mode."
   (interactive "d")
-  (let ((action (get-text-property char 'action)))
-    (cl-case action
+  (let* ((action (get-text-property char 'action))
+         ;; A link to a dictionary carries that dictionary's id, and the
+         ;; registry knows what to run: one clause instead of the fifteen
+         ;; that had to be added to, by hand, whenever a dictionary was.
+         (dictionary (diogenes--lookup-dictionary action)))
+    (if dictionary
+        (funcall (plist-get dictionary :command)
+                 (get-text-property char 'headword))
+      (cl-case action
       (bibl (apply #'diogenes--browse-work (diogenes--lookup-parse-bibl-string
 					    (get-text-property char 'bibl))))
-      (old (diogenes-lookup-open-old (get-text-property char 'headword)))
-      (tll (diogenes-lookup-open-tll (get-text-property char 'headword)))
-      (gaffiot (diogenes-lookup-gaffiot (get-text-property char 'headword)))
-      (lewis (diogenes-lookup-lewis (get-text-property char 'headword)))
-      (gaffiot-pdf (diogenes-lookup-open-gaffiot-pdf
-		    (get-text-property char 'headword)))
-      (georges (diogenes-lookup-open-georges (get-text-property char 'headword)))
-      (montanari (diogenes-lookup-open-montanari (get-text-property char 'headword)))
-      (cambridge (diogenes-lookup-open-cambridge (get-text-property char 'headword)))
-      (bdag (diogenes-lookup-open-bdag (get-text-property char 'headword)))
-      (bailly (diogenes-lookup-open-bailly (get-text-property char 'headword)))
-      (passow (diogenes-lookup-open-passow (get-text-property char 'headword)))
-      (tgl (diogenes-lookup-open-tgl (get-text-property char 'headword)))
-      (pape (diogenes-lookup-pape (get-text-property char 'headword)))
-      (lsj (diogenes-lookup-lsj (get-text-property char 'headword)))
       ;; The `lemma-nr' property is the byte offset of the entry in the
       ;; dictionary -- the first field of the analyses record, or the second
       ;; of a lemmata record, where make_latin_lemmata.pl writes 0 for "no
@@ -1919,7 +2052,7 @@ if nil, query interactively for their values"
 			  (or (= (count-windows) 1)
 			      (y-or-n-p "Open the result in this same window? ")))))
 		(diogenes--parse-and-lookup (or word (thing-at-point 'word)) lang)))
-	     (_ (message "C-c C-c cannot do anything useful here!"))))))))
+	     (_ (message "C-c C-c cannot do anything useful here!")))))))))
 
 (defun diogenes-lookup-open-tll-or-tgl ()
   "Open the print thesaurus appropriate to the current entry's language.
