@@ -929,36 +929,36 @@ of their language.  Everything else registers itself: see
   (diogenes-lookup-register-dictionary
    'montanari :lang "greek" :name "Montanari" :key "m" :order 10
    :command #'diogenes-lookup-open-montanari
-   :help "Open Montanari at \\"%s\\"")
+   :help "Open Montanari at \"%s\"")
   (diogenes-lookup-register-dictionary
    'cambridge :lang "greek" :name "CGL" :key "c" :order 20
    :command #'diogenes-lookup-open-cambridge
-   :help "Open the Cambridge Greek Lexicon at \\"%s\\"")
+   :help "Open the Cambridge Greek Lexicon at \"%s\"")
   (diogenes-lookup-register-dictionary
    'bdag :lang "greek" :name "BDAG" :key "b" :order 30
    :command #'diogenes-lookup-open-bdag
-   :help "Open BDAG (Bauer) at \\"%s\\"")
+   :help "Open BDAG (Bauer) at \"%s\"")
   (diogenes-lookup-register-dictionary
    'passow :lang "greek" :name "Passow" :key "p" :order 40
    :command #'diogenes-lookup-open-passow
-   :help "Open Passow at \\"%s\\"")
+   :help "Open Passow at \"%s\"")
   (diogenes-lookup-register-dictionary
    'tgl :lang "greek" :name "TGL" :key "t" :order 50
    :command #'diogenes-lookup-open-tgl
-   :help "Open Estienne's Thesaurus Graecae Linguae at \\"%s\\"")
+   :help "Open Estienne's Thesaurus Graecae Linguae at \"%s\"")
   ;; Latin, print
   (diogenes-lookup-register-dictionary
    'old :lang "latin" :name "OLD" :key "o" :order 10
    :command #'diogenes-lookup-open-old
-   :help "Open the OLD at \\"%s\\"")
+   :help "Open the OLD at \"%s\"")
   (diogenes-lookup-register-dictionary
    'tll :lang "latin" :name "TLL" :key "t" :order 20
    :command #'diogenes-lookup-open-tll
-   :help "Open the TLL at \\"%s\\"")
+   :help "Open the TLL at \"%s\"")
   (diogenes-lookup-register-dictionary
    'georges :lang "latin" :name "Georges" :key "G" :order 30
    :command #'diogenes-lookup-open-georges
-   :help "Open Georges at \\"%s\\"")
+   :help "Open Georges at \"%s\"")
   ;; Lewis & Short: the way back to the Latin dictionary Diogenes searches
   ;; by default, so offered in any Latin entry that is not itself one.
   (diogenes-lookup-register-dictionary
@@ -966,7 +966,7 @@ of their language.  Everything else registers itself: see
    :command #'diogenes-lookup-lewis
    :show 'unless-current
    :buffer-p #'diogenes--lookup-own-dictionary-p
-   :help "Show Lewis & Short's entry for \\"%s\\""))
+   :help "Show Lewis & Short's entry for \"%s\""))
 
 (diogenes--lookup-register-shipped-dictionaries)
 
