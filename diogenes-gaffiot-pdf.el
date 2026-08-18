@@ -291,5 +291,24 @@ Call this if you replace or re-bookmark the PDF while Emacs is running."
   (clrhash diogenes-gaffiot-pdf--index-cache)
   (message "Diogenes Gaffiot PDF index cache cleared"))
 
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(defun diogenes-gaffiot-pdf--register ()
+  "Announce the printed Gaffiot to the lookup banner.  Idempotent.
+Offered inside a Gaffiot entry, as before.  Unlike Bailly's PDF this one is
+NOT gated on being configured: the proofread TEI stops at F, so a word past
+it has nowhere else to go and the link must be there to explain itself.
+`P' is shared with Pape and bound by `diogenes-pape--install-keys'."
+  (diogenes-lookup-register-dictionary
+   'gaffiot-pdf :lang "latin" :name "PDF" :key "P" :order 90
+   :command #'diogenes-lookup-open-gaffiot-pdf
+   :show 'when-current :of 'gaffiot
+   :help "Open the printed Gaffiot at \"%s\""))
+
+(with-eval-after-load 'diogenes-perseus
+  (diogenes-gaffiot-pdf--register))
+
 (provide 'diogenes-gaffiot-pdf)
 ;;; diogenes-gaffiot-pdf.el ends here

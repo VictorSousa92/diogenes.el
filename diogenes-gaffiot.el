@@ -85,6 +85,8 @@
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus"
                   (expected dict-name))
 (declare-function diogenes--perseus-path "diogenes" ())
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
 (declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
                   (&optional word))
 (defvar diogenes-gaffiot-pdf-fallback)
@@ -427,8 +429,25 @@ TEI XML (which covers A-F) and run M-x diogenes-gaffiot-build-dictionary.  \
 Either in your init file before Diogenes loads, or through \
 M-x customize-variable")))))
 
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(defun diogenes-gaffiot--register ()
+  "Announce Gaffiot to the lookup banner.  Idempotent.
+`g' is Latin-only, so it can be bound from here; Lewis & Short, the way
+back, is registered by `diogenes-perseus.el' itself, being the dictionary
+Diogenes searches by default."
+  (diogenes-lookup-register-dictionary
+   'gaffiot :lang "latin" :name "Gaffiot" :key "g" :order 60
+   :command #'diogenes-lookup-gaffiot
+   :show 'unless-current
+   :buffer-p #'diogenes-gaffiot-lookup-buffer-p
+   :help "Show Gaffiot's entry for \"%s\""))
+
 (with-eval-after-load 'diogenes-perseus
-  (diogenes-gaffiot--install-xml-handlers))
+  (diogenes-gaffiot--install-xml-handlers)
+  (diogenes-gaffiot--register))
 
 (provide 'diogenes-gaffiot)
 ;;; diogenes-gaffiot.el ends here

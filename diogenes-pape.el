@@ -104,6 +104,8 @@
                   (&optional word))
 (declare-function diogenes--perseus-path "diogenes" ())
 (declare-function diogenes--strip-diacritics "diogenes-utils" (str))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 
 (defvar diogenes-lookup-mode-map)
@@ -564,9 +566,37 @@ back to Lewis & Short, the historical binding of this key."
     (keymap-set diogenes-lookup-mode-map "l"
                 #'diogenes-lookup-lewis-or-lsj)))
 
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(defun diogenes-pape--register ()
+  "Announce Pape, and the LSJ as the way back, to the lookup banner.
+Idempotent.  Both are `:show unless-current': Pape is not offered inside
+Pape, and the LSJ is not offered inside the LSJ -- which
+`diogenes--lookup-own-dictionary-p' recognises -- so from Pape or from
+Bailly the LSJ link appears, and in the LSJ it does not.
+
+Neither binds its key here.  `P' and `l' have to serve both languages, so
+`diogenes-pape--install-keys' puts the dispatching commands on them
+instead; see `diogenes-lookup-pape-or-gaffiot-pdf'."
+  (diogenes-lookup-register-dictionary
+   'pape :lang "greek" :name "Pape" :key "P" :order 60
+   :command #'diogenes-lookup-pape
+   :show 'unless-current
+   :buffer-p #'diogenes-pape-lookup-buffer-p
+   :help "Show Pape's entry for \"%s\"")
+  (diogenes-lookup-register-dictionary
+   'lsj :lang "greek" :name "LSJ" :key "l" :order 80
+   :command #'diogenes-lookup-lsj
+   :show 'unless-current
+   :buffer-p #'diogenes--lookup-own-dictionary-p
+   :help "Show the LSJ entry for \"%s\""))
+
 (with-eval-after-load 'diogenes-perseus
   (diogenes-pape--install-xml-handlers)
-  (diogenes-pape--install-keys))
+  (diogenes-pape--install-keys)
+  (diogenes-pape--register))
 
 (provide 'diogenes-pape)
 ;;; diogenes-pape.el ends here
