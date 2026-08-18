@@ -129,35 +129,44 @@ If file-length is not supplied, it will be determined."
 	  (t nil))))
 
 (defcustom diogenes-latin-fold-letters '((?j . ?i))
-  "Letters folded together when searching the Latin dictionary by headword.
-An alist of (FROM . TO) characters, applied to both the search word and
-the dictionary key before they are compared.
+  "Initial letters folded together when searching the Latin dictionary.
+An alist of (FROM . TO) characters, applied to the FIRST letter of both the
+search word and the dictionary key before they are compared.
 
-The Lewis & Short that comes with Diogenes files its entries under the
-classical i but leaves the `key\\=' attributes spelt with j: the entry
-displayed as `iacio\\=' has key=\"ja^ci^o\", and the keys along that stretch
-of the file run i, j, jabolenus, iacchus, jacea, jaceo, jacetani, jacio.
-That sequence is monotonic only once j counts as i, and a binary search
-over an order it does not share cannot find anything reliably -- looking up
-`iacio\\=' used to land between the two letter articles, and `jacio\\=' past
-the whole block.
+The Lewis & Short that comes with Diogenes is ordered two ways at once,
+depending on where the j falls.  An initial J is interleaved with I --
 
-Only j is folded by default.  The u/v distinction is NOT folded, because
-this dictionary does keep separate U and V sections, and folding them
-would break the searches that currently work.  Set to nil to compare the
-keys literally, as Diogenes\\=' own `$do_lookup\\=' does."
+  I, J, Jabolenus, Iacchus, jacea, jaceo, Jacetani, ja^ci^o
+
+which is alphabetical only if j counts as i -- while an internal j sorts
+after i, as it does in print:
+
+  abitus, abjecte, ... circumitus, circumjaceo, ... deitas, dejecte
+
+so folding everywhere trades one set of inversions for another (measured on
+the shipped file: 126 with no folding, 129 folding throughout, and fewest
+folding the initial letter alone).  Hence the fold applies only to the
+first letter.
+
+The u/v distinction is NOT folded: this dictionary keeps separate U and V
+sections.  Set this to nil to compare keys literally, as Diogenes\\=' own
+`$do_lookup\\=' does -- at the cost of `iacio\\=' landing between the letter
+articles and `jacio\\=' overshooting its whole block."
   :type '(alist :key-type character :value-type character)
   :group 'diogenes)
 
 (defun diogenes--latin-fold-key (str)
   "Reduce STR to the letters the Latin dictionary is ordered by.
-ASCII letters only, downcased, with `diogenes-latin-fold-letters' applied."
+ASCII letters only, downcased, with `diogenes-latin-fold-letters' applied
+to the initial letter."
   (let ((key (downcase (diogenes--ascii-alpha-only str))))
-    (if (not diogenes-latin-fold-letters)
+    (if (or (null diogenes-latin-fold-letters)
+	    (zerop (length key)))
 	key
-      (concat (mapcar (lambda (c)
-			(or (cdr (assq c diogenes-latin-fold-letters)) c))
-		      key)))))
+      (let ((folded (cdr (assq (aref key 0) diogenes-latin-fold-letters))))
+	(if folded
+	    (concat (string folded) (substring key 1))
+	  key)))))
 
 (defun diogenes--latin-sort-function (a b)
   "Compare two Lewis & Short keys as the dictionary itself orders them.
