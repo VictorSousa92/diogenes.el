@@ -1,994 +1,660 @@
-;;; diogenes-bailly.el --- Open Bailly's Dictionnaire grec-français PDF -*- lexical-binding: t -*-
+;;; diogenes-bailly.el --- Look up a Greek word in Bailly -*- lexical-binding: t -*-
 
 ;;; Commentary:
 
-;; Jump from a Diogenes *Greek* dictionary entry (the buffer produced by
-;; `diogenes-lookup-mode') to the page of Anatole Bailly's
-;; _Dictionnaire grec-français_ -- in the freely available re-typeset
-;; edition "Le Bailly 2020 - Hugo Chávez" (Gérard Gréco et al.) -- shown
-;; inside Emacs with `pdf-tools' (or `doc-view').  It is a Greek
-;; counterpart of `diogenes-montanari.el' / `diogenes-cambridge.el' and
-;; reuses `diogenes-old.el''s PDF display driver.
+;; Show the entry of Anatole Bailly's _Dictionnaire grec-français_ -- in the
+;; re-typeset and corrected edition "Bailly 2020 - Hugo Chávez" (Gérard
+;; Gréco, André Charbonnet, Mark De Wilde, Bernard Maréchal) -- for the
+;; Greek word you are reading, in a Diogenes lookup buffer.  From a Greek
+;; entry (the LSJ, or Pape), press `B' or click the "[Bailly (B)]" link.
 ;;
 ;; ---------------------------------------------------------------------
-;; THE RUNNING HEADS, NOT THE BOOKMARKS
+;; WHAT THIS IS, AND WHAT IT IS NOT
 ;; ---------------------------------------------------------------------
 ;;
-;; The Bailly 2020 PDF *is* bookmarked -- some 2 170 lemmas, roughly one
-;; per page -- but a bookmark names a word that occurs SOMEWHERE on its
-;; page, not the page's first or last entry, so the bookmarks alone give
-;; no page boundaries (the CGL and Montanari modules can key on their
-;; bookmarks precisely because those do give bounds).
+;; This is the Greek counterpart of `diogenes-gaffiot.el', and it works the
+;; same way: Bailly comes as TEI XML, entry by entry, exactly the kind of
+;; thing `diogenes-lookup-mode' already displays for the LSJ and Lewis &
+;; Short, so this module adds no display machinery of its own.  It hands
+;; Bailly to `diogenes--search-dict' as one more dictionary file, and
+;; everything the lookup buffer can do comes with it --
 ;;
-;; What this edition has instead is a machine-clean text layer -- it is
-;; typeset, not scanned -- and a running head on every entry page in the
-;; familiar three-part form
+;;   * `C-c C-n' / `C-c C-p' walk to the next and previous entry;
+;;   * `C-c C-c' on a word looks it up: Greek goes to the LSJ, so you can
+;;     step from Bailly back into the electronic Greek dictionary;
+;;   * the print dictionaries are one keystroke away, since the entry
+;;     carries the usual "[Montanari] [CGL] [BDAG] [Passow] [TGL]" banner;
+;;   * every entry opens in a fresh buffer, so the LSJ entry you came from
+;;     stays live and reachable.
 ;;
-;;     ἀγελαδόν                     90                     ἀγέροχος
-;;     first lemma on the page   page no.   last lemma on the page
+;; It is NOT one of the print-dictionary modules, and this is where it
+;; parts company with Gaffiot.  Gaffiot's proofread TEI stops at F, so
+;; `diogenes-gaffiot.el' asks whether a word falls inside its range and
+;; sends the rest to `diogenes-gaffiot-pdf.el'.  Nothing of the sort
+;; applies here: the Bailly 2020 XML is the whole dictionary, all 110,000
+;; articles of it, and it is the same text the PDF prints.  So the PDF is
+;; never a fallback and `B' never opens it from the LSJ or from Pape.  A
+;; word Bailly does not have is simply a word Bailly does not have, and
+;; Diogenes does what it does for the LSJ -- shows the nearest entry and
+;; says so, which for a complete dictionary is information rather than a
+;; failure.
 ;;
-;; Each entry page thus announces its own interval, and the intervals of
-;; consecutive pages tile the whole word list with no gaps and no
-;; overlaps.  That is a sorted array, and finding a word in it is a
-;; binary search.
+;; The printed page is still worth reaching, for the typography and the
+;; page as an object; `diogenes-bailly-pdf.el' opens it, from INSIDE a
+;; Bailly entry only, on the same `B' that brought you here (or the
+;; "[PDF (B)]" link in the entry's banner).  Pressing `B' twice therefore
+;; walks LSJ -> Bailly entry -> Bailly page, which is the one path where
+;; the PDF is what you asked for rather than what was left when the XML
+;; came up short.
 ;;
 ;; ---------------------------------------------------------------------
-;; TWO WAYS TO GET THE HEADS: LAZY PROBING, OR A PREBUILT .eld INDEX
+;; THE DICTIONARY FILE
 ;; ---------------------------------------------------------------------
 ;;
-;; Out of the box nothing is built.  A lookup reads ONE head per probe --
-;; only the top strip of the page, via `pdf-info-gettext' or `pdftotext'
-;; -- and caches it: a cold lookup costs 11-13 page probes, and since
-;; every probe warms the cache, later lookups in the same session
-;; usually cost one or two, often none.
+;; Diogenes looks a word up by binary search over a file of ONE ENTRY PER
+;; LINE, sorted by a `key' attribute (see `diogenes--binary-search').  For
+;; Greek that key is beta code, sorted in the order of the Greek alphabet
+;; rather than of ASCII -- see `diogenes--beta-sort-function' -- and the
+;; TEI has Unicode headwords full of accents and breathings.  So it has to
+;; be converted once:
 ;;
-;; \\[diogenes-bailly-build-index] reads every head in one pass (a few
-;; seconds with poppler's `pdftotext') and writes a portable prebuilt
-;; index -- `<pdf-name>-index.eld' beside the PDF, in the same spirit as
-;; Passow's `passow-index.eld' -- after which even the first lookup of a
-;; session, on any machine the file is copied to, needs no probing at
-;; all.  Building it is an optimisation, never a requirement: both paths
-;; fill the same table and give the same pages.
+;;   (setq diogenes-bailly-source-file "/path/to/bailly-tei.xml")
+;;   M-x diogenes-bailly-build-dictionary
 ;;
-;; Because the page is *found* by probing, nothing depends on the printed
-;; page number matching the PDF page number (in this edition they do
-;; match, on all 2 470 numbered heads); the number in a head serves only
-;; as the anchor that separates its two lemmas.
+;; which writes `bailly.xml' beside the other Diogenes dictionaries.  Each
+;; <entry> becomes one line, its <orth> becomes the <head> the formatter
+;; recognises as a headword, and its key is that headword transliterated
+;; into beta code and reduced to bare letters, so that the keys the LSJ
+;; sends us match.  Offered automatically the first time you press `B' with
+;; no dictionary file present.
 ;;
-;; A head counts as read only when both sides of its page number hold
-;; Greek lemmas in alphabetical order.  That is what keeps the front
-;; matter -- prefaces, the list of authors, where a page number sits amid
-;; prose -- out of the index, and what discards a page whose text came
-;; back with body matter attached instead of just the head.
+;; `diogenes-bailly-source-file' may name a single XML file, a DIRECTORY of
+;; them, or a list, as Pape's does: the conversion is the same whether the
+;; TEI arrives whole or split per letter.
 ;;
-;; The 24 pages that open a letter print a large "Α, α" instead of a
-;; running head.  They need no special data: a page with no parsable head
-;; is simply not a probe point, and a word sorting before the following
-;; page's first lemma is placed on it.
+;; ---------------------------------------------------------------------
+;; WHAT THE CONVERSION DOES TO THE TEI
+;; ---------------------------------------------------------------------
+;;
+;; Four rewritings, all of them for the formatter's benefit and none of
+;; them touching the text.  The converted file is a display artefact,
+;; rebuilt from the TEI whenever you like; the TEI stays the edition.
+;;
+;;   * `xml:lang="grc"' becomes `lang="greek"'.  This one is not
+;;     cosmetic.  `diogenes--dict-handle-elt' reads the attribute `lang'
+;;     and defaults to "english"; nothing in Diogenes looks at `xml:lang'.
+;;     Left alone, every Greek word in a Bailly entry -- and the headword
+;;     itself -- would count as English, and `C-c C-c' on one would go to
+;;     Lewis & Short instead of the LSJ.
+;;
+;;   * <orth> becomes <head>, keeping its attributes, as in Pape.  That is
+;;     the element the formatter draws as a headword and hangs the `orth'
+;;     text property on, which is what makes the print-dictionary keys act
+;;     on the entry the cursor is in.
+;;
+;;   * <etym> becomes <sense n="Étym.">, and <re type="variant"> becomes
+;;     <sense n="➳">.  The formatter gives <sense> a blank line and prints
+;;     its `n' as a label, which is exactly how Bailly sets an etymology
+;;     and a list of dialect forms off from the article; as bare elements
+;;     they would have run on into the last sense unlabelled.  The label
+;;     the TEI drops -- the printed "Étym." -- comes back here.
+;;
+;;   * <bibl> becomes <cit>.  The shared <bibl> handler builds a clickable
+;;     citation from an `n' attribute holding a Perseus reference, and
+;;     Bailly's sigla are not that: "PLUT. T. Gracch. 5" is resolved by a
+;;     bibliography (biblio.2020) distributed apart from the dictionary, so
+;;     an <bibl> here would be a link with nothing behind it, and clicking
+;;     it would fail inside `diogenes--lookup-parse-bibl-string'.  Its
+;;     <author> and <biblScope> keep their own faces, so a citation still
+;;     looks like one.  Should the sigla ever be resolved, the place to
+;;     undo this is `diogenes-bailly--rewrite-entry'.
 ;;
 ;; ---------------------------------------------------------------------
 ;; COLLATION
 ;; ---------------------------------------------------------------------
 ;;
-;; `diogenes-bailly--key' reproduces Bailly's own macro-alphabetical
-;; order: accents, breathings, diaereses, iota subscript, quantity marks,
-;; case, the compound interpunct "·", the "*" conjecture mark, homograph
-;; numerals ("1 ἄν", "2 ἄν") and the contracted half of a verb lemma
-;; ("τελέω-ῶ") are all ignored.  This module does NOT borrow
-;; `diogenes-montanari--greek-key', because Bailly prints medial beta as
-;; "ϐ" (U+03D0), which that key -- keeping only U+03B1..U+03C9 -- would
-;; silently DROP, turning ἀ·ϐαρής into αρης.  Here ϐ folds to β (and ς to
-;; σ, ϑ to θ, ϕ to φ, ϰ to κ, ϱ to ρ, ϖ to π).
+;; `diogenes-bailly--key' has one job the other Greek dictionaries do not:
+;; Bailly prints medial beta as "ϐ" (U+03D0), in 6,209 of its headwords.
+;; That character is in no beta-code table, so `diogenes--utf8-to-beta'
+;; passes it through untranslated and the filter to beta letters then drops
+;; it -- ἀϐαρής would be filed under "aarhs", where nothing will ever look
+;; for it.  So it folds to β first, together with the other variant shapes
+;; (ς, ϑ, ϕ, ϰ, ϱ, ϖ), exactly as `diogenes-bailly-pdf--key' folds them for
+;; the printed page.
 ;;
-;; Two finer points, both required by the printed order:
+;; The rest of what a Bailly headword can carry, measured over all 110,646
+;; of them: 1,548 superscript homograph numerals (ἤ ¹, ἤ ²) and the space
+;; before them; 60 apostrophes of elision; 38 en dashes on prefix and
+;; suffix entries (βου–, -δις); 26 parentheses; 7 asterisks of conjecture;
+;; 35 no-break spaces.  All of them drop out.  Three headwords are simply
+;; mis-spelt in the source, each once, and each would otherwise be
+;; unreachable: a Coptic kapa for κ in θαλίηⲕτρον, a Latin o for ο in
+;; συστράτηγoς, and a byte-order mark left on the end of λευκερῴδιος.
+;; They are folded here rather than corrected in the TEI, which is under a
+;; no-derivatives licence and is not ours to emend.
 ;;
-;;   * an apostrophe of crasis or elision closes the gap around it, so
-;;     "τῷ ’χλῳ" keys as τωχλω and follows τῶν, where Bailly puts it;
-;;   * a real word space does not close up, and sorts before any letter,
-;;     so "Διὸς ἱερόν" precedes "διόσ·δοτος".
+;; Digamma (ϝέ, ϝέθεν, ϝοῖ) is beta code `v', which sorts between ε and ζ
+;; in `diogenes--beta-code-alphabet'; since no table transliterates it,
+;; this module spells it out itself.
 ;;
-;; A second, accent-KEEPING key (`diogenes-bailly--tight-key') breaks
-;; ties: where consecutive pages share one accent-insensitive key (the
-;; ποιός/ποῖος and τίς/τις/τὶς clusters), the page whose own first lemma
-;; is spelt like the word wins.
-;;
-;; ---------------------------------------------------------------------
-;; ACCURACY
-;; ---------------------------------------------------------------------
-;;
-;; Checked against the PDF's own 2 170 lemma bookmarks -- an independent
-;; witness, since a bookmark sits mid-page while the search knows only
-;; page edges: 2 169 land on exactly the bookmarked page.  The one miss is
-;; a numbered homograph ("2 ἄρῃ") whose twin "1 ἄρῃ" ends the preceding
-;; page: identical spelling, so no collation key could separate them, and
-;; the reader arrives one page early with both in view.  Unlike the
-;; scanned dictionaries, there is no OCR noise here to allow for.
-;;
-;; Poppler's `pdftotext' is preferred for reading a page, because its
-;; `-layout' output puts the running head on the first line; pdf-tools'
-;; `pdf-info-gettext' is the fallback, and on some versions returns more
-;; of the page than the strip asked for, in which case heads are refused
-;; rather than guessed at.  Set `diogenes-bailly-text-method' to override.
-;;
-;; Setup:
-;;
-;;   (setq diogenes-bailly-pdf-file "/path/to/bailly-2020-hugo-chavez.pdf")
-;;
-;; Then, in a Greek lookup buffer, press `B' or click the "[Bailly]" link;
-;; optionally run \\[diogenes-bailly-build-index] once.
+;; The result: no headword keys to nothing, and 7,332 of them share a key
+;; with another -- the numbered homographs, ἤ ¹ against ἤ ², which no
+;; accent-blind key could separate and which Bailly means as one word
+;; anyway.  They stay in printed order, because `sort' on a list is stable,
+;; and `C-c C-n' walks from one to the next.
 
 ;;; Code:
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
 (require 'ucs-normalize)
-(require 'diogenes-old)                 ; reuse the PDF display driver
 
-(declare-function pdf-info-gettext "pdf-info"
-                  (page edges &optional selection-style file-or-buffer))
-(declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
-(declare-function pdf-info-number-of-pages "pdf-info" (&optional file-or-buffer))
+(declare-function diogenes--search-dict "diogenes-perseus"
+                  (word lang sort-fn key-fn &optional file))
+(declare-function diogenes--beta-sort-function "diogenes-perseus" (a b))
+(declare-function diogenes--xml-key-fn "diogenes-perseus" (buf))
+(declare-function diogenes--binary-search "diogenes-perseus"
+                  (dict-file comp-fn key-fn word &optional start stop))
+(declare-function diogenes--lookup-current-headword "diogenes-perseus" ())
+(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+                  (expected dict-name))
+(declare-function diogenes--perseus-path "diogenes" ())
+(declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 (declare-function diogenes--perseus-beta-to-utf8 "diogenes-utils" (str))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
+(declare-function diogenes-lookup-open-bailly-pdf "diogenes-bailly-pdf"
+                  (&optional word))
+(declare-function diogenes-bailly-pdf-available-p "diogenes-bailly-pdf" ())
+
+(defvar diogenes--lookup-file)
+(defvar diogenes--lookup-same-window)
+(defvar diogenes--dict-xml-handlers-extra)
 
 ;;;; --------------------------------------------------------------------
 ;;;; CUSTOMIZATION
 ;;;; --------------------------------------------------------------------
 
-(defcustom diogenes-bailly-pdf-file nil
-  "Path to a PDF of Bailly's Dictionnaire grec-français.
-Written for the re-typeset \"Bailly 2020 - Hugo Chávez\" edition, whose
-entry pages carry a running head of the form
+(defcustom diogenes-bailly-file nil
+  "Path to the converted Bailly dictionary, one entry per line.
+Nil means `bailly.xml' among the other Diogenes dictionaries, which is
+where \\[diogenes-bailly-build-dictionary] writes it -- and where, on many
+installations, it cannot: that directory lives inside the Diogenes tree and
+is commonly owned by root.  Name a path you can write instead, as for
+Pape:
 
-  ἀγελαδόν            90            ἀγέροχος
+    (setq diogenes-bailly-file \"~/.emacs.d/diogenes/bailly.xml\")
 
-\(first lemma, page number, last lemma).  Any edition with such heads
-and a real text layer will do; a scan without a text layer will not,
-since the heads are read from the page text."
-  :type '(choice (const :tag "Not set" nil) file)
+Missing directories are created.  This is NOT the TEI you converted from --
+see `diogenes-bailly-source-file'."
+  :type '(choice (const :tag "bailly.xml beside the other dictionaries" nil)
+                 file)
   :group 'diogenes)
 
-(defcustom diogenes-bailly-page-offset 0
-  "Integer added to every page number this module returns.
-Leave at 0: the page is located by reading the PDF's own pages, so it
-is already a physical PDF page index.  See `diogenes-old-page-offset'."
-  :type 'integer
+(defcustom diogenes-bailly-source-file nil
+  "Where the Bailly TEI XML lives.
+Read by \\[diogenes-bailly-build-dictionary] to produce
+`diogenes-bailly-file'; not used for lookups afterwards, so it may live
+anywhere and be deleted once converted.
+
+May be any of three things: a single XML file, a DIRECTORY (every *.xml in
+it is read, in `string<' order of file name), or an explicit list of files.
+All of them go into the one converted dictionary."
+  :type '(choice (const :tag "Not set" nil)
+                 (file :tag "Single XML file")
+                 (directory :tag "Directory of XML files")
+                 (repeat :tag "List of XML files" file))
   :group 'diogenes)
 
-(defcustom diogenes-bailly-text-method 'auto
-  "How to read the text of a single PDF page.
-`auto' prefers poppler's `pdftotext' and falls back to
-`pdf-info-gettext' (pdf-tools, no external process).  Force either with
-`pdftotext' or `pdf-tools'.
-
-`pdftotext' comes first deliberately.  Its `-layout' output puts a
-page's running head on the first line, exactly as printed, which is what
-the head parser wants; `pdf-info-gettext' asks for the top strip of the
-page but, depending on the pdf-tools version, may return a good deal
-more, in which case the head cannot be told from the body text following
-it and the page is skipped.  \\[diogenes-bailly-build-index] is also far
-faster with `pdftotext', which reads the whole dictionary in one run."
-  :type '(choice (const :tag "Prefer pdftotext, else pdf-tools" auto)
-                 (const :tag "The pdftotext program" pdftotext)
-                 (const :tag "pdf-tools (pdf-info-gettext)" pdf-tools))
-  :group 'diogenes)
-
-(defcustom diogenes-bailly-pdftotext-program "pdftotext"
-  "Name of (or path to) poppler's `pdftotext' program."
-  :type 'string
-  :group 'diogenes)
-
-(defcustom diogenes-bailly-head-strip 0.06
-  "Fraction of the page height, from the top, that holds the running head.
-Only this strip is read when `pdf-info-gettext' is used.  Enlarge it if
-heads are missed; too large a value merely pulls in the first line of
-the body, which the head parser ignores."
-  :type 'number
-  :group 'diogenes)
-
-(defcustom diogenes-bailly-number-tolerance 30
-  "How far the number in a running head may differ from its PDF page.
-The head's central number is the anchor separating its two lemmas, so a
-candidate number is accepted only within this many pages of the page it
-was read from.  That rejects the numeral of a homograph lemma (a head
-can read \"1 ἄν  212  2 ἄν\") and any number in ordinary body text.  Raise
-it for a copy with much unnumbered front matter, where printed and
-physical numbering drift apart."
-  :type 'integer
-  :group 'diogenes)
-
-(defcustom diogenes-bailly-body-range nil
-  "First and last PDF page of the dictionary proper, as a cons (FIRST . LAST).
-Nil means detect it: FIRST from the outline's \"lettre …\" bookmarks (or,
-without them, by scanning for the first page with a running head), LAST
-by probing for the last page that has one.  Set it explicitly to skip
-the detection, e.g. (81 . 2574) for the Bailly 2020 PDF."
-  :type '(choice (const :tag "Detect automatically" nil)
-                 (cons integer integer))
-  :group 'diogenes)
-
-(defcustom diogenes-bailly-index-file nil
-  "Where \\[diogenes-bailly-build-index] writes the portable index.
-Nil means `<pdf-name>-index.eld' in the PDF's own directory -- the
-counterpart of Passow's `passow-index.eld', and the natural place, since
-the index belongs to that one PDF.  Set a path of your own if the PDF
-lives somewhere unwritable."
-  :type '(choice (const :tag "Beside the PDF" nil) file)
-  :group 'diogenes)
-
-(defcustom diogenes-bailly-cache-directory
-  (expand-file-name "diogenes-bailly" user-emacs-directory)
-  "Directory for the fallback on-disk cache of the running heads.
-Used by \\[diogenes-bailly-build-index] when the portable index cannot
-be written beside the PDF (a read-only folder, say).  Keyed by the PDF's
-modification time, so replacing the PDF invalidates it.  Set to nil to
-disable on-disk caching entirely; the in-memory cache still applies
-within a session."
-  :type '(choice (const :tag "Disable disk cache" nil) directory)
+(defcustom diogenes-bailly-display-in-same-window t
+  "If non-nil, show a Bailly entry in the window it was invoked from.
+The LSJ entry you came from is not destroyed either way -- each lookup gets
+a fresh buffer -- so with the default you stay in one window and can return
+through the buffer history.  Nil lets `display-buffer' place it as it sees
+fit."
+  :type 'boolean
   :group 'diogenes)
 
 ;;;; --------------------------------------------------------------------
-;;;; COLLATION KEYS
+;;;; FORMATTING OF BAILLY'S OWN ELEMENTS
 ;;;; --------------------------------------------------------------------
+
+(defconst diogenes-bailly--xml-handlers
+  '((hi        . (font-lock-face italic))          ; <hi rend="italic">
+    (gram      . (font-lock-face font-lock-keyword-face))
+    (pron      . (font-lock-face shadow))          ; the quantity marks [ᾰῐ]
+    (author    . (font-lock-face font-lock-keyword-face))
+    (biblScope . (font-lock-face shadow)))
+  "Faces for the elements Bailly uses and the Perseus dictionaries do not.
+Added to `diogenes--dict-xml-handlers-extra' on load, without disturbing an
+entry already there, so the LSJ and Lewis & Short keep their appearance.
+Bailly's <head>, <sense>, <foreign> and <title> need nothing: the shared
+handlers in `diogenes--dict-handle-elt' already cover them.  <def>, <form>
+and <cit> are containers with nothing to say typographically; their
+contents are drawn by the handlers above.")
+
+(defun diogenes-bailly--install-xml-handlers ()
+  "Teach the dictionary formatter about Bailly's elements.  Idempotent."
+  (dolist (handler diogenes-bailly--xml-handlers)
+    (unless (assq (car handler) diogenes--dict-xml-handlers-extra)
+      (push handler diogenes--dict-xml-handlers-extra))))
+
+;;;; --------------------------------------------------------------------
+;;;; THE KEY A HEADWORD SORTS UNDER
+;;;; --------------------------------------------------------------------
+
+(defconst diogenes-bailly--beta-letters "abgdevzhqiklmncoprstufxyw"
+  "The letters a beta-code key may consist of, and nothing else.
+`diogenes--beta-sort-function' looks every character up in
+`diogenes--beta-code-alphabet' and SIGNALS on one it does not find, so a
+stray Latin letter in a key would not merely sort oddly but break every
+search that walked past it.  Hence a key is filtered down to these, in
+this order (alpha beta gamma delta epsilon digamma zeta eta theta ...),
+which is the order Greek sorts in and not the order ASCII does.")
 
 (defconst diogenes-bailly--letter-folds
-  '((?ϐ . ?β)                          ; U+03D0 medial beta -- Bailly's default
+  '((?ϐ . ?β)                     ; U+03D0 medial beta -- 6,209 headwords
     (?ς . ?σ) (?ϑ . ?θ) (?ϕ . ?φ) (?ϰ . ?κ) (?ϱ . ?ρ) (?ϖ . ?π)
-    (?ϴ . ?θ) (?ϒ . ?υ))
-  "Alist folding Greek variant letter shapes onto their plain letter.")
+    (?ϴ . ?θ) (?ϒ . ?υ)
+    ;; Three one-off misspellings in the source; see the Commentary.
+    (?ⲕ . ?κ)                     ; U+2C95 COPTIC SMALL LETTER KAPA
+    (?o . ?ο))                    ; LATIN SMALL LETTER O
+  "Alist folding variant and mistaken letter shapes onto a plain Greek letter.
+Applied BEFORE transliteration, since `diogenes--utf8-to-beta' knows only
+the plain letters and silently leaves anything else for the filter in
+`diogenes-bailly--key' to discard.")
 
-(defsubst diogenes-bailly--greek-letter-p (c)
-  "Non-nil if character C is a plain Greek letter, upper or lower case."
-  (or (<= #x0391 c #x03a9) (<= #x03b1 c #x03c9)))
+(defconst diogenes-bailly--spelt-out
+  '((?ϝ . "v") (?Ϝ . "v"))
+  "Letters transliterated here because no beta-code table lists them.
+Digamma is beta code `v', which `diogenes--beta-code-alphabet' sorts
+between epsilon and zeta; three Bailly headwords begin with it.")
 
 (defun diogenes-bailly--prepare (word)
-  "Normalise WORD for keying and return its NFD decomposition.
-Converts Perseus beta code (LSJ headwords arrive as e.g. \"le/gw\") to
-Unicode, closes up an apostrophe of crasis or elision together with any
-space before it, and drops the contracted tail of a lemma such as
-\"τελέω-ῶ\"."
+  "Normalise WORD before it is keyed, and return it decomposed.
+Converts Perseus beta code to Unicode -- LSJ headwords arrive as e.g.
+\"le/gw\", and the translation leaves Greek letters alone, so a headword
+with one Latin letter in it survives the trip -- then removes what Bailly
+prints around a lemma but does not file it under: the superscript numeral
+that distinguishes homographs, the apostrophe of elision, the en dash of a
+prefix or suffix entry, parentheses, the asterisk of conjecture, commas
+and every kind of space.
+
+Wrapped in `save-match-data': this does its own matching, and a caller
+that has just located something with `string-match' would otherwise find
+its `match-beginning' quietly redirected here."
   (save-match-data
     (let* ((word (or word ""))
            (word (if (and (fboundp 'diogenes--perseus-beta-to-utf8)
                           (string-match-p "[A-Za-z]" word))
                      (or (diogenes--perseus-beta-to-utf8 word) word)
                    word))
-           ;; "τῷ ’χλῳ" -> "τῷχλῳ": the apostrophe and the space before it go.
-           (word (replace-regexp-in-string "[[:space:]]*['’ʼ´`]" "" word))
-           ;; "τελέω-ῶ" -> "τελέω"; a lemma that is only a hyphenated
-           ;; prefix ("ἀ-") keeps its letters.
-           (word (let ((cut (car (split-string word "-"))))
-                   (if (string-empty-p cut)
-                       (replace-regexp-in-string "-" "" word)
-                     cut))))
+           ;; A headword may offer several forms; the first is the one it
+           ;; is filed under.
+           (word (or (car (split-string word "[,;]" t "[[:space:]]+")) ""))
+           (word (replace-regexp-in-string
+                  "[¹²³⁴⁵⁶⁷⁸⁹'’ʼ´`()*\ufeff\u00a0[:space:]–—-]" "" word)))
       (ucs-normalize-NFD-string word))))
 
-(defun diogenes-bailly--key (word)
-  "Return Bailly's macro-alphabetical collation key for WORD.
-Keeps the bare Greek letters and word spaces only: accents, breathings,
-diaereses, iota subscript, quantity marks, case, \"·\", \"*\",
-parentheses, commas and homograph numerals all drop out, and variant
-letter shapes fold (notably ϐ to β; see
-`diogenes-bailly--letter-folds').  A word space survives and sorts
-before every letter, so a two-word lemma is ordered as Bailly orders it.
-Plain lowercase Greek letters are in alphabetical order in Unicode, so
-keys compare with `string<'."
-  (let ((chars nil))
-    (dolist (c (string-to-list (diogenes-bailly--prepare word)))
-      (unless (<= #x0300 c #x036f)     ; combining marks
-        (let* ((c (downcase c))
-               (c (or (cdr (assq c diogenes-bailly--letter-folds)) c)))
-          (cond ((diogenes-bailly--greek-letter-p c) (push c chars))
-                ((memq c '(?\s ?\t)) (push ?\s chars))))))
-    (string-trim
-     (replace-regexp-in-string "  +" " " (apply #'string (nreverse chars))))))
+(defun diogenes-bailly--key (headword)
+  "Return the beta-code key HEADWORD is filed under.
+`diogenes--beta-sort-function' compares keys after discarding everything
+but ASCII letters, so a key must survive that: the headword is normalised
+by `diogenes-bailly--prepare', its variant letter shapes folded (ϐ to β
+above all -- see the Commentary), its diacritics dropped with the
+combining marks NFD decomposition exposes, and what is left transliterated
+into beta code and filtered down to `diogenes-bailly--beta-letters'.
 
-(defun diogenes-bailly--tight-key (word)
-  "Return an accent-KEEPING key for WORD, used only to break ties.
-Like `diogenes-bailly--key' but retaining the combining marks, so ποιός,
-ποῖος and ποιὸς stay distinct while case, \"·\" and the rest are still
-ignored.  Compared with `string=' only, never ordered."
-  (let ((chars nil))
-    (dolist (c (string-to-list (diogenes-bailly--prepare word)))
-      (if (<= #x0300 c #x036f)
-          (push c chars)
+Returns the empty string for a word with no Greek in it, which the caller
+is expected to refuse rather than search for."
+  (let ((out nil))
+    (dolist (c (string-to-list (diogenes-bailly--prepare headword)))
+      (unless (<= #x0300 c #x036f)                 ; combining marks
         (let* ((c (downcase c))
-               (c (or (cdr (assq c diogenes-bailly--letter-folds)) c)))
-          (when (diogenes-bailly--greek-letter-p c) (push c chars)))))
-    (ucs-normalize-NFD-string (apply #'string (nreverse chars)))))
+               (spelt (cdr (assq c diogenes-bailly--spelt-out))))
+          (if spelt
+              (dolist (l (string-to-list spelt)) (push l out))
+            (let ((folded (or (cdr (assq c diogenes-bailly--letter-folds)) c)))
+              (dolist (b (string-to-list
+                          (downcase (diogenes--utf8-to-beta (string folded)))))
+                (when (cl-find b diogenes-bailly--beta-letters)
+                  (push b out))))))))
+    (apply #'string (nreverse out))))
+
+(defun diogenes-bailly--key< (a b)
+  "Non-nil if key A sorts before key B, as the binary search expects.
+Delegates to `diogenes--beta-sort-function', which returns `a' when A is
+the greater, `b' when B is, and nil when they are equal; A precedes B
+exactly when the answer is `b'.
+
+Written this way rather than reimplemented so that the file this module
+writes and the search that reads it can never disagree.  They must not:
+the Greek alphabet and ASCII part company at ξ -- beta code `c', which
+sorts after ν and before ο, but between b and d in ASCII -- so a
+dictionary sorted by `string<' would send every binary search for a word
+from ο onwards down the wrong half of the file, and the failure would look
+like missing entries rather than a sorting bug."
+  (eq 'b (diogenes--beta-sort-function a b)))
 
 ;;;; --------------------------------------------------------------------
-;;;; READING ONE PAGE'S RUNNING HEAD
+;;;; BUILDING THE DICTIONARY FILE
 ;;;; --------------------------------------------------------------------
 
-(defun diogenes-bailly--pdftotext-p ()
-  "Non-nil if poppler's `pdftotext' is available."
-  (and (executable-find diogenes-bailly-pdftotext-program) t))
+(defun diogenes-bailly--dictionary-file ()
+  "Return the path of the converted dictionary, whether or not it exists."
+  (or diogenes-bailly-file
+      (file-name-concat (diogenes--perseus-path) "bailly.xml")))
 
-(defun diogenes-bailly--pdf-tools-p ()
-  "Non-nil if `pdf-info-gettext' can be used."
-  (and (or (fboundp 'pdf-info-gettext) (require 'pdf-info nil t))
-       (fboundp 'pdf-info-gettext)))
+(defun diogenes-bailly--nearest-existing-directory (dir)
+  "Return the innermost existing directory at or above DIR.
+The target directory is created on demand, so it is its nearest existing
+ancestor whose writability decides whether the build can finish."
+  (let ((dir (directory-file-name (expand-file-name dir))))
+    (while (and (not (file-directory-p dir))
+                (not (string= dir (directory-file-name
+                                   (file-name-directory dir)))))
+      (setq dir (directory-file-name (file-name-directory dir))))
+    dir))
 
-(defun diogenes-bailly--page-text (file page &optional whole-page)
-  "Return the text of PAGE of FILE, or nil.
-By default only the top strip is read (`diogenes-bailly-head-strip'),
-which is where the running head is; with WHOLE-PAGE non-nil the whole
-page is read.  Uses `pdf-info-gettext' or `pdftotext' according to
-`diogenes-bailly-text-method'.  Returns nil for a page that does not
-exist or cannot be read."
-  (let ((method diogenes-bailly-text-method))
+(defun diogenes-bailly--assert-writable (target)
+  "Signal a user-error unless TARGET can be written.
+Asked BEFORE anything is converted.  The default location is inside the
+Diogenes installation, which is usually owned by root, and the conversion
+takes a minute or two over 86 MB of TEI: finding out at the end, with the
+sorted result thrown away and only `Permission denied' to explain it, is a
+poor trade for one call to `file-writable-p'."
+  (unless (if (file-exists-p target)
+              (file-writable-p target)
+            (file-writable-p (diogenes-bailly--nearest-existing-directory
+                              (file-name-directory target))))
+    (user-error "Cannot write %s -- no permission.  Set \
+`diogenes-bailly-file' to a path you own, e.g. (setq diogenes-bailly-file \
+\"~/.emacs.d/diogenes/bailly.xml\")"
+                (abbreviate-file-name target))))
+
+(defun diogenes-bailly--source-files (&optional source)
+  "Return the list of TEI files to convert.
+SOURCE defaults to `diogenes-bailly-source-file' and may be a file, a
+directory, or a list of files; see that variable.  Signals if it names
+nothing readable, since the alternative is a silently empty dictionary."
+  (let ((source (or source diogenes-bailly-source-file)))
     (cond
-     ((and (memq method '(auto pdftotext)) (diogenes-bailly--pdftotext-p))
+     ((null source) nil)
+     ((consp source)
+      (or (seq-filter #'file-readable-p source)
+          (user-error "None of the files in `diogenes-bailly-source-file' \
+can be read")))
+     ((file-directory-p source)
+      (or (directory-files source t "\\.xml\\'" nil)
+          (user-error "No .xml files in %s" (abbreviate-file-name source))))
+     ((file-readable-p source) (list source))
+     (t (user-error "Cannot read the Bailly source at %s"
+                    (abbreviate-file-name source))))))
+
+(defun diogenes-bailly--rewrite-entry (body)
+  "Return BODY, the inside of one TEI <entry>, as the formatter wants it.
+The four rewritings the Commentary describes: `xml:lang=\"grc\"' becomes
+the `lang=\"greek\"' that `diogenes--dict-handle-elt' actually reads,
+<etym> and <re type=\"variant\"> become labelled <sense>s so they are set
+off from the article as the print sets them off, and <bibl> becomes <cit>
+so that a citation Diogenes cannot resolve is not drawn as a link that
+fails when clicked.
+
+<orth> is NOT renamed here: `diogenes-bailly--convert-buffer' does that,
+having found it already while reading the headword out."
+  (let ((body body))
+    (setq body (replace-regexp-in-string
+                "xml:lang=\"grc\"" "lang=\"greek\"" body t t))
+    (setq body (replace-regexp-in-string
+                "xml:lang=\"fr\"" "lang=\"french\"" body t t))
+    ;; The etymology and the dialect forms, labelled as Bailly labels them.
+    (setq body (replace-regexp-in-string
+                "<etym>" "<sense n=\"Étym.\">" body t t))
+    (setq body (replace-regexp-in-string "</etym>" "</sense>" body t t))
+    (setq body (replace-regexp-in-string
+                "<re type=\"variant\">" "<sense n=\"➳\">" body t t))
+    (setq body (replace-regexp-in-string "</re>" "</sense>" body t t))
+    ;; Citations: a face, not a dead link.
+    (setq body (replace-regexp-in-string "<bibl>" "<cit>" body t t))
+    (setq body (replace-regexp-in-string "</bibl>" "</cit>" body t t))
+    body))
+
+(defun diogenes-bailly--convert-buffer ()
+  "Convert the TEI in the current buffer to a list of (KEY . LINE).
+Point is left at the end.  Returns (ENTRIES . SKIPPED), the entries in the
+order the file gives them.
+
+Each <entry> becomes one line: its <orth> is renamed <head> -- keeping its
+attributes, so the headword carries a language and `C-c C-c' on it
+searches Greek -- the rest is rewritten by
+`diogenes-bailly--rewrite-entry', newlines are folded to spaces so the
+line-oriented binary search stays line-oriented, and a fresh `key' is put
+on the opening tag.  The key goes on a tag of our own writing because
+`diogenes--xml-key-fn' takes the FIRST `key=' it finds in the line, and
+an <entry> may already carry attributes of its own."
+  (let ((rows nil)
+        (skipped 0))
+    (goto-char (point-min))
+    (while (re-search-forward "<entry\\(?:[[:space:]][^>]*\\)?>" nil t)
+      (let ((start (point))
+            (end (save-excursion
+                   (when (search-forward "</entry>" nil t)
+                     (match-beginning 0)))))
+        (if (null end)
+            (cl-incf skipped)
+          (let ((body (buffer-substring-no-properties start end)))
+            (goto-char end)
+            (if (not (string-match
+                      "<orth\\([^>]*\\)>\\(\\(?:.\\|\n\\)*?\\)</orth>" body))
+                (cl-incf skipped)
+              ;; Read the whole match out FIRST: anything that matches in
+              ;; between would move these offsets and the <head> would be
+              ;; spliced into the middle of the <orth> tag.
+              (let* ((orth-start (match-beginning 0))
+                     (orth-end (match-end 0))
+                     (attrs (match-string 1 body))
+                     (orth (match-string 2 body))
+                     (plain (replace-regexp-in-string "<[^>]*>" "" orth))
+                     (key (diogenes-bailly--key plain))
+                     (line (concat (substring body 0 orth-start)
+                                   "<head" attrs ">" orth "</head>"
+                                   (substring body orth-end))))
+                (if (string-empty-p key)
+                    (cl-incf skipped)
+                  (setq line (diogenes-bailly--rewrite-entry line))
+                  (setq line (replace-regexp-in-string
+                              "[[:space:]]*\n[[:space:]]*" " " line))
+                  (push (cons key (format "<entry key=\"%s\">%s</entry>"
+                                          key (string-trim line)))
+                        rows))))))))
+    (cons (nreverse rows) skipped)))
+
+;;;###autoload
+(defun diogenes-bailly-build-dictionary (&optional source target)
+  "Convert the Bailly TEI XML into a dictionary Diogenes can search.
+SOURCE defaults to `diogenes-bailly-source-file' -- a file, a directory of
+per-letter files, or a list -- and TARGET to `diogenes-bailly-file'.  Each
+<entry> becomes one line, keyed in beta code by `diogenes-bailly--key' and
+sorted in Greek alphabetical order; see `diogenes-bailly--convert-buffer'
+for what else the conversion does.  Entries keep their printed order
+within a key, so numbered homographs stay in the sequence Bailly prints
+them in.
+
+Run once, after setting `diogenes-bailly-source-file'.  The full
+dictionary is some 110,000 entries over 86 MB of TEI and takes a minute or
+two."
+  (interactive)
+  (let* ((sources (or (diogenes-bailly--source-files source)
+                      (list (read-file-name "Bailly TEI XML (or directory): "
+                                            nil nil t))))
+         (sources (diogenes-bailly--source-files sources))
+         (target (or target (diogenes-bailly--dictionary-file)))
+         (rows nil)
+         (skipped 0))
+    (dolist (file sources)
+      (when (and (file-exists-p target)
+                 (string= (file-truename file) (file-truename target)))
+        (user-error "Refusing to convert %s onto itself: \
+`diogenes-bailly-file' must differ from `diogenes-bailly-source-file'"
+                    (abbreviate-file-name file))))
+    (diogenes-bailly--assert-writable target)
+    (dolist (file sources)
+      (message "Converting %s ..." (file-name-nondirectory file))
       (with-temp-buffer
-        (when (zerop (call-process diogenes-bailly-pdftotext-program nil t nil
-                                   "-layout"
-                                   "-f" (number-to-string page)
-                                   "-l" (number-to-string page)
-                                   file "-"))
-          (buffer-string))))
-     ((and (memq method '(auto pdf-tools)) (diogenes-bailly--pdf-tools-p))
-      (ignore-errors
-        (pdf-info-gettext page
-                          (list 0 0 1 (if whole-page 1 diogenes-bailly-head-strip))
-                          'line file)))
-     ((eq method 'pdf-tools)
-      (user-error "pdf-tools is not installed, but `diogenes-bailly-text-method' \
-is set to `pdf-tools'"))
-     ((eq method 'pdftotext)
-      (user-error "Cannot find %s; install poppler-utils or set \
-`diogenes-bailly-text-method'" diogenes-bailly-pdftotext-program))
-     (t
-      (user-error "Bailly needs either pdf-tools or poppler's %s to read the \
-running heads" diogenes-bailly-pdftotext-program)))))
-
-(defun diogenes-bailly--lemma-token-p (token)
-  "Non-nil if TOKEN can be part of a lemma, i.e. it holds Greek letters.
-Tested through `diogenes-bailly--key', so a precomposed polytonic form
-\(ὁ, ᾧ) and the variant shapes (ϐ) count, and a French or Latin word
-does not."
-  (not (string-empty-p (diogenes-bailly--key token))))
-
-(defsubst diogenes-bailly--homograph-numeral-p (token)
-  "Non-nil if TOKEN is the small numeral that distinguishes homographs."
-  (string-match-p "\\`[1-9]\\'" token))
-
-(defun diogenes-bailly--lemma-before (tokens)
-  "Return the lemma that TOKENS end with, or an empty string.
-Walks back from the end while the tokens are lemma-like, so a
-two-word lemma (\"Διὸς ἱερόν\") and a numbered homograph (\"1 ἄν\") come
-back whole, while anything before them is left alone."
-  (let ((out nil))
-    (cl-loop for token in (reverse tokens)
-             while (or (diogenes-bailly--lemma-token-p token)
-                       (and out (diogenes-bailly--homograph-numeral-p token)))
-             do (push token out))
-    (if (cl-some #'diogenes-bailly--lemma-token-p out)
-        (mapconcat #'identity out " ")
-      "")))
-
-(defun diogenes-bailly--lemma-after (tokens)
-  "Return the lemma that TOKENS begin with, or an empty string.
-The mirror image of `diogenes-bailly--lemma-before'."
-  (let ((out nil))
-    (cl-loop for token in tokens
-             while (or (diogenes-bailly--lemma-token-p token)
-                       (and (null out)
-                            (diogenes-bailly--homograph-numeral-p token)))
-             do (setq out (append out (list token))))
-    (if (cl-some #'diogenes-bailly--lemma-token-p out)
-        (mapconcat #'identity out " ")
-      "")))
-
-(defun diogenes-bailly--split-at-number (line page)
-  "Split LINE at its page-number token; return (FIRST . LAST) or nil.
-An entry page's head is \"<first lemma> <number> <last lemma>\", so the
-number is the anchor.  Integer tokens within
-`diogenes-bailly-number-tolerance' of PAGE are tried nearest first, and
-a split is accepted only when all three of these hold:
-
-  * the tokens immediately LEFT of the number end in a lemma, and
-  * the tokens immediately RIGHT of it begin with one -- both judged by
-    the presence of Greek letters, so French definition text abutting
-    the number is refused; and
-  * the two lemmas are in alphabetical order.
-
-Those conditions are what keep a page out of the index unless its head
-really was read.  They matter because the page text is not always just
-the head: `pdf-info-gettext' may hand back more of the page than the
-strip asked for, in which case the \"last lemma\" would otherwise be
-swallowed body text (\"κίρνημι 1329 lequel on mélange…\"), and a bogus
-interval like that misdirects the binary search across the whole
-dictionary.  They also stop the front matter -- prefaces and the list
-of authors, where a page number sits amid ordinary prose -- from
-looking like dictionary pages."
-  (let* ((tokens (split-string line nil t))
-         (candidates
-          (sort (cl-loop for token in tokens
-                         for i from 0
-                         for n = (and (string-match-p "\\`[0-9]+\\'" token)
-                                      (string-to-number token))
-                         when (and n (<= (abs (- n page))
-                                         diogenes-bailly-number-tolerance))
-                         collect (cons (abs (- n page)) i))
-                (lambda (a b) (< (car a) (car b))))))
-    (cl-loop for candidate in candidates
-             for i = (cdr candidate)
-             for first = (diogenes-bailly--lemma-before (seq-take tokens i))
-             for last = (diogenes-bailly--lemma-after (seq-drop tokens (1+ i)))
-             for key-first = (diogenes-bailly--key first)
-             for key-last = (diogenes-bailly--key last)
-             when (and (not (string-empty-p key-first))
-                       (not (string-empty-p key-last))
-                       (not (string< key-last key-first)))
-             return (cons first last))))
-
-(defun diogenes-bailly--parse-head (text page)
-  "Parse the running head out of TEXT, the top of PAGE.
-Returns (FIRST-LEMMA . LAST-LEMMA) as strings, or nil when PAGE has no
-running head -- the case for the pages that open a letter (they print a
-large \"Α, α\" instead), for front and back matter, and for blank pages.
-
-Copes with both shapes the extractors produce: all three fields on one
-line (`pdftotext -layout'), and each on a line of its own."
-  (when (and text (not (string-empty-p text)))
-    (let ((lines (seq-remove (lambda (l) (string-match-p "\\`[[:space:]]*\\'" l))
-                             (split-string text "\n"))))
-      (when lines
-        (or (diogenes-bailly--split-at-number (car lines) page)
-            (diogenes-bailly--split-at-number
-             (mapconcat #'identity (seq-take lines 3) " ") page))))))
+        (insert-file-contents file)
+        (let ((result (diogenes-bailly--convert-buffer)))
+          (setq rows (nconc rows (car result)))
+          (cl-incf skipped (cdr result)))))
+    (unless rows
+      (user-error "Found no entries in %s: is this the Bailly TEI?"
+                  (mapconcat #'file-name-nondirectory sources ", ")))
+    ;; `sort' on a list is stable, so entries sharing a key keep the order
+    ;; the dictionary prints them in -- and, across per-letter files, the
+    ;; order the letters were read in.
+    (message "Sorting %d entries ..." (length rows))
+    (setq rows (sort rows (lambda (a b) (diogenes-bailly--key< (car a) (car b)))))
+    (make-directory (file-name-directory target) t)
+    (let ((coding-system-for-write 'utf-8))
+      (with-temp-file target
+        (dolist (row rows)
+          (insert (cdr row) "\n"))))
+    (message "Bailly: wrote %d entries (%s-%s) from %d file(s) to %s%s"
+             (length rows) (car (car rows)) (car (car (last rows)))
+             (length sources)
+             (abbreviate-file-name target)
+             (if (zerop skipped) "" (format "; skipped %d" skipped)))
+    target))
 
 ;;;; --------------------------------------------------------------------
-;;;; THE HEAD TABLE: MEMORY, PREBUILT INDEX, DISK CACHE, LAZY PROBES
+;;;; THE LOOKUP
 ;;;; --------------------------------------------------------------------
 
-;; One data structure serves both routes.  A state plist
-;;
-;;     (:heads HASH :min PAGE :max PAGE)
-;;
-;; maps a page to (FIRST . LAST) or to the symbol `none' (no head there).
-;; Lazy probing fills it entry by entry; the prebuilt index fills it in
-;; one go.  The search does not care which happened.
-
-(defconst diogenes-bailly--cache-format-version 1
-  "Bumped when the cached data structure changes, to invalidate old files.")
-
-(defvar diogenes-bailly--cache (make-hash-table :test 'equal)
-  "Cache mapping a PDF cache-key to that file's state plist.")
-
-(defun diogenes-bailly--cache-key (file)
-  "Return a session cache key for FILE: its truename and mtime.
-Machine-local by design -- it also names the fallback cache file."
-  (let ((true (file-truename file)))
-    (cons true (file-attribute-modification-time (file-attributes true)))))
-
-(defun diogenes-bailly--signature (file)
-  "Return a portable signature for the PDF FILE: its size in bytes.
-Deliberately not the path or the mtime, both of which change when the
-file is copied while its contents -- and therefore its running heads --
-do not.  This is what a stored index records, so an index built here and
-shipped alongside the PDF is accepted elsewhere without complaint, while
-a genuinely different PDF is still caught."
-  (file-attribute-size (file-attributes file)))
+(defun diogenes-bailly--assert-converted (file)
+  "Signal a user-error unless FILE is a converted Bailly dictionary.
+The lookup wants one entry per line, each with a `key' attribute; handed
+the TEI file instead it would fail deep inside `diogenes--xml-key-fn' with
+an unhelpful message.  `diogenes-bailly-file' is the CONVERTED file; the
+TEI belongs in `diogenes-bailly-source-file'."
+  (with-temp-buffer
+    (insert-file-contents file nil 0 400)
+    (goto-char (point-min))
+    (unless (looking-at "<entry[^>]*[[:space:]]key=\"")
+      (user-error "%s is not a converted Bailly dictionary (no key= on its \
+first entry).  If this is the TEI file, set it as \
+`diogenes-bailly-source-file' instead and run \
+M-x diogenes-bailly-build-dictionary"
+                  (abbreviate-file-name file)))))
 
 (defun diogenes-bailly--file ()
-  "Return the configured Bailly PDF, or signal a user-error."
-  (let ((file diogenes-bailly-pdf-file))
-    (diogenes--require-path file 'diogenes-bailly-pdf-file "Bailly" 'file)))
-
-(defun diogenes-bailly--new-state ()
-  "Return an empty state plist."
-  (list :heads (make-hash-table :test 'eql) :min nil :max nil))
-
-;;; Serialisation ------------------------------------------------------
-
-(defun diogenes-bailly--state-to-serializable (state)
-  "Return STATE as plain data: its head table becomes an alist."
-  (let (alist)
-    (maphash (lambda (page head) (push (cons page head) alist))
-             (plist-get state :heads))
-    (list :heads (sort alist (lambda (a b) (< (car a) (car b))))
-          :min (plist-get state :min)
-          :max (plist-get state :max))))
-
-(defun diogenes-bailly--state-from-serializable (data)
-  "Inverse of `diogenes-bailly--state-to-serializable'."
-  (let ((table (make-hash-table :test 'eql)))
-    (dolist (kv (plist-get data :heads))
-      (puthash (car kv) (cdr kv) table))
-    (list :heads table :min (plist-get data :min) :max (plist-get data :max))))
-
-(defun diogenes-bailly--index-file (file)
-  "Return the path \\[diogenes-bailly-build-index] writes for the PDF FILE.
-`<pdf-name>-index.eld' in the PDF's own folder, unless
-`diogenes-bailly-index-file' says otherwise."
-  (or diogenes-bailly-index-file
-      (expand-file-name (concat (file-name-base file) "-index.eld")
-                        (file-name-directory (expand-file-name file)))))
-
-(defun diogenes-bailly--index-candidates (file)
-  "Return the index files worth trying for the PDF FILE, best first.
-The one \\[diogenes-bailly-build-index] would write, then any other
-`*-index.eld' sitting in the same folder.  So an index built elsewhere
-and dropped in beside the PDF is picked up whatever it is called, and
-the PDF may be renamed without losing it -- safely, because an index
-whose signature does not match the PDF is refused (see
-`diogenes-bailly--read-index')."
-  (let* ((primary (diogenes-bailly--index-file file))
-         (dir (file-name-directory (expand-file-name file)))
-         (others (and (file-directory-p dir)
-                      (directory-files dir t "-index\\.eld\\'"))))
-    (cons primary
-          (seq-remove (lambda (f) (string= (expand-file-name f)
-                                           (expand-file-name primary)))
-                      others))))
-
-(defun diogenes-bailly--disk-cache-file (key)
-  "Return the fallback on-disk cache path for cache KEY, or nil if disabled."
-  (when diogenes-bailly-cache-directory
-    (expand-file-name (format "bailly-%d-%s.eld"
-                              diogenes-bailly--cache-format-version
-                              (secure-hash 'sha1 (format "%S" key)))
-                      diogenes-bailly-cache-directory)))
-
-(defun diogenes-bailly--read-index (path signature describe)
-  "Read a stored state from PATH, or return nil.
-SIGNATURE is the PDF's current signature.  A stored index whose signature
-differs was built from a different PDF, and its page numbers would be
-quietly wrong for this one, so it is REFUSED (with a message naming
-DESCRIBE) rather than used: probing the PDF is cheap, a silently
-misdirected lookup is not.  A missing, corrupt or wrong-version file is a
-silent miss."
-  (when (and path (file-readable-p path))
-    (condition-case err
-        (with-temp-buffer
-          (insert-file-contents path)
-          (goto-char (point-min))
-          (let ((data (read (current-buffer))))
-            ;; Stored form: (:diogenes-bailly-index VERSION SIGNATURE . STATE)
-            (when (and (consp data)
-                       (eq (car data) :diogenes-bailly-index)
-                       (eq (nth 1 data) diogenes-bailly--cache-format-version))
-              (if (equal (nth 2 data) signature)
-                  (diogenes-bailly--state-from-serializable (nthcdr 3 data))
-                (message "Bailly: ignoring %s -- it was built from a \
-different PDF; rebuild it with M-x diogenes-bailly-build-index" describe)
-                nil))))
-      ;; A corrupt index must never break a lookup.
-      (error (ignore err) nil))))
-
-(defun diogenes-bailly--write-index (path signature state)
-  "Write STATE for SIGNATURE to PATH; return the path on success.
-Failures are swallowed and reported by the caller: a stored index is an
-optimisation, never needed for correctness."
-  (condition-case err
-      (progn
-        (make-directory (file-name-directory path) t)
-        (let ((coding-system-for-write 'utf-8)
-              (print-length nil)        ; never abbreviate long structures
-              (print-level nil)
-              (print-circle nil))
-          (with-temp-file path
-            (prin1 (append (list :diogenes-bailly-index
-                                 diogenes-bailly--cache-format-version
-                                 signature)
-                           (diogenes-bailly--state-to-serializable state))
-                   (current-buffer))))
-        path)
-    (error (ignore err) nil)))
-
-;;; The state for a file ------------------------------------------------
-
-(defun diogenes-bailly--state (file)
-  "Return the state plist for FILE, loading or creating it as needed.
-Resolution order, cheapest first:
-
-  1. the in-memory cache (instant within a session);
-  2. the portable prebuilt index beside the PDF, written by
-     \\[diogenes-bailly-build-index] -- so even a fresh session, or a
-     fresh machine the file was copied to, does no probing;
-  3. the mtime-keyed fallback cache under
-     `diogenes-bailly-cache-directory';
-  4. an empty table, which the lookup then fills by probing the dozen
-     pages it actually needs."
-  (let ((key (diogenes-bailly--cache-key file))
-        (signature (diogenes-bailly--signature file)))
-    (or (gethash key diogenes-bailly--cache)
-        (let ((loaded
-               (or (cl-loop for path in (diogenes-bailly--index-candidates file)
-                            thereis (diogenes-bailly--read-index
-                                     path signature
-                                     (abbreviate-file-name path)))
-                   (diogenes-bailly--read-index
-                    (diogenes-bailly--disk-cache-file key) signature
-                    "the cached head table"))))
-          (puthash key (or loaded (diogenes-bailly--new-state))
-                   diogenes-bailly--cache)))))
-
-(defun diogenes-bailly--head (file page)
-  "Return PAGE's running head as (FIRST . LAST), or nil; cached.
-A page whose head cannot be parsed is remembered as such, so it is read
-only once per session."
-  (let* ((heads (plist-get (diogenes-bailly--state file) :heads))
-         (hit (gethash page heads)))
+  "Return the converted dictionary file, building it if the user agrees.
+Signals rather than returning nil when there is nothing to search: unlike
+Gaffiot, whose TEI covers only part of the alphabet and whose PDF is
+therefore a genuine alternative, Bailly's XML is the whole dictionary.  A
+missing dictionary is the end of the road, and the error may as well say
+how to fix it."
+  (let ((file (diogenes-bailly--dictionary-file)))
     (cond
-     ((consp hit) hit)
-     ((eq hit 'none) nil)
-     (t (let* ((text (diogenes-bailly--page-text file page))
-               (head (diogenes-bailly--parse-head text page)))
-          ;; With pdf-tools only the top strip was read.  If it came back
-          ;; empty the strip is too small (or the page renders oddly), which
-          ;; is not the same thing as a page having no head, so read the
-          ;; whole page before concluding there is none.  A page that does
-          ;; yield text but no head -- a letter opening, front matter -- is
-          ;; not re-read: parsing its body could invent a head.
-          (when (and (null head)
-                     (or (null text)
-                         (string-match-p "\\`[[:space:]]*\\'" text)))
-            (setq head (diogenes-bailly--parse-head
-                        (diogenes-bailly--page-text file page t) page)))
-          (puthash page (or head 'none) heads)
-          head)))))
-
-(defun diogenes-bailly--head-near-p (file page)
-  "Non-nil if PAGE or one of its neighbours has a running head.
-Used to decide whether PAGE is still inside the dictionary body: a
-letter-opening page has no head of its own but sits between pages that
-do."
-  (and (> page 0)
-       (or (diogenes-bailly--head file page)
-           (diogenes-bailly--head file (1+ page))
-           (and (> page 1) (diogenes-bailly--head file (1- page))))))
-
-;;;; --------------------------------------------------------------------
-;;;; WHERE THE DICTIONARY BODY BEGINS AND ENDS
-;;;; --------------------------------------------------------------------
-
-(defun diogenes-bailly--letter-bookmark-p (title)
-  "Non-nil if TITLE is a bookmark opening a letter of the dictionary.
-The Bailly 2020 outline titles those \"lettre Α, α\" -- but it also titles
-the sections of the front-matter list of authors \"Lettre A - Auteurs -
-ouvrages\", which is the same word followed by a LATIN letter.  Requiring
-a Greek letter after \"lettre\" separates them; taking the author list for
-the start of the dictionary would otherwise put the body\'s first page
-some sixty pages too early."
-  (save-match-data
-    (and (string-match "\\`[[:space:]]*lettre[[:space:]]+\\(.\\)"
-                       (downcase title))
-         (diogenes-bailly--lemma-token-p (match-string 1 (downcase title))))))
-
-(defun diogenes-bailly--letter-pages (file)
-  "Return the pages of FILE's \"lettre <Greek letter>\" bookmarks, ascending.
-Nil when pdf-tools is unavailable or the PDF has no such bookmarks.  See
-`diogenes-bailly--letter-bookmark-p' for what counts as one."
-  (when (or (fboundp 'pdf-info-outline) (require 'pdf-info nil t))
-    (ignore-errors
-      (sort (cl-loop for entry in (pdf-info-outline file)
-                     for page = (alist-get 'page entry)
-                     for title = (or (alist-get 'title entry) "")
-                     when (and (integerp page) (> page 0)
-                               (diogenes-bailly--letter-bookmark-p title))
-                     collect page)
-            #'<))))
-
-(defun diogenes-bailly--find-body-start (file)
-  "Return the first page of the dictionary body in FILE.
-Prefers the first \"lettre …\" bookmark.  Failing that, scans forward for
-the first page that has a running head whose successor also has one, in
-order -- a stray page of front matter cannot fake that -- and steps back
-one page, since a letter-opening page carries no head."
-  (or (car (diogenes-bailly--letter-pages file))
-      (cl-loop for page from 1 to 400
-               for this = (diogenes-bailly--head file page)
-               for next = (and this (diogenes-bailly--head file (1+ page)))
-               when (and this next
-                         (not (string< (diogenes-bailly--key (car next))
-                                       (diogenes-bailly--key (car this)))))
-               return (max 1 (1- page)))
-      (user-error "Found no running heads in %s: is it a text-layer PDF of Bailly?"
-                  file)))
-
-(defun diogenes-bailly--find-body-end (file start)
-  "Return the last page of the dictionary body in FILE, above START.
-Walks back from `pdf-info-number-of-pages' when pdf-tools is available;
-otherwise doubles a step until it is past the body, then bisects.  Either
-way a handful of probes, once per session."
-  (let ((known (and (or (fboundp 'pdf-info-number-of-pages)
-                        (require 'pdf-info nil t))
-                    (ignore-errors (pdf-info-number-of-pages file)))))
-    (if known
-        (cl-loop for page downfrom known to start
-                 when (diogenes-bailly--head file page) return page
-                 finally return start)
-      (let ((inside start) (step 1) (outside nil))
-        (while (and (null outside) (< step 8192))
-          (let ((probe (+ inside step)))
-            (if (diogenes-bailly--head-near-p file probe)
-                (setq inside probe
-                      step (* 2 step))
-              (setq outside probe))))
-        (unless outside (setq outside (+ inside step)))
-        (while (> (- outside inside) 1)
-          (let ((mid (/ (+ inside outside) 2)))
-            (if (diogenes-bailly--head-near-p file mid)
-                (setq inside mid)
-              (setq outside mid))))
-        (cl-loop for page downfrom inside to start
-                 when (diogenes-bailly--head file page) return page
-                 finally return start)))))
-
-(defun diogenes-bailly--body-range (file)
-  "Return (FIRST . LAST), the PDF pages of the dictionary body of FILE.
-Honours `diogenes-bailly-body-range' when set; otherwise detects the
-range once and keeps it with the file's heads."
-  (or diogenes-bailly-body-range
-      (let ((state (diogenes-bailly--state file)))
-        (unless (and (plist-get state :min) (plist-get state :max))
-          (let* ((start (diogenes-bailly--find-body-start file))
-                 (end (diogenes-bailly--find-body-end file start)))
-            (when (< end start)
-              (user-error "Could not delimit the dictionary body in %s" file))
-            (plist-put state :min start)
-            (plist-put state :max end)))
-        (cons (plist-get state :min) (plist-get state :max)))))
-
-;;;; --------------------------------------------------------------------
-;;;; HEADWORD -> PAGE
-;;;; --------------------------------------------------------------------
-
-(defun diogenes-bailly--probe (file page lo hi)
-  "Return the page nearest PAGE within LO..HI that has a running head.
-Nil if none has.  Letter-opening pages are the only gaps inside the
-body, so this normally returns PAGE itself or a neighbour."
-  (cl-loop for d from 0 to 5
-           thereis (cl-loop for cand in (list (+ page d) (- page d))
-                            when (and (<= lo cand) (<= cand hi)
-                                      (diogenes-bailly--head file cand))
-                            return cand)))
-
-(defun diogenes-bailly--search (file key)
-  "Return the first page of FILE whose head interval reaches KEY, or nil.
-That is the lowest page whose LAST lemma sorts at or after KEY, so an
-entry running over a page break resolves to the page it begins on.
-Pages without a head are skipped as probe points."
-  (let* ((range (diogenes-bailly--body-range file))
-         (lo (car range))
-         (hi (cdr range))
-         (found nil))
-    (while (<= lo hi)
-      (let ((probe (diogenes-bailly--probe file (/ (+ lo hi) 2) lo hi)))
-        (if (null probe)
-            (setq lo (1+ hi))          ; nothing left to probe: stop
-          (let ((head (diogenes-bailly--head file probe)))
-            (if (not (string< (diogenes-bailly--key (cdr head)) key))
-                (setq found probe
-                      hi (1- probe))
-              (setq lo (1+ probe)))))))
-    found))
-
-(defun diogenes-bailly--refine (file page key tight)
-  "Adjust PAGE, as returned by `diogenes-bailly--search', and return it.
-KEY and TIGHT are the word's accent-insensitive and accent-keeping keys.
-Three corrections, all for things the running heads cannot settle alone:
-
-  * the word sorts BEFORE this page's first lemma, so it belongs to the
-    page before -- the one that opens a letter and prints no head;
-  * several consecutive pages share the word's key (the ποιός/ποῖος,
-    τίς/τις/τὶς clusters): if a later page of that run has the word
-    itself as its first lemma, that is the page;
-  * the word's key equals this page's first lemma but is spelt
-    differently, and the page before opens a letter: the entry is on
-    that head-less page."
-  (let* ((range (diogenes-bailly--body-range file))
-         (min-page (car range))
-         (max-page (cdr range))
-         (head (diogenes-bailly--head file page))
-         (first-key (diogenes-bailly--key (car head))))
-    (cond
-     ((and (string< key first-key) (> page min-page))
-      (1- page))
-     ((or (string= (diogenes-bailly--tight-key (car head)) tight)
-          (string= (diogenes-bailly--tight-key (cdr head)) tight))
-      page)
+     ((file-readable-p file)
+      (diogenes-bailly--assert-converted file)
+      file)
+     ((and diogenes-bailly-source-file
+           (y-or-n-p (format "Bailly is not converted yet; build %s now? "
+                             (abbreviate-file-name file))))
+      (diogenes-bailly-build-dictionary diogenes-bailly-source-file file))
      (t
-      (or
-       ;; Walk the run of pages still sharing KEY, looking for the word.
-       (cl-loop for p from (1+ page) to max-page
-                for h = (diogenes-bailly--head file p)
-                while (and h (not (string< key (diogenes-bailly--key (car h)))))
-                when (string= (diogenes-bailly--tight-key (car h)) tight)
-                return p)
-       (and (string= key first-key)
-            (> page min-page)
-            (not (diogenes-bailly--head file (1- page)))
-            (1- page))
-       page)))))
+      (user-error "Bailly is not set up yet: set `diogenes-bailly-source-file' \
+to the TEI XML (a file, or the directory holding the per-letter files) and \
+run M-x diogenes-bailly-build-dictionary.  Either in your init file before \
+Diogenes loads, or through M-x customize-variable")))))
 
-(defun diogenes-bailly--page-for-word (word &optional file)
-  "Return the Bailly page number for WORD's entry, or nil.
-FILE defaults to `diogenes-bailly-pdf-file'.  The page is found by a
-binary search over the running heads of the dictionary's pages -- read
-from the PDF on demand, or from a prebuilt index if one was built -- and
-`diogenes-bailly-page-offset' is added to the result.
-
-A word that is no lemma of Bailly's still yields the page where it would
-stand alphabetically, which is what one wants for an inflected form or a
-variant spelling."
-  (let* ((file (or file (diogenes-bailly--file)))
-         (key (diogenes-bailly--key word)))
-    (unless (string-empty-p key)
-      (let ((page (diogenes-bailly--search file key)))
-        (when page
-          (+ (diogenes-bailly--refine file page key
-                                      (diogenes-bailly--tight-key word))
-             diogenes-bailly-page-offset))))))
-
-(defun diogenes-bailly--head-string (file page)
-  "Return \"FIRST – LAST\" for PAGE of FILE, or nil; used in messages."
-  (let ((head (diogenes-bailly--head file (- page diogenes-bailly-page-offset))))
-    (when head (format "%s – %s" (car head) (cdr head)))))
-
-;;;; --------------------------------------------------------------------
-;;;; BUILDING THE PORTABLE INDEX
-;;;; --------------------------------------------------------------------
-
-(defun diogenes-bailly--read-all-heads-pdftotext (file first last state)
-  "Fill STATE's head table for pages FIRST..LAST of FILE in one pass.
-Runs `pdftotext' once over the whole dictionary; pages come back
-separated by form feeds.  Returns the number of pages that carry a head."
-  (let ((heads (plist-get state :heads))
-        (found 0))
-    (with-temp-buffer
-      (unless (zerop (call-process diogenes-bailly-pdftotext-program nil t nil
-                                   "-layout"
-                                   "-f" (number-to-string first)
-                                   "-l" (number-to-string last)
-                                   file "-"))
-        (user-error "%s failed on %s" diogenes-bailly-pdftotext-program file))
-      (let ((page first))
-        (dolist (text (split-string (buffer-string) "\f"))
-          (when (<= page last)
-            (let ((head (diogenes-bailly--parse-head text page)))
-              (when head (setq found (1+ found)))
-              (puthash page (or head 'none) heads))
-            (setq page (1+ page))))))
-    found))
-
-(defun diogenes-bailly--read-all-heads-page-by-page (file first last)
-  "Fill the head table for pages FIRST..LAST of FILE one page at a time.
-The fallback when `pdftotext' is absent: slower, but needs nothing but
-pdf-tools.  Returns the number of pages that carry a head."
-  (let ((reporter (make-progress-reporter "Bailly: reading running heads..."
-                                          first last))
-        (found 0))
-    (cl-loop for page from first to last
-             do (when (diogenes-bailly--head file page)
-                  (setq found (1+ found)))
-                (progress-reporter-update reporter page))
-    (progress-reporter-done reporter)
-    found))
+(defun diogenes-bailly-lookup-buffer-p ()
+  "Non-nil if the current lookup buffer is showing Bailly.
+Read from the buffer-local `diogenes--lookup-file', which records the
+dictionary the entries were read from.  Used by
+`diogenes--lookup-insert-dict-links' to offer \"[Bailly (B)]\" in an LSJ or
+Pape entry and \"[PDF (B)]\" here, so the link always leads somewhere you
+are not; and by `diogenes-lookup-bailly', so that `B' pressed inside a
+Bailly entry opens the printed page instead of looking the word up again."
+  (and (boundp 'diogenes--lookup-file)
+       diogenes--lookup-file
+       (let ((bailly (diogenes-bailly--dictionary-file)))
+         (and (file-exists-p bailly)
+              (file-exists-p diogenes--lookup-file)
+              (string= (file-truename diogenes--lookup-file)
+                       (file-truename bailly))))))
 
 ;;;###autoload
-(defun diogenes-bailly-build-index ()
-  "Read every running head of the Bailly PDF and write a portable index.
-Lookups work without this -- each reads the dozen pages it needs -- but
-building the index once makes every later lookup, in this and any future
-session, instant.  The file is `<pdf-name>-index.eld' beside the PDF (or
-`diogenes-bailly-index-file'), the counterpart of Passow's
-`passow-index.eld': plain data, portable, worth committing next to the
-PDF.  If that folder cannot be written, the table is saved instead under
-`diogenes-bailly-cache-directory', which serves the same purpose for
-this machine only.
+(defun diogenes-lookup-bailly (&optional word)
+  "Show Bailly's entry for WORD in a Diogenes lookup buffer.
+Interactively, WORD defaults to the headword of the Greek entry at point;
+with a prefix argument, prompt for it.  The entry behaves like any other
+lookup: `C-c C-n' and `C-c C-p' walk the dictionary, `C-c C-c' on a Greek
+word returns to the LSJ, and the print-dictionary banner opens Montanari,
+the CGL, BDAG, Passow and the TGL.
 
-With poppler's `pdftotext' this is one pass and takes a few seconds;
-with pdf-tools alone it reads page by page and takes longer."
-  (interactive)
-  (let* ((file (diogenes-bailly--file))
-         (key (diogenes-bailly--cache-key file))
-         (signature (diogenes-bailly--signature file))
-         (range (diogenes-bailly--body-range file))
-         (first (car range))
-         (last (cdr range))
-         (state (diogenes-bailly--new-state))
-         found)
-    (plist-put state :min first)
-    (plist-put state :max last)
-    (setq found
-          (if (and (diogenes-bailly--pdftotext-p)
-                   (not (eq diogenes-bailly-text-method 'pdf-tools)))
-              (progn
-                (message "Bailly: reading the running heads of %s ..."
-                         (file-name-nondirectory file))
-                (diogenes-bailly--read-all-heads-pdftotext file first last state))
-            ;; No pdftotext: fill the session cache page by page, then copy
-            ;; that table into the state we are about to write.
-            (let ((n (diogenes-bailly--read-all-heads-page-by-page
-                      file first last)))
-              (setq state (copy-sequence (diogenes-bailly--state file)))
-              n)))
-    ;; Make the current session use the freshly built table.
-    (puthash key state diogenes-bailly--cache)
-    (let ((written (or (diogenes-bailly--write-index
-                        (diogenes-bailly--index-file file) signature state)
-                       (let ((fallback (diogenes-bailly--disk-cache-file key)))
-                         (and fallback
-                              (diogenes-bailly--write-index
-                               fallback signature state))))))
-      (message "Bailly: %d of %d pages carry a running head (pp. %d-%d)%s"
-               found (1+ (- last first)) first last
-               (if written
-                   (format "; index written to %s" (abbreviate-file-name written))
-                 "; could not write an index file, so this session only")))))
+Bailly's XML is complete -- it is the whole of the Bailly 2020 edition, the
+same text its PDF prints -- so there is no coverage to check and nothing
+to fall back on: a word that is not in it produces the nearest entry, with
+a message saying so, exactly as the LSJ does.  In particular this command
+never opens the PDF, however Bailly is configured.
 
-;;;###autoload
-(defun diogenes-bailly-clear-cache ()
-  "Forget the cached Bailly running heads and body range.
-Clears the in-memory table and deletes the mtime-keyed files under
-`diogenes-bailly-cache-directory', so the next lookup reads the PDF
-again.  The portable index written by \\[diogenes-bailly-build-index] is
-a deliberate artifact and is left alone -- delete or rebuild it yourself
-after replacing the PDF; it records the PDF's signature and warns when
-it looks stale."
-  (interactive)
-  (clrhash diogenes-bailly--cache)
-  (when (and diogenes-bailly-cache-directory
-             (file-directory-p diogenes-bailly-cache-directory))
-    (dolist (f (directory-files diogenes-bailly-cache-directory t
-                                "\\`bailly-[0-9]+-.*\\.eld\\'"))
-      (ignore-errors (delete-file f))))
-  (message "Diogenes Bailly page cache cleared"))
+Pressed a second time, from INSIDE the entry it has just shown, it opens
+that word's page in the printed Bailly instead -- see
+`diogenes-lookup-open-bailly-pdf' and `diogenes-bailly-pdf-file'.  That is
+the only way to the PDF, and `C-u B' looks another word up in the XML from
+there.
 
-;;;; --------------------------------------------------------------------
-;;;; INTERACTIVE ENTRY POINTS
-;;;; --------------------------------------------------------------------
-
-(defvar diogenes--lookup-headword)      ; from diogenes-perseus.el
-
-(declare-function diogenes--lookup-headword-at-point "diogenes-perseus"
-                  (&optional pos))
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
-                  (expected dict-name))
-
-(defun diogenes-bailly--current-headword ()
-  "Return the headword to look up for the Greek entry point is in.
-Resolved from point on every call via
-`diogenes--lookup-headword-at-point', so the opener always acts on the
-entry the cursor is currently in -- including entries loaded later by
-`diogenes-lookup-next' / `diogenes-lookup-previous'."
-  (or (and (fboundp 'diogenes--lookup-headword-at-point)
-           (diogenes--lookup-headword-at-point))
-      (get-text-property (point) 'orth)
-      (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
-      (thing-at-point 'word t)
-      (user-error "No headword found at point")))
-
-;;;###autoload
-(defun diogenes-lookup-open-bailly (&optional word)
-  "Open Bailly's Dictionnaire grec-français at the entry for WORD.
-Interactively, WORD defaults to the headword of the Greek entry at point
-in a `diogenes-lookup-mode' buffer.  With a prefix argument, prompt for
-the word.
-
-Requires `diogenes-bailly-pdf-file' to point at a Bailly PDF with a text
-layer, and `pdf-tools' (recommended) or `doc-view' for display."
+Requires a converted dictionary file; see
+\\[diogenes-bailly-build-dictionary]."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "greek" "Bailly's Dictionnaire grec-français")
+     (diogenes--lookup-assert-lang "greek" "Bailly")
      (list (if current-prefix-arg
-               (read-string "Open Bailly at word: ")
-             (diogenes-bailly--current-headword)))))
-  (let* ((word (or word (diogenes-bailly--current-headword)))
-         (file (diogenes-bailly--file))
-         (page (diogenes-bailly--page-for-word word file)))
-    (unless page
-      (user-error "Could not locate \"%s\" in Bailly" word))
-    ;; Reuse the OLD module's viewer driver (pdf-tools/doc-view/Reader,
-    ;; async startup, page clamping, large-file prompt).
-    (diogenes-old--show-page page file)
-    (let ((head (diogenes-bailly--head-string file page)))
-      (if head
-          (message "Bailly: \"%s\" -> page %d (%s)" word page head)
-        (message "Bailly: \"%s\" -> page %d" word page)))))
+               (read-string "Look up in Bailly: ")
+             (diogenes--lookup-current-headword)))))
+  ;; Already reading Bailly: this key's other job is the printed page.
+  ;; Checked here rather than in the `interactive' form so that the link in
+  ;; the banner, which calls us with a word, dispatches the same way.
+  (if (and (null current-prefix-arg) (diogenes-bailly-lookup-buffer-p))
+      (if (and (require 'diogenes-bailly-pdf nil t)
+               (diogenes-bailly-pdf-available-p))
+          (diogenes-lookup-open-bailly-pdf word)
+        (user-error "This entry is Bailly already; set \
+`diogenes-bailly-pdf-file' to reach the printed page from here, `l' returns \
+to the LSJ, `C-u B' looks up another word here"))
+    (let* ((word (string-trim (or word (diogenes--lookup-current-headword))))
+           (file (diogenes-bailly--file))
+           (key (diogenes-bailly--key word)))
+      (when (string-empty-p key)
+        (user-error "Nothing to look up in \"%s\"" word))
+      (let ((diogenes--lookup-same-window diogenes-bailly-display-in-same-window))
+        (diogenes--search-dict key "greek"
+                               #'diogenes--beta-sort-function
+                               #'diogenes--xml-key-fn
+                               file)))))
+
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(defun diogenes-bailly--register ()
+  "Announce Bailly to the lookup banner.  Idempotent.
+`:show unless-current' keeps the link out of a Bailly entry, where its
+place is taken by \"[PDF (B)]\" -- registered by `diogenes-bailly-pdf.el',
+which is also what makes the printed page unreachable from anywhere else.
+`:bind t' puts `B' on `diogenes-lookup-bailly': the key is Greek-only, so
+it needs no language dispatcher of the kind `P' and `l' have."
+  (diogenes-lookup-register-dictionary
+   'bailly :lang "greek" :name "Bailly" :key "B" :order 70
+   :command #'diogenes-lookup-bailly
+   :show 'unless-current
+   :buffer-p #'diogenes-bailly-lookup-buffer-p
+   :bind t
+   :help "Show Bailly's entry for \"%s\""))
+
+(with-eval-after-load 'diogenes-perseus
+  (diogenes-bailly--install-xml-handlers)
+  (diogenes-bailly--register))
 
 (provide 'diogenes-bailly)
 ;;; diogenes-bailly.el ends here
