@@ -61,6 +61,7 @@
 (require 'diogenes-cambridge)
 (require 'diogenes-bdag)
 (require 'diogenes-passow)
+(require 'diogenes-dict-faces)
 (require 'diogenes-bailly)
 (require 'diogenes-bailly-pdf)
 (require 'diogenes-gaffiot)

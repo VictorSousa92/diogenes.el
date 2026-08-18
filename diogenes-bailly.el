@@ -148,6 +148,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'ucs-normalize)
+(require 'diogenes-dict-faces)
 
 (declare-function diogenes--search-dict "diogenes-perseus"
                   (word lang sort-fn key-fn &optional file))
@@ -220,24 +221,19 @@ fit."
 ;;;; --------------------------------------------------------------------
 
 (defconst diogenes-bailly--xml-handlers
-  '((hi        . (font-lock-face italic))          ; <hi rend="italic">
-    (gram      . (font-lock-face font-lock-keyword-face))
-    (pron      . (font-lock-face shadow))          ; the quantity marks [ᾰῐ]
-    (author    . (font-lock-face font-lock-keyword-face))
-    (biblScope . (font-lock-face shadow)))
-  "Faces for the elements Bailly uses and the Perseus dictionaries do not.
-Added to `diogenes--dict-xml-handlers-extra' on load, without disturbing an
-entry already there, so the LSJ and Lewis & Short keep their appearance.
-Bailly's <head>, <sense>, <foreign> and <title> need nothing: the shared
-handlers in `diogenes--dict-handle-elt' already cover them.  <def>, <form>
-and <cit> are containers with nothing to say typographically; their
-contents are drawn by the handlers above.")
+  '()
+  "Faces peculiar to Bailly, over and above `diogenes-dict-tei-faces'.
+Empty: every element Bailly uses -- <gram>, <pron>, <author>, <biblScope>,
+<mentioned> -- is shared with Gaffiot and Georges and coloured for all of
+them in `diogenes-dict-faces.el'.  Kept so a Bailly-only element has
+somewhere to go.")
 
 (defun diogenes-bailly--install-xml-handlers ()
   "Teach the dictionary formatter about Bailly's elements.  Idempotent."
   (dolist (handler diogenes-bailly--xml-handlers)
     (unless (assq (car handler) diogenes--dict-xml-handlers-extra)
-      (push handler diogenes--dict-xml-handlers-extra))))
+      (push handler diogenes--dict-xml-handlers-extra)))
+  (diogenes-dict-install-faces))
 
 ;;;; --------------------------------------------------------------------
 ;;;; THE KEY A HEADWORD SORTS UNDER
@@ -417,7 +413,10 @@ having found it already while reading the headword out."
     ;; Citations: a face, not a dead link.
     (setq body (replace-regexp-in-string "<bibl>" "<cit>" body t t))
     (setq body (replace-regexp-in-string "</bibl>" "</cit>" body t t))
-    body))
+    ;; <hi rend="..."> becomes i / b / sc / sup, so that italic, bold and
+    ;; small capitals can be told apart by the face table, which sees
+    ;; element names only.
+    (diogenes-dict-flatten-hi body)))
 
 (defun diogenes-bailly--convert-buffer ()
   "Convert the TEI in the current buffer to a list of (KEY . LINE).

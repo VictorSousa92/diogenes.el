@@ -70,6 +70,7 @@
 
 ;;; Code:
 (require 'cl-lib)
+(require 'diogenes-dict-faces)
 (require 'seq)
 (require 'subr-x)
 (require 'ucs-normalize)
@@ -132,20 +133,23 @@ place it as it sees fit."
 ;;;; --------------------------------------------------------------------
 
 (defconst diogenes-gaffiot--xml-handlers
-  '((latin . (font-lock-face italic))          ; the Latin being illustrated
-    (auth  . (font-lock-face font-lock-keyword-face))
-    (refno . (font-lock-face shadow)))
-  "Faces for the elements Gaffiot uses and the Perseus dictionaries do not.
-Added to `diogenes--dict-xml-handlers-extra' on load, without disturbing an
-entry already there, so the LSJ and Lewis & Short keep their appearance.
-Gaffiot's <head>, <sense>, <foreign> and <title> need nothing: the shared
-handlers in `diogenes--dict-handle-elt' already cover them.")
+  '()
+  "Faces peculiar to Gaffiot, over and above `diogenes-dict-tei-faces'.
+Empty, and kept only so a future Gaffiot-only element has somewhere to go.
+
+It once held `latin', `auth' and `refno', the elements of the partial TEI
+this module was written against.  The converted Dictan base uses ordinary
+TEI instead -- <quote>, <author>, <title>, <biblScope>, <mentioned>,
+<etym>, <gram> -- which `diogenes-dict-faces.el' colours for every
+dictionary that shares them, so there is nothing left to declare here.")
 
 (defun diogenes-gaffiot--install-xml-handlers ()
-  "Teach the dictionary formatter about Gaffiot's elements.  Idempotent."
+  "Teach the dictionary formatter about Gaffiot's elements.  Idempotent.
+Gaffiot's own additions first, so they win, then the shared TEI faces."
   (dolist (handler diogenes-gaffiot--xml-handlers)
     (unless (assq (car handler) diogenes--dict-xml-handlers-extra)
-      (push handler diogenes--dict-xml-handlers-extra))))
+      (push handler diogenes--dict-xml-handlers-extra)))
+  (diogenes-dict-install-faces))
 
 ;;;; --------------------------------------------------------------------
 ;;;; THE KEY A HEADWORD SORTS UNDER
@@ -250,6 +254,11 @@ seconds for the 11 MB file."
                                      (substring body orth-end))))
                   (if (string-empty-p key)
                       (cl-incf skipped)
+                    ;; <hi rend="..."> becomes i / b / sc / sup: the
+                    ;; formatter keys faces on element names and cannot see
+                    ;; attributes, so italic, bold and small capitals would
+                    ;; otherwise all be drawn alike.
+                    (setq line (diogenes-dict-flatten-hi line))
                     (setq line (replace-regexp-in-string
                                 "[[:space:]]*\n[[:space:]]*" " " line))
                     (push (cons key (format "<entryFree key=\"%s\">%s</entryFree>"
