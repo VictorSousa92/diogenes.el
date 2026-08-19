@@ -1570,17 +1570,20 @@ merged; grouping is `diogenes--analyses-dicts''s job."
 
 (defun diogenes--analyses-dicts (record)
   "Return the entries to show for RECORD, as an alist of (OFFSET . CONF).
-Offsets keep their first-seen order and occur only once; CONF is the SUM
-of the confidences of the analyses pointing there, as in Perl's %conf, so
-several exact analyses of one entry raise it well clear of the caveat
-thresholds.  Supplementary offsets are appended with a CONF of -1 unless
-they already occur among the analyses."
+Offsets keep their first-seen order and occur only once; CONF is the LOWEST
+confidence among the analyses pointing there.  Perl SUMS them
+\(`$conf{$dict} += $conf'), which silently clears the caveat thresholds
+whenever a doubtful headword is reached by several analyses at once: the
+three analyses of `retemptare' are each recorded at 2, and 2+2+2 is 6, so
+upstream prints no warning about an entry it knows to be a guess.  Three
+uncertain analyses are not one certain one.  Supplementary offsets are
+appended with a CONF of -1 unless they already occur among the analyses."
   (let (dicts)
     (dolist (a (plist-get record :analyses))
       (let* ((offset (plist-get a :offset))
 	     (cell (assq offset dicts)))
 	(if cell
-	    (cl-incf (cdr cell) (plist-get a :conf))
+	    (setcdr cell (min (cdr cell) (plist-get a :conf)))
 	  (push (cons offset (plist-get a :conf)) dicts))))
     (setq dicts (nreverse dicts))
     (dolist (offset (plist-get record :suppl))
@@ -1645,6 +1648,115 @@ the application does."
 		  for i from 1
 		  concat (format "%2d. %s\n" i (line a))))
        "\n"))))
+
+(defcustom diogenes-lookup-expand-homographs t
+  "Whether a guessed dictionary entry is shown together with its homographs.
+When the offset recorded for a lemma is a guess -- confidence 2 or less --
+the entry it names is as likely as not the wrong one of a numbered set, and
+the others are worth seeing.
+
+`index_lewis.pl' indexes each Lewis & Short key five ways and keeps the
+first claim on each spelling:
+
+    print \"$basic_key $i\\n\" unless $seen{$basic_key}++;
+
+so of the two entries keyed `re^tento1' and `re^tento2' only the first ever
+answers to the letters-only spelling `retento'.  Morpheus writes the
+compound as `re-tento', which matches no key at all, so
+`make_latin_analyses.pl' falls through to its last resort --
+
+    unless ($ls{$real_lemma}) { $conf = 2; $real_lemma =~ s/[^a-zA-Z]//g }
+
+-- and records the offset of `re^tento1', the frequentative of `retineo',
+for a form belonging to `re^tento2', to attempt again.  Parsing
+`retemptare' then shows the wrong entry with no hint that anything is
+amiss.  Showing both leaves the reader to pick, which is the best that can
+be done without an index that distinguishes them."
+  :type 'boolean
+  :group 'diogenes)
+
+(defun diogenes--dict-basic-key (entry)
+  "The letters of ENTRY's key, downcased: `re^tento2' gives `retento'.
+The spelling `index_lewis.pl' reduces a key to for its coarsest index, and
+the only one a homograph number does not distinguish."
+  (when (string-match "key\\s-*=\\s-*\"\\([^\"]*\\)\"" entry)
+    (downcase (diogenes--ascii-alpha-only (match-string 1 entry)))))
+
+(defun diogenes--dict-homograph-run (offset lang &optional file limit)
+  "The entries around OFFSET that share its headword, as (START END BYTES).
+Homographs are numbered forms of one headword -- `re^tento1', `re^tento2'
+-- and so are always neighbours in the file: this walks outwards from
+OFFSET while the letters-only key still matches, at most LIMIT entries in
+each direction (six by default).  Returns them in file order, OFFSET's own
+entry among them."
+  (let* ((dict (or file (diogenes--dict-file lang)))
+	 (limit (or limit 6))
+	 (here (diogenes--get-dict-line dict offset)))
+    (if (not (car here))
+	nil
+      (let ((key (diogenes--dict-basic-key (car here)))
+	    (run (list (list (nth 1 here) (nth 2 here) (nth 0 here)))))
+	(when key
+	  ;; backwards, then forwards, from the entry we were given
+	  (cl-loop repeat limit
+		   for pos = (1- (nth 1 (car run)))
+		   while (> pos 0)
+		   for line = (diogenes--get-dict-line dict pos)
+		   while (and (car line)
+			      (equal key (diogenes--dict-basic-key (car line))))
+		   do (push (list (nth 1 line) (nth 2 line) (nth 0 line)) run))
+	  (setq run (nreverse run))
+	  (cl-loop repeat limit
+		   for pos = (1+ (nth 1 (car run)))
+		   for line = (diogenes--get-dict-line dict pos)
+		   while (and (car line)
+			      (equal key (diogenes--dict-basic-key (car line))))
+		   do (push (list (nth 1 line) (nth 2 line) (nth 0 line)) run))
+	  (setq run (nreverse run)))
+	run))))
+
+(defun diogenes--dict-entry-hyphenated-p (entry)
+  "Whether ENTRY's printed headword contains a hyphen.
+Lewis & Short prints the compound as `rĕ-tento' and the frequentative as
+`rĕtento', a distinction its keys drop but its `orth_orig' keeps -- the
+same distinction Morpheus makes by writing the lemma `re-tento'."
+  (and (string-match "orth_orig\\s-*=\\s-*\"\\([^\"]*\\)\"" entry)
+       (string-search "-" (match-string 1 entry))
+       t))
+
+(defun diogenes--expand-uncertain-dicts (record dicts lang &optional file)
+  "Add the homographs of any guessed entry in DICTS, an alist of (OFFSET . CONF).
+An entry whose confidence is 2 or less was reached by stripping the lemma
+down to its letters, which cannot tell numbered homographs apart, so its
+neighbours are included too.  Where the lemma is hyphenated, an entry whose
+printed headword is hyphenated is shown first, that being the same
+distinction; otherwise file order is kept.  Governed by
+`diogenes-lookup-expand-homographs'."
+  (if (not diogenes-lookup-expand-homographs)
+      dicts
+    (cl-loop
+     for (offset . conf) in dicts
+     append
+     (if (or (< conf 0) (> conf 2))
+	 (list (cons offset conf))
+       (let* ((run (diogenes--dict-homograph-run offset lang file))
+	      (hyphenated (cl-loop for a in (plist-get record :analyses)
+				   thereis (and (= offset (plist-get a :offset))
+						(string-search
+						 "-" (plist-get a :lemma))))))
+	 (cond
+	  ((< (length run) 2) (list (cons offset conf)))
+	  (t (let ((offsets (mapcar #'car run)))
+	       (when hyphenated
+		 (setq offsets
+		       (append
+			(cl-loop for (start _end bytes) in run
+				 when (diogenes--dict-entry-hyphenated-p bytes)
+				 collect start)
+			(cl-loop for (start _end bytes) in run
+				 unless (diogenes--dict-entry-hyphenated-p bytes)
+				 collect start))))
+	       (mapcar (lambda (o) (cons o conf)) offsets)))))))))
 
 (defun diogenes--show-analysis-entries (dicts lang &optional file)
   "Show the entries named by DICTS, an alist of (OFFSET . CONF).
@@ -1780,7 +1892,7 @@ headword, exactly as the application does."
 	      (diogenes--lookup-dict word lang))
 	  (let ((buffer (diogenes--show-analysis-entries
 			 (if diogenes-lookup-show-all-entries
-			     dicts
+			     (diogenes--expand-uncertain-dicts record dicts lang)
 			   (diogenes--choose-analysis record dicts word))
 			 lang)))
 	    (when diogenes-lookup-show-analysis
