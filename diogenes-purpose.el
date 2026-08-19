@@ -144,10 +144,13 @@ Otherwise fall through to window-purpose's normal action
 
 ;;;; Focus: moving between the browser, the lookup and the dictionary
 ;;
-;; With three purposed windows on screen -- browser, lookup, dictionary --
-;; the question of which one has point becomes a real one.  purpose.el
-;; decides WHERE a buffer appears; it has nothing to say about focus.  What
-;; follows is a small set of conventions:
+;; With the browser, the lookup and the dictionary each in its own window --
+;; and, as Diogenes is meant to be used, the dictionary in a frame of its
+;; own -- which of them has the input focus becomes a real question.
+;; purpose.el decides WHERE a buffer appears; it has nothing to say about
+;; focus, and across frames focus is the window manager's business rather
+;; than Emacs's.  What follows is a small set of conventions, each of which
+;; raises and focuses the target frame when the target is not on this one:
 ;;
 ;;   * opening a dictionary, or turning it to a new entry, focuses it;
 ;;   * `Q' in the dictionary returns to the lookup;
@@ -163,10 +166,12 @@ Otherwise fall through to window-purpose's normal action
 ;; That marker is also what makes `D' able to find the dictionary again.
 
 (defcustom diogenes-purpose-focus-dictionary t
-  "Whether opening or turning a dictionary moves point into its window.
+  "Whether opening or turning a dictionary moves the focus to it.
 Non-nil selects the dictionary window whenever Diogenes displays a page in
-it -- opening one, or looking up a new entry while it is already on screen.
-Nil leaves point where it was, which is Diogenes' own behaviour."
+it -- opening one, or looking up a new entry while it is already on screen
+-- raising and focusing its frame when, as is usual, the dictionary has a
+frame to itself.  Nil leaves the focus where it was, which is Diogenes' own
+behaviour."
   :type 'boolean
   :group 'diogenes)
 
@@ -191,14 +196,30 @@ which returns point to the lookup window, and lets
   :keymap diogenes-purpose-dict-mode-map)
 
 (defun diogenes-purpose--window-with (predicate)
-  "The most recently used window of this frame whose buffer satisfies PREDICATE.
-PREDICATE is called with the window's buffer current."
+  "The most recently used window showing a buffer that satisfies PREDICATE.
+Every visible frame is searched, not just the selected one: Diogenes is
+meant to be used with the dictionary in a frame of its own, so the window
+wanted is usually not on this frame at all.  PREDICATE is called with the
+window's buffer current."
   (car (sort (cl-remove-if-not
               (lambda (window)
                 (with-current-buffer (window-buffer window)
                   (funcall predicate)))
-              (window-list nil 'no-minibuffer))
+              (cl-loop for frame in (visible-frame-list)
+                       append (window-list frame 'no-minibuffer)))
              (lambda (a b) (> (window-use-time a) (window-use-time b))))))
+
+(defun diogenes-purpose--focus (window)
+  "Give WINDOW the input focus, raising and focusing its frame if need be.
+`select-window' alone is not enough across frames: it makes WINDOW current
+for Lisp but leaves the window manager pointing at whatever frame had focus
+before, so keys keep going to the old frame.  `select-frame-set-input-focus'
+raises the frame and asks the window manager to focus it."
+  (let ((frame (window-frame window)))
+    (unless (eq frame (selected-frame))
+      (select-frame-set-input-focus frame))
+    (select-window window)
+    window))
 
 (defun diogenes-purpose--lookup-window ()
   "A window showing a Diogenes lookup or analysis buffer, or nil."
@@ -222,8 +243,8 @@ entry it was opened from."
   (interactive)
   (let ((window (diogenes-purpose--lookup-window)))
     (if window
-        (select-window window)
-      (user-error "No Diogenes lookup window on this frame"))))
+        (diogenes-purpose--focus window)
+      (user-error "No Diogenes lookup window on any visible frame"))))
 
 (defun diogenes-purpose-focus-dictionary-window ()
   "Select the window showing a Diogenes print dictionary.
@@ -233,9 +254,13 @@ otherwise open one first with `o', `t', `m', `c', `b', `g', `G' or `p'."
   (interactive)
   (let ((window (diogenes-purpose--dict-window)))
     (cond
-     (window (select-window window))
+     (window (diogenes-purpose--focus window))
      ((buffer-live-p diogenes-purpose--last-dict-buffer)
-      (select-window (display-buffer diogenes-purpose--last-dict-buffer)))
+      ;; Gone from the screen but still alive -- an iconified or closed
+      ;; dictionary frame.  Displaying it again brings it back wherever the
+      ;; configuration puts dictionaries, and then it gets the focus.
+      (diogenes-purpose--focus
+       (display-buffer diogenes-purpose--last-dict-buffer)))
      (t (user-error
          "No dictionary open; `o' opens the OLD, `t' the TLL, `g' Gaffiot")))))
 
@@ -246,8 +271,8 @@ it was looked up from.  Unlike \\`q', nothing is buried or killed."
   (interactive)
   (let ((window (diogenes-purpose--browser-window)))
     (if window
-        (select-window window)
-      (user-error "No Diogenes browser window on this frame"))))
+        (diogenes-purpose--focus window)
+      (user-error "No Diogenes browser window on any visible frame"))))
 
 (defun diogenes-purpose--after-display-page (buffer &rest _)
   "Mark BUFFER as a dictionary and, optionally, select its window.
@@ -259,8 +284,9 @@ forward opener funnels through and which returns the buffer it displayed."
         (diogenes-purpose-dict-mode 1)))
     (setq diogenes-purpose--last-dict-buffer buffer)
     (when diogenes-purpose-focus-dictionary
-      (let ((window (get-buffer-window buffer)))
-        (when window (select-window window)))))
+      ;; t: look on every frame, since the dictionary usually has its own.
+      (let ((window (get-buffer-window buffer t)))
+        (when window (diogenes-purpose--focus window)))))
   buffer)
 
 (defun diogenes-purpose--install-focus ()
