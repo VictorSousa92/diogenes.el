@@ -48,6 +48,14 @@
 (defvar purpose-user-mode-purposes)
 (defvar purpose-user-name-purposes)
 
+;; Defined in diogenes-old.el and diogenes-perseus.el, which this module does
+;; not require: it is loaded from a Spacemacs user-config hook, possibly before
+;; either of them.  Advising a function before it is defined is supported, and
+;; the keymap is touched inside `with-eval-after-load'.
+(declare-function diogenes-old--display-page-buffer "diogenes-old"
+                  (buffer action other-window))
+(defvar diogenes-lookup-mode-map)
+
 (defcustom diogenes-purpose-mode-purposes
   '((diogenes-lookup-mode   . diogenes-lookup)
     (diogenes-analysis-mode . diogenes-lookup)
@@ -134,6 +142,146 @@ Otherwise fall through to window-purpose's normal action
     (when (fboundp 'purpose--action-function)
       (purpose--action-function buffer alist))))
 
+;;;; Focus: moving between the browser, the lookup and the dictionary
+;;
+;; With three purposed windows on screen -- browser, lookup, dictionary --
+;; the question of which one has point becomes a real one.  purpose.el
+;; decides WHERE a buffer appears; it has nothing to say about focus.  What
+;; follows is a small set of conventions:
+;;
+;;   * opening a dictionary, or turning it to a new entry, focuses it;
+;;   * `Q' in the dictionary returns to the lookup;
+;;   * `D' in the lookup goes (back) to the dictionary;
+;;   * `Q' in the lookup returns to the browser.
+;;
+;; A dictionary buffer is an ordinary `pdf-view-mode' (or `doc-view-mode',
+;; or `reader-mode') buffer, which as the Commentary above notes is not
+;; distinguishable by mode or name.  So this tracks them itself: every
+;; buffer Diogenes displays through `diogenes-old--display-page-buffer'
+;; gets `diogenes-purpose-dict-mode', a minor mode whose only job is to
+;; mark the buffer as a Diogenes dictionary and to carry the `Q' binding.
+;; That marker is also what makes `D' able to find the dictionary again.
+
+(defcustom diogenes-purpose-focus-dictionary t
+  "Whether opening or turning a dictionary moves point into its window.
+Non-nil selects the dictionary window whenever Diogenes displays a page in
+it -- opening one, or looking up a new entry while it is already on screen.
+Nil leaves point where it was, which is Diogenes' own behaviour."
+  :type 'boolean
+  :group 'diogenes)
+
+(defvar diogenes-purpose--last-dict-buffer nil
+  "The dictionary buffer Diogenes displayed most recently.
+Consulted by `diogenes-purpose-focus-dictionary-window' when no window is
+currently showing a dictionary.")
+
+(defvar diogenes-purpose-dict-mode-map
+  (let ((map (make-sparse-keymap)))
+    (keymap-set map "Q" #'diogenes-purpose-focus-lookup-window)
+    map)
+  "Keymap for `diogenes-purpose-dict-mode'.")
+
+(define-minor-mode diogenes-purpose-dict-mode
+  "Mark this buffer as a Diogenes print dictionary.
+Turned on automatically in any PDF or document buffer Diogenes opens at an
+entry's page.  Provides \\<diogenes-purpose-dict-mode-map>\\[diogenes-purpose-focus-lookup-window], \
+which returns point to the lookup window, and lets
+`diogenes-purpose-focus-dictionary-window' recognise the buffer."
+  :lighter " Dio-Dict"
+  :keymap diogenes-purpose-dict-mode-map)
+
+(defun diogenes-purpose--window-with (predicate)
+  "The most recently used window of this frame whose buffer satisfies PREDICATE.
+PREDICATE is called with the window's buffer current."
+  (car (sort (cl-remove-if-not
+              (lambda (window)
+                (with-current-buffer (window-buffer window)
+                  (funcall predicate)))
+              (window-list nil 'no-minibuffer))
+             (lambda (a b) (> (window-use-time a) (window-use-time b))))))
+
+(defun diogenes-purpose--lookup-window ()
+  "A window showing a Diogenes lookup or analysis buffer, or nil."
+  (diogenes-purpose--window-with
+   (lambda () (derived-mode-p 'diogenes-lookup-mode 'diogenes-analysis-mode))))
+
+(defun diogenes-purpose--browser-window ()
+  "A window showing the Diogenes browser, or nil."
+  (diogenes-purpose--window-with
+   (lambda () (derived-mode-p 'diogenes-browser-mode))))
+
+(defun diogenes-purpose--dict-window ()
+  "A window showing a Diogenes print dictionary, or nil."
+  (diogenes-purpose--window-with
+   (lambda () (bound-and-true-p diogenes-purpose-dict-mode))))
+
+(defun diogenes-purpose-focus-lookup-window ()
+  "Select the window showing the Diogenes lookup.
+Bound to \\`Q' in a dictionary buffer: the way back from the page to the
+entry it was opened from."
+  (interactive)
+  (let ((window (diogenes-purpose--lookup-window)))
+    (if window
+        (select-window window)
+      (user-error "No Diogenes lookup window on this frame"))))
+
+(defun diogenes-purpose-focus-dictionary-window ()
+  "Select the window showing a Diogenes print dictionary.
+Bound to \\`D' in a lookup buffer.  When no dictionary is on screen but one
+was opened earlier in this session, it is displayed again and selected;
+otherwise open one first with `o', `t', `m', `c', `b', `g', `G' or `p'."
+  (interactive)
+  (let ((window (diogenes-purpose--dict-window)))
+    (cond
+     (window (select-window window))
+     ((buffer-live-p diogenes-purpose--last-dict-buffer)
+      (select-window (display-buffer diogenes-purpose--last-dict-buffer)))
+     (t (user-error
+         "No dictionary open; `o' opens the OLD, `t' the TLL, `g' Gaffiot")))))
+
+(defun diogenes-purpose-focus-browser-window ()
+  "Select the window showing the Diogenes browser.
+Bound to \\`Q' in a lookup buffer: the way back from the entry to the text
+it was looked up from.  Unlike \\`q', nothing is buried or killed."
+  (interactive)
+  (let ((window (diogenes-purpose--browser-window)))
+    (if window
+        (select-window window)
+      (user-error "No Diogenes browser window on this frame"))))
+
+(defun diogenes-purpose--after-display-page (buffer &rest _)
+  "Mark BUFFER as a dictionary and, optionally, select its window.
+`:filter-return' advice on `diogenes-old--display-page-buffer', which every
+forward opener funnels through and which returns the buffer it displayed."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (unless (bound-and-true-p diogenes-purpose-dict-mode)
+        (diogenes-purpose-dict-mode 1)))
+    (setq diogenes-purpose--last-dict-buffer buffer)
+    (when diogenes-purpose-focus-dictionary
+      (let ((window (get-buffer-window buffer)))
+        (when window (select-window window)))))
+  buffer)
+
+(defun diogenes-purpose--install-focus ()
+  "Install the dictionary advice and the `D' and `Q' lookup bindings."
+  (advice-add 'diogenes-old--display-page-buffer :filter-return
+              #'diogenes-purpose--after-display-page)
+  (with-eval-after-load 'diogenes-perseus
+    (when (boundp 'diogenes-lookup-mode-map)
+      (keymap-set diogenes-lookup-mode-map "D"
+                  #'diogenes-purpose-focus-dictionary-window)
+      (keymap-set diogenes-lookup-mode-map "Q"
+                  #'diogenes-purpose-focus-browser-window))))
+
+(defun diogenes-purpose--uninstall-focus ()
+  "Undo `diogenes-purpose--install-focus'."
+  (advice-remove 'diogenes-old--display-page-buffer
+                 #'diogenes-purpose--after-display-page)
+  (when (boundp 'diogenes-lookup-mode-map)
+    (keymap-unset diogenes-lookup-mode-map "D" t)
+    (keymap-unset diogenes-lookup-mode-map "Q" t)))
+
 ;;;###autoload
 (defun diogenes-purpose-install ()
   "Give Diogenes buffers their own window-purposes and recompile.
@@ -165,6 +313,8 @@ Idempotent."
              (fboundp 'purpose--action-function))
     (setq display-buffer-overriding-action
           '(diogenes-purpose--overriding-action)))
+  ;; Focus conventions between the three purposed windows.
+  (diogenes-purpose--install-focus)
   t)
 
 ;;;###autoload
@@ -193,6 +343,7 @@ stay."
       (setq purpose-user-name-purposes
             (cl-remove-if (lambda (cell) (member (car cell) names))
                           purpose-user-name-purposes))))
+  (diogenes-purpose--uninstall-focus)
   (when (fboundp 'purpose-compile-user-configuration)
     (purpose-compile-user-configuration))
   t)
