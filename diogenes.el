@@ -64,6 +64,7 @@
 (require 'diogenes-dict-faces)
 (require 'diogenes-bailly)
 (require 'diogenes-bailly-pdf)
+(require 'diogenes-cheatsheet)
 (require 'diogenes-gaffiot)
 (require 'diogenes-gaffiot-pdf)
 (require 'diogenes-pape)

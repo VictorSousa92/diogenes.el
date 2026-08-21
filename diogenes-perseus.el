@@ -1594,7 +1594,9 @@ appended with a CONF of -1 unless they already occur among the analyses."
 (defun diogenes--analysis-caveat (conf)
   "The note to print above an entry whose summed confidence is CONF.
 Diogenes' own wording."
-  (cond ((= conf -1) "Supplementary prefix entry:")
+  (cond ((= conf -2)
+	 "(Headword found by assimilating the prefix of the lemma.)")
+	((= conf -1) "Supplementary prefix entry:")
 	((= conf 0) "(NB. Could not find dictionary headword; \
 this is around the spot it should appear.)")
 	((<= conf 2) "(NB. This dictionary headword is a guess.)")))
@@ -1694,26 +1696,45 @@ entry among them."
 	 (here (diogenes--get-dict-line dict offset)))
     (if (not (car here))
 	nil
-      (let ((key (diogenes--dict-basic-key (car here)))
-	    (run (list (list (nth 1 here) (nth 2 here) (nth 0 here)))))
+      ;; `diogenes--get-dict-line' returns (BYTES START END); a run entry is
+      ;; (START END BYTES).
+      (let* ((key (diogenes--dict-basic-key (car here)))
+	     (self (list (nth 1 here) (nth 2 here) (nth 0 here)))
+	     (before nil)
+	     (after nil))
 	(when key
-	  ;; backwards, then forwards, from the entry we were given
-	  (cl-loop repeat limit
-		   for pos = (1- (nth 1 (car run)))
-		   while (> pos 0)
-		   for line = (diogenes--get-dict-line dict pos)
-		   while (and (car line)
-			      (equal key (diogenes--dict-basic-key (car line))))
-		   do (push (list (nth 1 line) (nth 2 line) (nth 0 line)) run))
-	  (setq run (nreverse run))
-	  (cl-loop repeat limit
-		   for pos = (1+ (nth 1 (car run)))
-		   for line = (diogenes--get-dict-line dict pos)
-		   while (and (car line)
-			      (equal key (diogenes--dict-basic-key (car line))))
-		   do (push (list (nth 1 line) (nth 2 line) (nth 0 line)) run))
-	  (setq run (nreverse run)))
-	run))))
+	  ;; Leftwards from the START of the leftmost entry so far.  Stepping
+	  ;; from its END would land inside the entry itself, which of course
+	  ;; still has the same key, and the entry would be collected again and
+	  ;; again until LIMIT stopped it.
+	  (let ((pos (1- (nth 0 self)))
+		(n 0))
+	    (while (and (< n limit) (> pos 0))
+	      (let ((line (diogenes--get-dict-line dict pos)))
+		(if (and (car line)
+			 (equal key (diogenes--dict-basic-key (car line)))
+			 (< (nth 1 line) (nth 0 (or (car before) self))))
+		    (progn (push (list (nth 1 line) (nth 2 line) (nth 0 line))
+				 before)
+			   (setq pos (1- (nth 1 line))
+				 n (1+ n)))
+		  (setq n limit)))))
+	  ;; Rightwards from the END of the rightmost entry so far.
+	  (let ((pos (1+ (nth 1 self)))
+		(n 0))
+	    (while (< n limit)
+	      (let ((line (diogenes--get-dict-line dict pos)))
+		(if (and (car line)
+			 (equal key (diogenes--dict-basic-key (car line)))
+			 (> (nth 1 line)
+			    (nth 0 (or (car (last after)) self))))
+		    (setq after (nconc after
+				       (list (list (nth 1 line) (nth 2 line)
+						   (nth 0 line))))
+			  pos (1+ (nth 2 line))
+			  n (1+ n))
+		  (setq n limit))))))
+	(append before (list self) after)))))
 
 (defun diogenes--dict-entry-hyphenated-p (entry)
   "Whether ENTRY's printed headword contains a hyphen.
@@ -1723,6 +1744,116 @@ same distinction Morpheus makes by writing the lemma `re-tento'."
   (and (string-match "orth_orig\\s-*=\\s-*\"\\([^\"]*\\)\"" entry)
        (string-search "-" (match-string 1 entry))
        t))
+
+(defcustom diogenes-latin-assimilate-prefixes t
+  "Whether a hyphenated Latin lemma is retried with its prefix assimilated.
+Morpheus writes a compound unassimilated, marking the morpheme boundary --
+`in-mitto\=', `in-lido\=', `con-pello\=' -- where Lewis & Short keys the
+assimilated form: `immitto\=', `illido\=', `compello\='.
+`make_latin_analyses.pl\=' strips the lemma to its bare letters as a last
+resort, which yields `inmitto\=', matches no key, and leaves the confidence
+at 0 with the offset at wherever that spelling would sort -- `innabilis\=',
+as it happens.
+
+The hyphen says where the boundary falls, so the assimilated spellings can
+be worked out and offered to the dictionary, and only the one it has a key
+for is used.  Nothing is guessed: a spelling the dictionary does not
+confirm is discarded."
+  :type 'boolean
+  :group 'diogenes)
+
+(defconst diogenes--latin-labials '(?p ?b ?m)
+  "The letters before which a nasal is written m.")
+
+(defun diogenes--latin-assimilations (lemma)
+  "The spellings a hyphenated LEMMA might be keyed under, likeliest first.
+`in-mitto\=' gives `immitto\=' and `inmitto\='; `con-pello\=' gives `compello\=',
+`conpello\=' and `coppello\='; `con-eo\=' gives `coeo\='.  Nothing is decided
+here -- every candidate is offered, and `diogenes--assimilated-offset\=' keeps
+whichever the dictionary actually has."
+  (let* ((clean (replace-regexp-in-string
+		 "[_^+]" ""
+		 (replace-regexp-in-string "#?[0-9]+\\'" "" lemma)))
+	 (parts (split-string clean "-" t)))
+    (when (= 2 (length parts))
+      (let* ((prefix (downcase (car parts)))
+	     (stem (downcase (cadr parts)))
+	     (final (and (> (length prefix) 0)
+			 (aref prefix (1- (length prefix)))))
+	     (initial (and (> (length stem) 0) (aref stem 0)))
+	     (stub (substring prefix 0 (max 0 (1- (length prefix)))))
+	     candidates)
+	(when (and final initial)
+	  ;; The compound simply run together comes FIRST, and deliberately.
+	  ;; It is what make_latin_lemmata.pl assumes, and it costs nothing: a
+	  ;; confidence of 0 means make_latin_analyses.pl already tried the
+	  ;; letters-only spelling -- this very one -- and found no key, so it
+	  ;; cannot match here either.  At a confidence of 2 it DOES match, and
+	  ;; matching it returns the offset the build already chose, which
+	  ;; leaves `re-tento\=' to the homograph sweep where it belongs.  Trying
+	  ;; an assimilated spelling first would instead send `ad-sum\=' to
+	  ;; `assum\=', roast meat, in preference to `adsum\='.
+	  (push (concat prefix stem) candidates)
+	  (when (memq final '(?n ?m ?d ?b ?s ?x))
+	    (cond
+	     ;; A nasal is written m before a labial: con+pello, in+mitto.
+	     ((and (memq final '(?n ?m))
+		   (memq initial diogenes--latin-labials))
+	      (push (concat stub "m" stem) candidates))
+	     ;; Before a vowel the consonant drops: con+eo.
+	     ((memq initial '(?a ?e ?i ?o ?u ?y))
+	      (push (concat stub stem) candidates)))
+	    ;; Total assimilation, which is what doubles the letter: in+lido,
+	    ;; ad+sum, ob+fero, ex+fero.
+	    (push (concat stub (string initial) stem) candidates)))
+	(nreverse (delete-dups candidates))))))
+
+(defun diogenes--dict-exact-offset (word lang &optional file)
+  "The offset of the entry whose key is WORD, or nil if there is none.
+Unlike `diogenes--lookup-dict\=', a miss is a miss: nothing is displayed and
+no nearest entry offered, so this can be used to ask the dictionary whether
+a spelling exists at all."
+  (seq-let (_bytes start _end exact-hit)
+      (diogenes--binary-search
+       (or file (diogenes--dict-file lang))
+       (if (string= lang "latin")
+	   #'diogenes--latin-sort-function
+	 #'diogenes--ascii-sort-function)
+       #'diogenes--xml-key-fn
+       word)
+    (and exact-hit start)))
+
+(defun diogenes--assimilated-offset (lemma lang &optional file)
+  "The offset of the entry for the hyphenated LEMMA, or nil.
+The first of `diogenes--latin-assimilations\=' that the dictionary has a key
+for.  See `diogenes-latin-assimilate-prefixes\='."
+  (when (and diogenes-latin-assimilate-prefixes
+	     (string= lang "latin")
+	     (string-search "-" lemma))
+    (cl-loop for candidate in (diogenes--latin-assimilations lemma)
+	     thereis (diogenes--dict-exact-offset candidate lang file))))
+
+(defun diogenes--expand-homographs (offset conf lemma lang &optional file)
+  "The homographs of the entry at OFFSET, each carrying CONF.
+LEMMA settles their order: where it is hyphenated, an entry whose printed
+headword is hyphenated comes first, that being the same distinction between
+a compound and a simple verb."
+  (let* ((run (diogenes--dict-homograph-run offset lang file))
+	 (hyphenated (and lemma (string-search "-" lemma))))
+    (cond
+     ((< (length run) 2) (list (cons offset conf)))
+     (t (let ((offsets (mapcar #'car run)))
+	  (when hyphenated
+	    (setq offsets
+		  (append
+		   (cl-loop for (start _end bytes) in run
+			    when (diogenes--dict-entry-hyphenated-p bytes)
+			    collect start)
+		   (cl-loop for (start _end bytes) in run
+			    unless (diogenes--dict-entry-hyphenated-p bytes)
+			    collect start))))
+	  (mapcar (lambda (o) (cons o conf))
+		  (delete-dups offsets)))))))
 
 (defun diogenes--expand-uncertain-dicts (record dicts lang &optional file)
   "Add the homographs of any guessed entry in DICTS, an alist of (OFFSET . CONF).
@@ -1739,24 +1870,16 @@ distinction; otherwise file order is kept.  Governed by
      append
      (if (or (< conf 0) (> conf 2))
 	 (list (cons offset conf))
-       (let* ((run (diogenes--dict-homograph-run offset lang file))
-	      (hyphenated (cl-loop for a in (plist-get record :analyses)
-				   thereis (and (= offset (plist-get a :offset))
-						(string-search
-						 "-" (plist-get a :lemma))))))
-	 (cond
-	  ((< (length run) 2) (list (cons offset conf)))
-	  (t (let ((offsets (mapcar #'car run)))
-	       (when hyphenated
-		 (setq offsets
-		       (append
-			(cl-loop for (start _end bytes) in run
-				 when (diogenes--dict-entry-hyphenated-p bytes)
-				 collect start)
-			(cl-loop for (start _end bytes) in run
-				 unless (diogenes--dict-entry-hyphenated-p bytes)
-				 collect start))))
-	       (mapcar (lambda (o) (cons o conf)) offsets)))))))))
+       (let* ((lemma (cl-loop for a in (plist-get record :analyses)
+			      thereis (and (= offset (plist-get a :offset))
+					   (plist-get a :lemma))))
+	      (assimilated (and lemma
+				(diogenes--assimilated-offset lemma lang file))))
+	 (if assimilated
+	     ;; The dictionary has a key for the assimilated spelling, so the
+	     ;; guessed offset can be replaced outright rather than hedged.
+	     (list (cons assimilated -2))
+	   (diogenes--expand-homographs offset conf lemma lang file)))))))
 
 (defun diogenes--show-analysis-entries (dicts lang &optional file)
   "Show the entries named by DICTS, an alist of (OFFSET . CONF).
