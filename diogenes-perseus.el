@@ -2006,19 +2006,103 @@ computed looks in the wrong bucket and can never match `Itys'."
 					  start end)))
     (and (nth 3 result) (car result))))
 
+(defcustom diogenes-latin-try-spelling-variants t
+  "Whether a Latin form that will not parse is retried under other spellings.
+The wordlists Morpheus was run over do not agree with every text a reader
+copies from, in three ways.
+
+They spell consonantal i as i -- there are 108 j-initial forms in the whole
+of `latin-analyses.txt\=' -- so a form written `jacio\=' is not a key in it at
+all.  They spell consonantal u as v, so `ualdissime\=' is likewise absent.
+And the cruncher assimilated a nasal before a consonant only sometimes: it
+produced `quendam\=' and `quandam\=', but `quorumdam\=' where every text
+prints `quorundam\='.
+
+Either way the parse fails and falls through to a headword search, which
+cannot help: an inflected form is nobody\='s dictionary headword, so
+`quorundam\=' landed on `quorsum\='.  Trying the other spelling finds the
+record, and with it the offset of the right entry.
+
+The form as typed is always tried first, so a form that parses costs
+nothing.  Set to nil to try only what the user typed, as Diogenes\=' own
+`$do_parse\=' does."
+  :type 'boolean
+  :group 'diogenes)
+
+(defconst diogenes--latin-vowels '(?a ?e ?i ?o ?u ?y)
+  "The letters that count as vowels when reading a spelling.")
+
+(defun diogenes--latin-swap-letters (word from to)
+  "Replace every FROM in WORD with TO, in upper case as well as lower.
+For the swaps that need no judgement: every j in a Latin word stands for
+the consonant, and so does every v, so they can be rewritten wholesale as
+i and u."
+  (concat (mapcar (lambda (c)
+		    (cond ((eq c from) to)
+			  ((eq c (upcase from)) (upcase to))
+			  (t c)))
+		  word)))
+
+(defun diogenes--latin-swap-at (word positions mask from to)
+  "WORD with the POSITIONS picked out by MASK rewritten from FROM to TO."
+  (let ((variant (copy-sequence word)))
+    (cl-loop for bit from 0
+	     for i in positions
+	     unless (zerop (logand mask (ash 1 bit)))
+	     do (aset variant i (if (eq (aref variant i) (upcase from))
+				    (upcase to)
+				  to)))
+    variant))
+
+(defun diogenes--latin-positional-swaps (word from to predicate &optional cap)
+  "Spellings of WORD with some of its FROMs, where PREDICATE holds, written TO.
+PREDICATE is called with the character following the candidate.  Rewriting
+every occurrence gives nonsense -- `iacio\=' would become `jacjo\=', `seruus\='
+`servvs\=' -- so each combination of the qualifying positions is returned
+instead, at most CAP of them considered (four by default)."
+  (let* ((positions (cl-loop for i from 0 below (max 0 (1- (length word)))
+			     when (and (eq (downcase (aref word i)) from)
+				       (funcall predicate
+						(downcase (aref word (1+ i)))))
+			     collect i))
+	 (positions (seq-take positions (or cap 4))))
+    (cl-loop for mask from 1 to (1- (ash 1 (length positions)))
+	     collect (diogenes--latin-swap-at word positions mask from to))))
+
+(defun diogenes--latin-vowel-p (char)
+  "Whether CHAR is a vowel."
+  (memq char diogenes--latin-vowels))
+
+(defun diogenes--latin-consonant-p (char)
+  "Whether CHAR is a letter and not a vowel."
+  (and (>= char ?a) (<= char ?z) (not (memq char diogenes--latin-vowels))))
+
 (defun diogenes--latin-form-variants (word)
   "Spelling variants of WORD to try in the analyses file, WORD first.
-The Latin wordlists Morpheus was run over spell consonantal i as i, so a
-form typed or copied with j -- `jacio\\=', `jactatus\\=' -- is not a key in
-`latin-analyses.txt\\=' at all, and the parse would fail and fall through to
-a headword search.  Swapping j for i (and, for a form taken from a text
-that prints the classical spelling, i for j) gives it a second chance.
-Only initial and intervocalic positions could bear a consonantal i, but
-trying the whole word costs one more binary search and misses nothing."
-  (delete-dups
-   (list word
-	 (replace-regexp-in-string "j" "i" (replace-regexp-in-string "J" "I" word))
-	 (replace-regexp-in-string "i" "j" word))))
+Three conventions the wordlists and the texts disagree over are applied in
+turn -- i/j, u/v, and a nasal before a consonant -- so a form ambiguous on
+more than one count is covered.  See `diogenes-latin-try-spelling-variants\='."
+  (if (not diogenes-latin-try-spelling-variants)
+      (list word)
+    (let ((variants (list word)))
+      (dolist (axis
+	       ;; Each axis: the wholesale swap, then the positional one.
+	       '((?j ?i ?i ?j diogenes--latin-vowel-p)
+		 (?v ?u ?u ?v diogenes--latin-vowel-p)
+		 ;; A nasal before a consonant, either way about: the cruncher
+		 ;; wrote `quorumdam\=' but `quendam\='.
+		 (nil nil ?n ?m diogenes--latin-consonant-p)
+		 (nil nil ?m ?n diogenes--latin-consonant-p)))
+	(seq-let (from to pos-from pos-to predicate) axis
+	  (setq variants
+		(cl-loop
+		 for v in variants
+		 append (append (list v)
+				 (when from
+				   (list (diogenes--latin-swap-letters v from to)))
+				 (diogenes--latin-positional-swaps
+				  v pos-from pos-to predicate))))))
+      (delete-dups variants))))
 
 (defun diogenes--do-parse (word lang)
   "Return the raw analyses record for WORD in LANG, or nil.
