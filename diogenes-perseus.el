@@ -740,6 +740,9 @@ Returns the lookup buffer."
       (save-excursion
 	(goto-char (point-min))
 	(diogenes--lookup-insert-entry-links lang))
+      ;; So that navigation can tell which entry point is in, once more
+      ;; than one is on show.
+      (diogenes--lookup-mark-entry (point-min) (point-max) start end)
       lookup-buffer))
 
 (defun diogenes--lookup-insert-entry-links (lang &optional pos)
@@ -1151,56 +1154,124 @@ runs."
       (user-error "No word given"))
     (diogenes--lookup-dict word "latin")))
 
+(defun diogenes--lookup-mark-entry (beg end start-offset end-offset)
+  "Record on the text from BEG to END which dictionary entry it is.
+START-OFFSET and END-OFFSET are the entry\='s offsets in the dictionary
+file.  `diogenes--lookup-bufstart\=' and `-bufend\=' track only the outermost
+pair on show, which is all that is needed to extend the stack at either
+edge; navigating from where point happens to be needs to know which of
+several stacked entries that is, so each carries its own offsets."
+  (let ((inhibit-read-only t))
+    (put-text-property beg end 'diogenes-entry
+		       (cons start-offset end-offset))))
+
+(defun diogenes--lookup-entry-at-point ()
+  "The (START . END) dictionary offsets of the entry point is in, or nil.
+A separator or a link banner belongs to the entry it follows, so where
+point is between entries the one before it answers."
+  (or (get-text-property (point) 'diogenes-entry)
+      (let ((pos (previous-single-property-change (point) 'diogenes-entry)))
+	(and pos (get-text-property (1- pos) 'diogenes-entry)))
+      (and (get-text-property (point-min) 'diogenes-entry))))
+
+(defun diogenes--lookup-entry-region (offsets)
+  "The buffer positions (BEG . END) of the displayed entry whose OFFSETS match."
+  (let ((pos (point-min))
+	found)
+    (while (and pos (not found))
+      (let ((here (get-text-property pos 'diogenes-entry)))
+	(if (equal here offsets)
+	    (setq found (cons pos (or (next-single-property-change
+				       pos 'diogenes-entry)
+				      (point-max))))
+	  (setq pos (next-single-property-change pos 'diogenes-entry)))))
+    found))
+
+(defun diogenes--lookup-entry-starting-at (offset)
+  "The buffer position of a displayed entry whose START offset is OFFSET."
+  (let ((pos (point-min))
+	found)
+    (while (and pos (not found))
+      (let ((here (get-text-property pos 'diogenes-entry)))
+	(if (and here (= (car here) offset))
+	    (setq found pos)
+	  (setq pos (next-single-property-change pos 'diogenes-entry)))))
+    found))
+
+(defun diogenes--lookup-insert-entry (xml-bytes start end position before)
+  "Insert the entry in XML-BYTES at POSITION, and return where it begins.
+A separator goes between it and what it is joined to: after the entry when
+BEFORE is non-nil, since the entry then precedes what is already there, and
+before it otherwise.  The inserted text is marked with its offsets by
+`diogenes--lookup-mark-entry\=', and given its own link banner."
+  (let* ((xml (decode-coding-string xml-bytes 'utf-8))
+	 (formatted (diogenes--dict-parse-xml xml start end))
+	 (inhibit-read-only t)
+	 (beg (copy-marker position nil))
+	 (fin (copy-marker position t)))
+    (goto-char position)
+    (unless before (diogenes--lookup-print-separator))
+    (let ((entry-start (point)))
+      (if formatted
+	  (diogenes--lookup-insert-and-format formatted)
+	(diogenes--lookup-insert-xml xml start end (current-buffer)))
+      (goto-char fin)
+      (when before (diogenes--lookup-print-separator))
+      (diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))
+    (diogenes--lookup-mark-entry beg fin start end)
+    (setq diogenes--lookup-bufstart (min diogenes--lookup-bufstart start)
+	  diogenes--lookup-bufend (max diogenes--lookup-bufend end))
+    (marker-position beg)))
+
 (defun diogenes-lookup-next (&optional n)
-  "Find and show the next entry in the active dictionary.
-When called with a numerical prefix, show the next N entries."
+  "Go to the entry after the one point is in, showing it if need be.
+With a numerical prefix, move on N entries.
+
+Movement is relative to point, not to the stack: with several entries on
+show, this goes to the one after the entry point is in.  Where that entry
+is already displayed -- as the next of a stacked pair, or because it was
+fetched before -- point simply moves to it and nothing is read; otherwise
+it is fetched and inserted directly after the current entry, so that the
+buffer keeps the dictionary\='s own order."
   (interactive "p")
   (unless (eq major-mode 'diogenes-lookup-mode)
     (error "Not in Diogenes Lookup Mode!"))
-  (seq-let (xml-bytes start end)
-      (diogenes--get-dict-line diogenes--lookup-file
-			       (1+ diogenes--lookup-bufend))
-    (unless xml-bytes (error "No further entries!"))
-    (let* ((xml (decode-coding-string xml-bytes 'utf-8))
-	   (formatted (diogenes--dict-parse-xml xml start end))
-	   (inhibit-read-only t))
-      (setq diogenes--lookup-bufend end)
-      (goto-char (point-max))
-      (diogenes--lookup-print-separator)
-      (let ((entry-start (point)))
-	(if formatted
-	    (diogenes--lookup-insert-and-format formatted)
-	  (diogenes--lookup-insert-xml xml start end (current-buffer)))
-	;; give the newly-appended entry its own dictionary link banner,
-	;; acting on ITS headword (see `diogenes--lookup-insert-entry-links').
-	(diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))
-      (when (and n (> n 1)) (diogenes-lookup-next (1- n))))))
+  (dotimes (_ (max 1 (or n 1)))
+    (let* ((here (or (diogenes--lookup-entry-at-point)
+		     (cons diogenes--lookup-bufstart diogenes--lookup-bufend)))
+	   (wanted (1+ (cdr here)))
+	   (shown (diogenes--lookup-entry-starting-at wanted)))
+      (if shown
+	  (goto-char shown)
+	(seq-let (xml-bytes start end)
+	    (diogenes--get-dict-line diogenes--lookup-file wanted)
+	  (unless xml-bytes (error "No further entries!"))
+	  (goto-char (or (cdr (diogenes--lookup-entry-region here))
+			 (point-max)))
+	  (goto-char (diogenes--lookup-insert-entry xml-bytes start end
+						    (point) nil)))))))
 
 (defun diogenes-lookup-previous (&optional n)
-  "Find and show the previous entry in the active dictionary.
-When called with a numerical prefix, show the previous N entries."
+  "Go to the entry before the one point is in, showing it if need be.
+With a numerical prefix, move back N entries.  The counterpart of
+`diogenes-lookup-next\=', and relative to point in the same way."
   (interactive "p")
   (unless (eq major-mode 'diogenes-lookup-mode)
     (error "Not in Diogenes Lookup Mode!"))
-  (seq-let (xml-bytes start end)
-      (diogenes--get-dict-line diogenes--lookup-file
-			       (1- diogenes--lookup-bufstart))
-    (unless xml-bytes (error "No further entries!"))
-    (let* ((xml (decode-coding-string xml-bytes 'utf-8))
-	   (formatted (diogenes--dict-parse-xml xml start end))
-	   (inhibit-read-only t))
-      (setq diogenes--lookup-bufstart start)
-      (goto-char (point-min))
-      (diogenes--lookup-print-separator)
-      (goto-char (point-min))
-      (let ((entry-start (point)))
-	(if formatted
-	    (diogenes--lookup-insert-and-format formatted)
-	  (diogenes--lookup-insert-xml xml start end (current-buffer)))
-	;; link banner for the just-prepended entry, on ITS headword.
-	(diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))
-      (goto-char (point-min))
-      (when (and n (> n 1)) (diogenes-lookup-previous (1- n))))))
+  (dotimes (_ (max 1 (or n 1)))
+    (let* ((here (or (diogenes--lookup-entry-at-point)
+		     (cons diogenes--lookup-bufstart diogenes--lookup-bufend)))
+	   (wanted (1- (car here))))
+      (seq-let (xml-bytes start end)
+	  (diogenes--get-dict-line diogenes--lookup-file wanted)
+	(unless xml-bytes (error "No further entries!"))
+	(let ((shown (diogenes--lookup-entry-starting-at start)))
+	  (if shown
+	      (goto-char shown)
+	    (goto-char (or (car (diogenes--lookup-entry-region here))
+			   (point-min)))
+	    (goto-char (diogenes--lookup-insert-entry xml-bytes start end
+						      (point) t))))))))
 
 
 
@@ -1609,16 +1680,19 @@ the application does."
   (let* ((xml (decode-coding-string xml-bytes 'utf-8))
 	 (formatted (diogenes--dict-parse-xml xml start end))
 	 (inhibit-read-only t))
-    (setq diogenes--lookup-bufend end)
+    (setq diogenes--lookup-bufend (max diogenes--lookup-bufend end))
     (goto-char (point-max))
-    (diogenes--lookup-print-separator)
-    (when note
-      (insert (propertize (concat note "\n\n") 'font-lock-face 'italic)))
-    (let ((entry-start (point)))
-      (if formatted
-	  (diogenes--lookup-insert-and-format formatted)
-	(diogenes--lookup-insert-xml xml start end (current-buffer)))
-      (diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))))
+    (let ((beg (copy-marker (point) nil))
+	  (fin (copy-marker (point) t)))
+      (diogenes--lookup-print-separator)
+      (when note
+	(insert (propertize (concat note "\n\n") 'font-lock-face 'italic)))
+      (let ((entry-start (point)))
+	(if formatted
+	    (diogenes--lookup-insert-and-format formatted)
+	  (diogenes--lookup-insert-xml xml start end (current-buffer)))
+	(diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))
+      (diogenes--lookup-mark-entry beg fin start end))))
 
 (defun diogenes--lookup-insert-at-top (text)
   "Insert TEXT at the top of the current lookup buffer."
