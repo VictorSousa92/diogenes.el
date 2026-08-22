@@ -321,21 +321,30 @@ some 54 700 entries over 40 MB of TEI and takes a minute or so."
 `diogenes-georges-file' must differ from `diogenes-georges-source-file'"
                     (abbreviate-file-name file))))
     (diogenes-georges--assert-writable target)
-    (dolist (file sources)
-      (message "Converting %s ..." (file-name-nondirectory file))
-      (with-temp-buffer
-        (insert-file-contents file)
-        (let ((result (diogenes-georges--convert-buffer)))
-          (setq rows (nconc rows (car result)))
-          (cl-incf skipped (cdr result)))))
+    ;; A 40 MB conversion allocates hard enough that the default threshold
+    ;; has Emacs collecting more than it converts.
+    (let ((gc-cons-threshold (max gc-cons-threshold (* 256 1024 1024))))
+      (dolist (file sources)
+        (message "Converting %s ..." (file-name-nondirectory file))
+        (with-temp-buffer
+          (insert-file-contents file)
+          (let ((result (diogenes-georges--convert-buffer)))
+            (setq rows (nconc rows (car result)))
+            (cl-incf skipped (cdr result))))))
     (unless rows
       (user-error "Found no <entryFree> in %s: is this the Georges TEI?"
                   (mapconcat #'file-name-nondirectory sources ", ")))
     ;; `sort' on a list is stable, so entries sharing a key keep the order
     ;; the dictionary prints them in.
     (message "Sorting %d entries ..." (length rows))
-    (setq rows (sort rows (lambda (a b)
-                            (diogenes-georges--key< (car a) (car b)))))
+    ;; `string<' rather than `diogenes-georges--key<': the keys were built
+    ;; by `diogenes-georges--key' and hold nothing but lowercase ASCII
+    ;; letters already, so the normalising the comparator would do on every
+    ;; one of the ~900,000 comparisons a sort of this size needs is wasted
+    ;; -- four fresh strings each time, for the same answer.  The two agree
+    ;; exactly on keys of this shape, which is what makes the substitution
+    ;; safe; `diogenes-georges--key<' remains the definition of record.
+    (setq rows (sort rows (lambda (a b) (string< (car a) (car b)))))
     (make-directory (file-name-directory target) t)
     (let ((coding-system-for-write 'utf-8))
       (with-temp-file target

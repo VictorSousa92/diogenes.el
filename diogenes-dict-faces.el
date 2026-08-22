@@ -168,22 +168,39 @@ and keeps its text, which is what the print does with it anyway.
 
 Nesting is preserved by counting: the closing </hi> of an unmapped rend
 must be dropped, and of a mapped one renamed, so the tags cannot simply be
-replaced one at a time."
-  (let ((pos 0) (stack nil) (out ""))
+replaced one at a time.
+
+Two things here are less obvious than they look.  The end of the tag is
+read out of the match BEFORE anything else is matched, because match data
+is global: the `string-match\=' that reads the rend attribute out of ATTRS
+overwrites the match on LINE, and taking `match-end\=' afterwards yields the
+end of `rend=\"italic\"\=' within the attributes -- around 13 -- rather than
+the end of the tag.  POS would then jump backwards, the same tag would
+match again, and the loop would never end.
+
+And the pieces are collected in a list rather than appended to a string,
+because `(setq out (concat out ...))\=' copies everything accumulated so far
+on every tag: quadratic in the entry, which for a dictionary like Georges
+-- 586,000 <hi> elements, single articles carrying 2,400 of them -- comes
+to some 2 GB of copying over a conversion."
+  (let ((pos 0) (stack nil) (parts nil))
     (while (string-match "<\\(/?\\)hi\\([^>]*\\)>" line pos)
-      (setq out (concat out (substring line pos (match-beginning 0))))
-      (let ((closing (string= (match-string 1 line) "/"))
+      (let ((tag-end (match-end 0))
+            (tag-start (match-beginning 0))
+            (closing (string= (match-string 1 line) "/"))
             (attrs (match-string 2 line)))
+        (push (substring line pos tag-start) parts)
         (if closing
             (let ((elt (pop stack)))
-              (when elt (setq out (concat out "</" elt ">"))))
+              (when elt (push (concat "</" elt ">") parts)))
           (let* ((rend (and (string-match "rend=\"\\([^\"]*\\)\"" attrs)
                             (match-string 1 attrs)))
                  (elt (cdr (assoc rend diogenes-dict-hi-elements))))
             (push elt stack)
-            (when elt (setq out (concat out "<" elt ">"))))))
-      (setq pos (match-end 0)))
-    (concat out (substring line pos))))
+            (when elt (push (concat "<" elt ">") parts))))
+        (setq pos tag-end)))
+    (push (substring line pos) parts)
+    (apply #'concat (nreverse parts))))
 
 (provide 'diogenes-dict-faces)
 ;;; diogenes-dict-faces.el ends here
