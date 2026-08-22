@@ -393,7 +393,10 @@ word returns to Lewis & Short and on a Greek one goes to the LSJ, and the
 
 A word the XML does not cover -- it is proofread only as far as F --
 opens the printed dictionary instead, when `diogenes-gaffiot-pdf-file' is
-set; see `diogenes-gaffiot-pdf-fallback'.  The two sources then cover the
+set; see `diogenes-gaffiot-pdf-fallback'.  Pressed a second time, from
+INSIDE the entry it has just shown, it opens that word's page in the
+printed Gaffiot -- as `B' does in Bailly and `G' in Georges -- and `C-u g'
+looks another word up in the XML from there.  The two sources then cover the
 whole alphabet between them.
 
 Requires a converted dictionary file; see
@@ -401,13 +404,24 @@ Requires a converted dictionary file; see
   (interactive
    (progn
      (diogenes--lookup-assert-lang "latin" "Gaffiot")
-     ;; Already here: `l' leads back and `P' to the printed page.
-     (when (and (not current-prefix-arg) (diogenes-gaffiot-lookup-buffer-p))
-       (user-error "This entry is Gaffiot already; `l' returns to Lewis & \
-Short, `P' opens the printed page, `C-u g' looks up another word here"))
      (list (if current-prefix-arg
                (read-string "Look up in Gaffiot: ")
              (diogenes-gaffiot--current-headword)))))
+  ;; Already reading Gaffiot: this key's other job is the printed page, as
+  ;; `B' is Bailly's and `G' Georges' -- the same key twice, from inside an
+  ;; article, is how every dictionary that has a printed companion reaches
+  ;; it.  `P' leads there too, being the Latin half of
+  ;; `diogenes-lookup-pape-or-gaffiot-pdf', and works from anywhere.
+  ;;
+  ;; Checked here rather than in the `interactive' form so that the banner
+  ;; link, which calls us with a word, dispatches the same way.
+  (if (and (null current-prefix-arg) (diogenes-gaffiot-lookup-buffer-p))
+      (if (diogenes-gaffiot--pdf-available-p)
+          (diogenes-lookup-open-gaffiot-pdf
+           (string-trim (or word (diogenes-gaffiot--current-headword))))
+        (user-error "This entry is Gaffiot already; set \
+`diogenes-gaffiot-pdf-file' to reach the printed page from here, `l' \
+returns to Lewis & Short, `C-u g' looks up another word here"))
   (let* ((word (string-trim (or word (diogenes-gaffiot--current-headword))))
          (file (diogenes-gaffiot--file))
          (key (diogenes-gaffiot--key word)))
@@ -436,7 +450,7 @@ dictionary to reach the rest"
 to a PDF of the printed dictionary, or `diogenes-gaffiot-source-file' to the \
 TEI XML (which covers A-F) and run M-x diogenes-gaffiot-build-dictionary.  \
 Either in your init file before Diogenes loads, or through \
-M-x customize-variable")))))
+M-x customize-variable"))))))
 
 ;;;; --------------------------------------------------------------------
 ;;;; REGISTRATION
