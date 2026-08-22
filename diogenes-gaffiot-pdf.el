@@ -300,9 +300,19 @@ Call this if you replace or re-bookmark the PDF while Emacs is running."
 Offered inside a Gaffiot entry, as before.  Unlike Bailly's PDF this one is
 NOT gated on being configured: the proofread TEI stops at F, so a word past
 it has nowhere else to go and the link must be there to explain itself.
-`P' is shared with Pape and bound by `diogenes-pape--install-keys'."
+The key announced is `g', shared with `diogenes-lookup-gaffiot', which
+dispatches: pressed inside a Gaffiot article it opens the printed page, as
+`B' does in Bailly and `G' in Georges.  So the banner here reads
+\"[PDF (g)]\", the same shape as theirs, and nothing is bound from this
+module.
+
+`P' reaches the printed Gaffiot as well, from anywhere, being the Latin
+half of `diogenes-lookup-pape-or-gaffiot-pdf' -- bound by
+`diogenes-pape--install-keys', which shares that key with Pape by
+language.  It is no longer the only way in, so it is no longer the key
+worth naming."
   (diogenes-lookup-register-dictionary
-   'gaffiot-pdf :lang "latin" :name "PDF" :key "P" :order 90
+   'gaffiot-pdf :lang "latin" :name "PDF" :key "g" :order 90
    :command #'diogenes-lookup-open-gaffiot-pdf
    :show 'when-current :of 'gaffiot
    :help "Open the printed Gaffiot at \"%s\""))
