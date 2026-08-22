@@ -249,9 +249,14 @@ seconds for the 11 MB file."
                        (orth (match-string 1 body))
                        (plain (replace-regexp-in-string "<[^>]*>" "" orth))
                        (key (diogenes-gaffiot--key plain))
+                       (rest (substring body orth-end))
                        (line (concat (substring body 0 orth-start)
                                      "<head>" orth "</head>"
-                                     (substring body orth-end))))
+                                     (if (diogenes-gaffiot--space-after-head-p
+                                          rest)
+                                         " "
+                                       "")
+                                     rest)))
                   (if (string-empty-p key)
                       (cl-incf skipped)
                     ;; <hi rend="..."> becomes i / b / sc / sup: the
@@ -284,6 +289,21 @@ seconds for the 11 MB file."
 ;;;; --------------------------------------------------------------------
 ;;;; IS THE WORD IN THERE AT ALL?
 ;;;; --------------------------------------------------------------------
+
+(defun diogenes-gaffiot--space-after-head-p (rest)
+  "Whether a space belongs between the headword and REST, what follows it.
+Gaffiot keeps the inflections of a headword in an element of their own, so
+nothing in the source separates them from it and the two come out run
+together: \"dicodixi, dictum, ere\".  Lewis & Short has no such trouble, the
+comma and space there being text in the entry itself.
+
+A space is wanted only when what follows begins with a letter or a digit.
+Tags are looked through to find out -- the separation that matters is the
+one the reader sees, not the one in the markup -- and punctuation is left
+alone, so an entry whose inflections do begin with a comma does not gain a
+space before it."
+  (string-match-p "\\`[[:alnum:]]"
+		  (replace-regexp-in-string "<[^>]*>" "" (or rest ""))))
 
 (defun diogenes-gaffiot--entry-exists-p (key file)
   "Non-nil if FILE holds an entry whose key is exactly KEY.
