@@ -300,6 +300,33 @@ can be read")))
      (t (user-error "Cannot read the Pape source at %s"
                     (abbreviate-file-name source))))))
 
+(defconst diogenes-pape--language-codes
+  '(("grc" . "greek") ("la" . "latin") ("lat" . "latin")
+    ("de" . "german") ("deu" . "german") ("en" . "english"))
+  "How a TEI language tag maps onto the languages Diogenes knows.
+`diogenes--dict-handle-elt' reads the attribute `lang' and nothing in
+Diogenes reads `xml:lang', which is the only one TEI has: a conformant
+edition writes `xml:lang="grc"' where this formatter wants
+`lang="greek"'.  Only `greek' and `latin' do anything, being the two
+languages a lookup can be made in; the rest are here to say positively
+that a run of prose is NOT Greek, so that `C-c C-c' on a German word
+does not go looking for it in the LSJ.")
+
+(defun diogenes-pape--rewrite-entry (body)
+  "Return BODY with TEI's `xml:lang' turned into the `lang' Diogenes reads.
+A no-op on a file that already uses `lang', so both the conformant TEI and
+the older Diogenes-flavoured conversions build alike.  This is what
+`diogenes-bailly.el' and `diogenes-dge.el' do; Pape did not need it while
+the only TEI in circulation was already flavoured, and needs it now that
+fdb2tei emits an edition a validator accepts."
+  (let ((body body))
+    (dolist (code diogenes-pape--language-codes)
+      (setq body (replace-regexp-in-string
+                  (concat "xml:lang=\"" (car code) "\"")
+                  (concat "lang=\"" (cdr code) "\"")
+                  body t t)))
+    body))
+
 (defun diogenes-pape--convert-buffer ()
   "Convert the TEI in the current buffer to a list of (KEY . LINE).
 Point is left at the end.  Returns the entries in the order the file gives
@@ -339,6 +366,7 @@ them, together with the number skipped as the second value of a cons cell:
                                    (substring body orth-end))))
                 (if (string-empty-p key)
                     (cl-incf skipped)
+                  (setq line (diogenes-pape--rewrite-entry line))
                   (setq line (replace-regexp-in-string
                               "[[:space:]]*\n[[:space:]]*" " " line))
                   ;; A fresh open tag, so that OUR key is the one

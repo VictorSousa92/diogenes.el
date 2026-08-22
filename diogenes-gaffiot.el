@@ -199,6 +199,42 @@ its `match-beginning\' quietly redirected here."
   (or diogenes-gaffiot-file
       (file-name-concat (diogenes--perseus-path) "gaffiot.xml")))
 
+(defconst diogenes-gaffiot--language-codes
+  '(("la" . "latin") ("lat" . "latin") ("grc" . "greek")
+    ("fr" . "french") ("en" . "english"))
+  "How a TEI language tag maps onto the languages Diogenes knows.
+`diogenes--dict-handle-elt' reads the attribute `lang' and nothing in
+Diogenes reads `xml:lang', which is the only one TEI has.  Only `greek' and
+`latin' do anything, being the two languages a lookup can be made in;
+`french' is here to say positively that the definitions are NOT Latin, so
+that `C-c C-c' on a French word does not go looking for it in Lewis &
+Short.")
+
+(defun diogenes-gaffiot--rewrite-entry (body)
+  "Return BODY, the inside of one <entryFree>, as the formatter wants it.
+Two rewritings, both of them what `diogenes-bailly.el' does and for the same
+reasons.
+
+`xml:lang' becomes `lang', which is the attribute the formatter actually
+reads.  And <bibl> becomes <cit>: the shared <bibl> handler builds a
+clickable citation out of an `n' attribute holding a Perseus reference, and
+a conversion of a Dictan base has none, so every one of them would be drawn
+as a link with nothing behind it and clicking one would fail inside
+`diogenes--lookup-parse-bibl-string'.  Their <author>, <title> and
+<biblScope> keep their own faces, so a citation still looks like one.
+
+A no-op on TEI that has neither -- the partial edition this module was
+written against, or fdb2tei's `--flavour diogenes' -- so every vintage of
+the source builds alike."
+  (let ((body body))
+    (dolist (code diogenes-gaffiot--language-codes)
+      (setq body (replace-regexp-in-string
+                  (concat "xml:lang=\"" (car code) "\"")
+                  (concat "lang=\"" (cdr code) "\"")
+                  body t t)))
+    (setq body (replace-regexp-in-string "<bibl\\([ >]\\)" "<cit\\1" body))
+    (replace-regexp-in-string "</bibl>" "</cit>" body t t)))
+
 ;;;###autoload
 (defun diogenes-gaffiot-build-dictionary (&optional source target)
   "Convert the Gaffiot TEI XML into a dictionary Diogenes can search.
@@ -229,7 +265,7 @@ seconds for the 11 MB file."
     (with-temp-buffer
       (insert-file-contents source)
       (goto-char (point-min))
-      (while (re-search-forward "<entryFree>" nil t)
+      (while (re-search-forward "<entryFree\\(?:[[:space:]][^>]*\\)?>" nil t)
         (let ((start (point))
               (end (save-excursion
                      (when (search-forward "</entryFree>" nil t)
@@ -238,7 +274,8 @@ seconds for the 11 MB file."
               (cl-incf skipped)
             (let ((body (buffer-substring-no-properties start end)))
               (goto-char end)
-              (if (not (string-match "<orth>\\(\\(?:.\\|\n\\)*?\\)</orth>" body))
+              (if (not (string-match
+                       "<orth\\([^>]*\\)>\\(\\(?:.\\|\n\\)*?\\)</orth>" body))
                   (cl-incf skipped)
                 ;; Read the whole match out FIRST.  Anything that matches in
                 ;; between -- `diogenes-gaffiot--key\' used to -- would move
@@ -246,12 +283,17 @@ seconds for the 11 MB file."
                 ;; middle of the <orth> tag.
                 (let* ((orth-start (match-beginning 0))
                        (orth-end (match-end 0))
-                       (orth (match-string 1 body))
+                       ;; The attributes come across onto the <head>: a
+                       ;; conformant edition puts xml:lang on the headword,
+                       ;; and `diogenes-gaffiot--rewrite-entry' turns that
+                       ;; into the `lang' the formatter reads.
+                       (attrs (match-string 1 body))
+                       (orth (match-string 2 body))
                        (plain (replace-regexp-in-string "<[^>]*>" "" orth))
                        (key (diogenes-gaffiot--key plain))
                        (rest (substring body orth-end))
                        (line (concat (substring body 0 orth-start)
-                                     "<head>" orth "</head>"
+                                     "<head" attrs ">" orth "</head>"
                                      (if (diogenes-gaffiot--space-after-head-p
                                           rest)
                                          " "
@@ -263,6 +305,7 @@ seconds for the 11 MB file."
                     ;; formatter keys faces on element names and cannot see
                     ;; attributes, so italic, bold and small capitals would
                     ;; otherwise all be drawn alike.
+                    (setq line (diogenes-gaffiot--rewrite-entry line))
                     (setq line (diogenes-dict-flatten-hi line))
                     (setq line (replace-regexp-in-string
                                 "[[:space:]]*\n[[:space:]]*" " " line))
