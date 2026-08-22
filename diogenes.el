@@ -69,6 +69,7 @@
 (require 'diogenes-gaffiot-pdf)
 (require 'diogenes-pape)
 (require 'diogenes-georges)
+(require 'diogenes-georges-pdf)
 (require 'diogenes-tgl)
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)

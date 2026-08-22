@@ -43,13 +43,16 @@
   :type '(repeat string)
   :group 'diogenes-cheatsheet)
 
-(defcustom diogenes-cheatsheet-width 64
-  "Width in columns of the cheatsheet panel."
-  :type 'natnum
+(defcustom diogenes-cheatsheet-max-height 0.8
+  "How tall the cheatsheet panel may grow.
+A number of lines, or a fraction of the frame\='s height.  Sections that do
+not fit are moved into further columns rather than being cut off, so this
+governs the shape of the panel more than how much of it you see."
+  :type '(choice natnum float)
   :group 'diogenes-cheatsheet)
 
-(defcustom diogenes-cheatsheet-max-height 40
-  "Greatest height in lines the cheatsheet panel will take."
+(defcustom diogenes-cheatsheet-column-gap 3
+  "Spaces between the columns of the cheatsheet panel."
   :type 'natnum
   :group 'diogenes-cheatsheet)
 
@@ -121,6 +124,12 @@ would report the prefix and none of what it leads to."
      (lambda (event definition)
        (let ((keys (vconcat prefix (vector event))))
 	 (cond
+	  ;; `remap' is not a prefix but a pseudo-keymap: a binding under it
+	  ;; says "wherever COMMAND would run, run this instead", so the key is
+	  ;; whatever the user has bound COMMAND to.  Descending into it yields
+	  ;; rows like `<remap> <scroll-up-command>', which name no key at all;
+	  ;; the remapped command is already listed under its real key.
+	  ((memq event '(remap menu-bar tool-bar)) nil)
 	  ;; A prefix: descend.  `keymapp' covers both a keymap and a symbol
 	  ;; whose function definition is one.
 	  ((and (keymapp definition) (not (consp event)))
@@ -216,9 +225,15 @@ PDF' rather than a bare `PDF' adrift in the list."
 			       (capitalize (symbol-name (plist-get entry :of))))))
 	 (shared (diogenes-cheatsheet--companions entry)))
     (cond
-     ;; A companion with its own key: name the parent it belongs to.
+     ;; A companion with its own key.  `when-current' means the registry
+     ;; offers it ONLY inside the buffer of the dictionary named by `:of',
+     ;; so the key does something else everywhere else -- Gaffiot\='s PDF and
+     ;; Pape both answer to `P\=' -- and a label that did not say so would be
+     ;; telling the reader to press a key that will not work.
      ((and parent-name (not (diogenes-cheatsheet--shares-parent-key-p entry)))
-      (format "%s: %s" parent-name name))
+      (if (eq (plist-get entry :show) 'when-current)
+	  (format "%s: %s (in %s only)" parent-name name parent-name)
+	(format "%s: %s" parent-name name)))
      ;; A dictionary one of whose companions shares its key.
      (shared
       (format "%s, or %s in %s"
@@ -226,6 +241,10 @@ PDF' rather than a bare `PDF' adrift in the list."
 	      (mapconcat (lambda (other) (or (plist-get other :name) "?"))
 			 shared "/")
 	      name))
+     ;; `unless-current' -- an electronic dictionary withheld in its own
+     ;; buffer -- is deliberately NOT annotated: it covers five of the
+     ;; dictionaries, and "Gaffiot (not in Gaffiot)" on every row would say
+     ;; the obvious at the cost of the ones worth reading.
      (t name))))
 
 (defun diogenes-cheatsheet--shares-parent-key-p (entry)
@@ -339,34 +358,83 @@ map: each is shown with its global key if it has one, otherwise as
 			   (if keys (key-description keys) "M-x"))
 			 command)))
 
-(defun diogenes-cheatsheet--render ()
-  "Return the cheatsheet as a propertized string."
+(defun diogenes-cheatsheet--blocks ()
+  "The cheatsheet as a list of blocks, each block a list of lines.
+One block per section, kept whole: a section is never split down the middle
+by a column break."
   (let ((sections (diogenes-cheatsheet--sections)))
     (unless sections
       (user-error "No Diogenes keymaps are loaded"))
-    (cl-flet ((line (binding)
-		;; CDR is already a label: `diogenes-cheatsheet--classify'
-		;; names a dictionary from its registry entry, which knows
-		;; more than the command name does.
-		(format "  %s  %s"
-			(propertize (format "%-11s" (car binding))
-				    'face 'diogenes-cheatsheet-key)
-			(cdr binding))))
-      (mapconcat
-       (lambda (section)
-	 (concat
-	  (propertize (car section) 'face 'diogenes-cheatsheet-title)
-	  "\n"
-	  (mapconcat
-	   (lambda (group)
-	     (concat
-	      (propertize (format " %s\n" (car group))
-			  'face 'diogenes-cheatsheet-group)
-	      (mapconcat #'line (cdr group) "\n")))
-	   (diogenes-cheatsheet--classify (cdr section))
-	   "\n")))
-       sections
-       "\n\n"))))
+    (cl-loop
+     for section in sections
+     collect
+     (cons (propertize (car section) 'face 'diogenes-cheatsheet-title)
+	   (cl-loop
+	    for group in (diogenes-cheatsheet--classify (cdr section))
+	    append (cons (propertize (format " %s" (car group))
+				     'face 'diogenes-cheatsheet-group)
+			 (cl-loop for (key . label) in (cdr group)
+				  collect (format "  %s  %s"
+						  (propertize (format "%-11s" key)
+							      'face
+							      'diogenes-cheatsheet-key)
+						  label))))))))
+
+(defun diogenes-cheatsheet--columnate (blocks height)
+  "Distribute BLOCKS into columns no taller than HEIGHT where possible.
+A block taller than HEIGHT takes a column of its own and sets the height:
+better a panel that runs long than a section cut in half."
+  (let (columns current (used 0))
+    (dolist (block blocks)
+      (let ((size (1+ (length block))))	; a blank line between blocks
+	(when (and current (> (+ used size) height))
+	  (push (nreverse current) columns)
+	  (setq current nil used 0))
+	(setq current (append (list block) current)
+	      used (+ used size))))
+    (when current (push (nreverse current) columns))
+    (nreverse columns)))
+
+(defun diogenes-cheatsheet--paste (columns)
+  "Join COLUMNS side by side.  Returns (TEXT WIDTH HEIGHT)."
+  (let* ((gap (make-string diogenes-cheatsheet-column-gap ?\s))
+	 (texts (mapcar (lambda (column)
+			  (let ((lines nil))
+			    (dolist (block column)
+			      (setq lines (append lines block '(""))))
+			    lines))
+			columns))
+	 (widths (mapcar (lambda (lines)
+			   (apply #'max 1 (mapcar #'string-width lines)))
+			 texts))
+	 (height (apply #'max 1 (mapcar #'length texts))))
+    (list
+     (cl-loop
+      for row below height
+      concat (concat
+	      (cl-loop
+	       for lines in texts
+	       for width in widths
+	       for first = (eq lines (car texts))
+	       concat (concat (unless first gap)
+			      (let ((line (or (nth row lines) "")))
+				(concat line
+					(make-string
+					 (max 0 (- width (string-width line)))
+					 ?\s)))))
+	      "\n"))
+     (+ (apply #'+ widths)
+	(* diogenes-cheatsheet-column-gap (max 0 (1- (length widths)))))
+     height)))
+
+(defun diogenes-cheatsheet--render (&optional available-height)
+  "The cheatsheet laid out in columns.  Returns (TEXT WIDTH HEIGHT).
+AVAILABLE-HEIGHT is how many lines there is room for; it decides how many
+columns the sections are spread over."
+  (let* ((blocks (diogenes-cheatsheet--blocks))
+	 (height (or available-height 40)))
+    (diogenes-cheatsheet--paste
+     (diogenes-cheatsheet--columnate blocks height))))
 
 
 ;;;; Showing it
@@ -397,11 +465,9 @@ map: each is shown with its global key if it has one, otherwise as
     (delete-frame diogenes-cheatsheet--frame))
   (setq diogenes-cheatsheet--frame nil))
 
-(defun diogenes-cheatsheet--show-child-frame (buffer lines)
-  "Show BUFFER, LINES tall, in a child frame centred on the selected frame."
+(defun diogenes-cheatsheet--show-child-frame (buffer width height)
+  "Show BUFFER, WIDTH by HEIGHT, in a child frame over the selected frame."
   (let* ((parent (selected-frame))
-	 (height (min lines diogenes-cheatsheet-max-height))
-	 (width diogenes-cheatsheet-width)
 	 (char-w (frame-char-width parent))
 	 (char-h (frame-char-height parent))
 	 (left (max 0 (/ (- (frame-pixel-width parent) (* width char-w)) 2)))
@@ -440,30 +506,37 @@ map: each is shown with its global key if it has one, otherwise as
 (defun diogenes-cheatsheet ()
   "Show the Diogenes keys in a floating panel, until the next keystroke.
 The keys of the current Diogenes buffer come first, then those of the other
-Diogenes buffers.  The listing is read from the live keymaps, so registered
-print dictionaries and the `diogenes-purpose' focus keys appear
-automatically.
+Diogenes buffers, then the commands that get you into one.  The listing is
+read from the live keymaps, so registered print dictionaries and the
+`diogenes-purpose\=' focus keys appear of their own accord.
 
-On a graphical frame this is a child frame overlaying the current one; on a
-terminal, an ordinary help window."
+The sections are laid out in as many columns as the frame has room for, so
+nothing is cut off.  On a terminal frame, where there are no child frames,
+this falls back to an ordinary help window."
   (interactive)
-  (let* ((text (diogenes-cheatsheet--render))
-	 (lines (1+ (cl-count ?\n text)))
-	 (buffer (diogenes-cheatsheet--buffer text)))
-    (if (not (display-graphic-p))
-	(with-help-window (help-buffer)
-	  (princ text))
-      (diogenes-cheatsheet--delete-frame)
-      (diogenes-cheatsheet--show-child-frame buffer lines)
-      (unwind-protect
-	  ;; Any event takes the panel down, and is then replayed, so the key
-	  ;; that dismisses it still does its job.
-	  (let ((event (read-event)))
-	    (when event
-	      (setq unread-command-events
-		    (append (listify-key-sequence (vector event))
-			    unread-command-events))))
-	(diogenes-cheatsheet--delete-frame)))))
+  (let* ((parent (selected-frame))
+	 (room (max 8 (- (if (floatp diogenes-cheatsheet-max-height)
+			     (round (* diogenes-cheatsheet-max-height
+				       (frame-height parent)))
+			   diogenes-cheatsheet-max-height)
+			 2))))
+    (seq-let (text width height) (diogenes-cheatsheet--render room)
+      (if (not (display-graphic-p))
+	  (with-help-window (help-buffer) (princ text))
+	(diogenes-cheatsheet--delete-frame)
+	(diogenes-cheatsheet--show-child-frame
+	 (diogenes-cheatsheet--buffer text)
+	 (min width (- (frame-width parent) 4))
+	 (min height (- (frame-height parent) 2)))
+	(unwind-protect
+	    ;; Any event takes the panel down, and is then replayed, so the key
+	    ;; that dismissed it still does its job.
+	    (let ((event (read-event)))
+	      (when event
+		(setq unread-command-events
+		      (append (listify-key-sequence (vector event))
+			      unread-command-events))))
+	  (diogenes-cheatsheet--delete-frame))))))
 
 (provide 'diogenes-cheatsheet)
 ;;; diogenes-cheatsheet.el ends here

@@ -686,8 +686,8 @@ language the ENTRY is in, FILE which dictionary it came from.
 
 Returns the lookup buffer."
     (let* ((xml (decode-coding-string xml-bytes 'utf-8))
-	   (formatted (diogenes--dict-parse-xml xml start end))
-	   (lookup-buffer (diogenes--get-fresh-buffer "lookup")))
+	   (lookup-buffer (diogenes--get-fresh-buffer "lookup"))
+	   formatted)
       ;; A fresh buffer either way (the previous entry is never destroyed);
       ;; `diogenes--lookup-same-window' only chooses WHERE to show it -- in
       ;; the calling window, or (default) via the usual `pop-to-buffer'.
@@ -729,6 +729,22 @@ Returns the lookup buffer."
 	    diogenes--lookup-bufstart start
 	    diogenes--lookup-bufend end
 	    diogenes--lookup-lang lang)
+      ;; Paint the window BEFORE parsing.  `diogenes--dict-parse-xml' runs
+      ;; `xml-parse-region', which is Lisp, over the whole of the entry --
+      ;; and an entry can be large: Georges gives 26 KB to `a' as a
+      ;; preposition alone.  Emacs is single-threaded, so nothing is redrawn
+      ;; while that runs, and on Wayland (`pgtk') a frame that has not been
+      ;; redrawn is not merely stale but blank: the frame the reader was
+      ;; looking at goes black for as long as the parse takes.  Showing
+      ;; something first, and forcing it onto the screen, leaves the
+      ;; compositor a painted surface to hold on to.
+      (let ((inhibit-read-only t))
+	(erase-buffer)
+	(insert (propertize "Looking up ...\n" 'font-lock-face 'italic)))
+      (redisplay t)
+      (setq formatted (diogenes--dict-parse-xml xml start end))
+      (let ((inhibit-read-only t))
+	(erase-buffer))
       (cond (formatted (diogenes--lookup-insert-and-format formatted))
 	    (t (diogenes--lookup-insert-xml xml start end lookup-buffer)))
       ;; Record the first entry's headword (a fallback for the openers) and
