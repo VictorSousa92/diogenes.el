@@ -2093,6 +2093,59 @@ instead, at most CAP of them considered (four by default)."
   "Whether CHAR is a letter and not a vowel."
   (and (>= char ?a) (<= char ?z) (not (memq char diogenes--latin-vowels))))
 
+(defun diogenes--latin-exs-variants (word)
+  "Spellings of WORD with an s inserted or dropped after an initial ex.
+Editions differ over the prefix: `exstruo\=' and `extruo\=', `exspecto\=' and
+`expecto\=', `exstinguo\=' and `extinguo\=', `exsisto\=' and `existo\='.  The
+wordlists carry one of the pair and not the other -- `exstruxit\=' is there,
+`extruxit\=' is not, so a text printing the shorter form parsed as nothing
+and fell through to a headword search that landed on `extrudo\='.
+
+The s is only meaningful before a consonant: `exeo\=' and `exsul\=' are not
+alternatives of one another."
+  (let ((case-fold-search nil))
+    (cond
+     ((string-match "\\`\\([Ee]\\)xs\\([bcdfglmnpqrstv]\\)" word)
+      (list (concat (match-string 1 word) "x"
+		    (substring word (match-beginning 2)))))
+     ;; No s in this class: the s of `exsul\=' is the word's own, and adding
+     ;; another would only ask the dictionary about `exssul\='.
+     ((string-match "\\`\\([Ee]\\)x\\([bcdfglmnpqrtv]\\)" word)
+      (list (concat (match-string 1 word) "xs"
+		    (substring word (match-beginning 2))))))))
+
+(defun diogenes--latin-genitive-plural-variants (word)
+  "Spellings of WORD with the other third-declension genitive plural ending.
+`aedium\=' and `aedum\=' are both the genitive plural of `aedes\=', and the
+wordlists have the second: `aedum\=' is recorded at confidence 9 against
+`aedes\=', `aedium\=' not at all, so the commoner of the two forms parsed as
+nothing and fell through to `aedon\=', the nightingale.
+
+Nothing here decides whether a word IS a genitive plural -- a noun in -um
+gets an -ium candidate whether it could bear one or not.  That costs one
+binary search on a form that would have failed anyway, and only an exact
+match counts, so a candidate like `bellium\=' is looked for and not found."
+  (cond
+   ((string-suffix-p "ium" word)
+    (list (concat (substring word 0 -3) "um")))
+   ((string-suffix-p "um" word)
+    (list (concat (substring word 0 -2) "ium")))))
+
+(defcustom diogenes-latin-spelling-rules
+  '(diogenes--latin-exs-variants
+    diogenes--latin-genitive-plural-variants)
+  "Functions producing further spellings of a Latin form that will not parse.
+Each is called with a form and returns a list of alternatives, or nil.
+Unlike the letter swaps `diogenes--latin-form-variants\=' applies, these are
+insertions and endings rather than substitutions, so each needs a rule of
+its own.
+
+Add to this to cover a variation of your own texts: a function here is
+tried against every spelling the letter swaps produce, and its answers are
+looked for in the analyses file like any other."
+  :type '(repeat function)
+  :group 'diogenes)
+
 (defun diogenes--latin-form-variants (word)
   "Spelling variants of WORD to try in the analyses file, WORD first.
 Three conventions the wordlists and the texts disagree over are applied in
@@ -2118,6 +2171,14 @@ more than one count is covered.  See `diogenes-latin-try-spelling-variants\='."
 				   (list (diogenes--latin-swap-letters v from to)))
 				 (diogenes--latin-positional-swaps
 				  v pos-from pos-to predicate))))))
+      ;; The rules go last, and over everything the swaps produced, so that a
+      ;; form needing both -- `exstruxit\=' typed with a u for its v, say --
+      ;; is still reached.
+      (dolist (rule diogenes-latin-spelling-rules)
+	(setq variants
+	      (append variants
+		      (cl-loop for v in variants
+			       append (ignore-errors (funcall rule v))))))
       (delete-dups variants))))
 
 (defun diogenes--do-parse (word lang)
