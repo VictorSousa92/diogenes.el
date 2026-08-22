@@ -68,6 +68,7 @@
 (require 'diogenes-gaffiot)
 (require 'diogenes-gaffiot-pdf)
 (require 'diogenes-pape)
+(require 'diogenes-dge)
 (require 'diogenes-georges)
 (require 'diogenes-georges-pdf)
 (require 'diogenes-tgl)

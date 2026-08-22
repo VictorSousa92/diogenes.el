@@ -380,6 +380,9 @@ Look a word up:
 | `diogenes-parse-and-lookup-latin` | Same, for Latin |
 | `diogenes-lookup-gaffiot` | Gaffiot's entry for a Latin headword, in a lookup buffer (`g`) |
 | `diogenes-lookup-lewis` | Back to Lewis & Short from another Latin dictionary (`l`) |
+| `diogenes-lookup-pape` | Pape's entry for a Greek headword, in a lookup buffer (`P`) |
+| `diogenes-lookup-dge` | The DGE's entry for a Greek headword, in a lookup buffer (`d`) |
+| `diogenes-lookup-lsj` | Back to the LSJ from another Greek dictionary (`l`) |
  
 - If there is no exact match, the nearest entry is shown (a message says so).
 - Use the parse-and-lookup commands for text you are reading (they handle inflected forms); use the plain ones when you already know the lemma.
@@ -387,7 +390,7 @@ Look a word up:
 The result opens in **Diogenes Lookup Mode**. What you get there:
  
 - The entry, formatted from its TEI XML.
-- A links line at the top, each link naming its key: `[OLD (o)]` `[TLL (t)]` `[Georges (G)]` `[Gaffiot (g)]` for Latin, `[Montanari (m)]` `[CGL (c)]` `[BDAG (b)]` `[Bailly (B)]` `[Passow (p)]` `[TGL (t)]` for Greek (see below).
+- A links line at the top, each link naming its key: `[OLD (o)]` `[TLL (t)]` `[Georges (G)]` `[Gaffiot (g)]` for Latin, `[Montanari (m)]` `[CGL (c)]` `[BDAG (b)]` `[Pape (P)]` `[DGE (d)]` `[Bailly (B)]` `[Passow (p)]` `[TGL (t)]` for Greek (see below).
 - Clickable citations: press RETURN or double-click to open the cited text in Browser Mode.
 Looking words up while reading a text (Browser Mode):
  
@@ -406,11 +409,14 @@ Diogenes Lookup Mode keys:
 | `o` `t` `g``G` | Open a print dictionary at the current entry — Latin (see table below) |
 | `m` `c` `b` `B` `p` | The same for Greek |
 | `g` `l` | Gaffiot and Lewis & Short as *lookup entries*, not PDFs |
+| `P` `d` `l` | Pape, the DGE and the LSJ, likewise *lookup entries* rather than PDFs (Greek) |
 | `q` | Quit the window |
  
 - Paging with `C-c C-n` / `C-c C-p` stays in the same buffer and reformats in place.
 - The print-dictionary keys and links always act on the entry the cursor is currently in.
 - Two of the Latin dictionaries are electronic rather than scans: Gaffiot (`g`) and Lewis & Short (`l`) open as entries in a lookup buffer, so `C-c C-n`, `C-c C-c` and the rest work inside them, and each leads to the other. Each key acts only where it makes sense — `g` from any Latin entry but not from Gaffiot, `l` and `P` from a Gaffiot entry only — and `C-u` on any of them prompts for a word and works anywhere.
+- Two of the Greek dictionaries are electronic in the same way: Pape (`P`) and the DGE (`d`) open as entries, and `l` leads back to the LSJ. Each acts only where it makes sense — not inside its own buffer, where the link would lead nowhere — and `C-u` on any of them prompts for a word and works anywhere.
+- `P` and `l` serve both languages, dispatching on the entry they are pressed in: `P` is Pape in a Greek entry and the printed Gaffiot in a Latin one, `l` is the LSJ in Greek and Lewis & Short in Latin.
 ## `C-c C-c` on words inside dictionary entries
  
 This is the main way to move around while reading. Put the cursor on
@@ -530,6 +536,50 @@ says which page it is on. Set `diogenes-gaffiot-pdf-fallback` to nil to keep the
 two apart, and `M-x diogenes-lookup-open-gaffiot-pdf` opens the PDF for any word
 regardless.
 
+### DGE (a lookup, not a PDF)
+
+The CSIC's *Diccionario Griego-Español* comes as TEI XML rather than a scan,
+so it is shown the way the LSJ and Lewis & Short are — as an entry in a
+Diogenes lookup buffer. From a Greek entry press `d` or click `[DGE]`; from
+inside the DGE, `l` or `[LSJ]` leads back. Everything else the lookup buffer
+does comes with it: `C-c C-n` / `C-c C-p` walk the dictionary, `C-c C-c` on a
+Greek word looks it up, the `[Montanari]` `[CGL]` `[BDAG]` `[Passow]` `[TGL]`
+links open the print dictionaries, and each entry gets its own buffer, so the
+one you came from stays live. Definitions are in Spanish and are tagged as
+such, so `C-c C-c` on one does not go looking for it in the LSJ.
+
+Setup — convert the TEI once into the one-entry-per-line form Diogenes
+searches:
+
+```elisp
+(setq diogenes-dge-source-file "/path/to/xdge_xml")   ; the clone, or one file
+(setq diogenes-dge-file "/path/to/dge.xml")           ; the converted file
+```
+
+then `M-x diogenes-dge-build-dictionary` (a minute or two; pressing `d` with
+no converted file offers to do it for you). Leaving `diogenes-dge-file` unset
+puts it beside the other Diogenes dictionaries — which on many installations
+is a directory owned by root, so name a path you can write.
+
+- The XML is at <https://github.com/dge-csic/xdge_xml>, one file per volume (`xdge1.xml` … `xdge8.xml`), 112 MB in all. `diogenes-dge-source-file` takes a single file, a **directory** of them, or a list; point it at the clone and every `*.xml` in it is read. CC BY-NC-SA 3.0 ES: free to convert and to read, not to sell.
+- The build reads 64 373 entries and writes about 80 MB. Nothing else is needed afterwards, and the TEI can be deleted.
+- Keys are the headword reduced to bare beta-code letters, so the quantities of `ἀγκῡροειδής`, the dagger of `†ἀαναίμα·`, the asterisk of `*ἀϜαλαλκάνα` and the homograph numeral of `1 ἄᾰτος` do not stand between an LSJ headword and its DGE entry.
+- **Coverage:** eight volumes have appeared and they reach **ἐπισκήπτω** — α to ἐπ-, and of the 64 373 entries 30 259 are under α alone. This is a working dictionary, not a finished one.
+
+Beyond that boundary there is nothing to show, and no printed supplement to
+fall through to: what the CSIC publishes for nothing is exactly this XML.
+Asking for `ὕβρις` therefore gets *The DGE reaches ἐπισκήπτω so far; "ὕβρις"
+is not written yet*, rather than the last entry of vol. VIII offered as the
+nearest match. Inside the published range a word the DGE has no article for
+behaves as it does everywhere else in Diogenes: nearest entry, with a message
+saying so. The boundary is read from the dictionary itself, so adding vol. IX
+and rebuilding is all that is needed; `diogenes-dge-check-coverage` turns the
+check off.
+
+- Articles are large — `ἐπί` alone is 431 KB — and an entry is parsed in Lisp before it is displayed, so the prepositions and the commonest verbs take a few seconds to open where an ordinary entry is instantaneous.
+- The DGE sets epigraphic letterforms in the private-use area of New Athena Unicode; entries keep them as published, so install that font if you want to see them rather than boxes. They are spelled out for sorting purposes only (`diogenes-dge-epichoric-substitutions`).
+- An etymology is given a labelled block of its own, since in a reflowed paragraph it would run on from the last citation. The label is `diogenes-dge-etymology-label`, "Etim." by default, and it is ours rather than the CSIC's — the print sets etymologies off by position alone.
+
 ### Choosing the PDF viewer
  
 Every dictionary is opened by the same routine, and you choose which
@@ -577,7 +627,7 @@ by a links line:
 - Each link carries its key: `[TLL (t)]`, `[Georges (G)]`. The key is shown in the `help-key-binding` face, so it reads as a binding rather than as part of the name.
 - Latin entries: `[OLD (o)]` `[TLL (t)]` `[Georges (G)]` `[Gaffiot (g)]` — and inside a Gaffiot entry, `[Lewis & Short (l)]` `[PDF (P)]` in place of `[Gaffiot (g)]`
 - Latin entries also carry `[Georges]` and `[Gaffiot]`, which is not a PDF but another **lookup entry** (see below); inside a Gaffiot entry that link becomes `[Lewis & Short]`, leading back, joined by `[PDF]` for the same word in the printed Gaffiot (`P`).
-- Greek entries: `[Montanari (m)]` `[CGL (c)]` `[BDAG (b)]` `[Bailly (B)]` `[Passow (p)]` `[TGL (t)]`
+- Greek entries: `[Montanari (m)]` `[CGL (c)]` `[BDAG (b)]` `[Pape (P)]` `[DGE (d)]` `[Bailly (B)]` `[Passow (p)]` `[TGL (t)]` — and inside a Pape or DGE entry, `[LSJ (l)]` in place of that dictionary's own link
 - Click or press RETURN to open that dictionary at the entry's page.
 - Works per entry: paging with `C-c C-n` / `C-c C-p` gives each entry its own links line and headword.
 **2. Single keys** (act on the entry the cursor is in, recomputed each keypress; prefix arg prompts for a word):
@@ -595,6 +645,9 @@ by a links line:
 | `m` | Montanari |
 | `c` | CGL |
 | `b` | BDAG |
+| `P` | Pape — the entry itself (a lookup buffer, not a PDF) |
+| `d` | DGE — the entry itself (a lookup buffer, not a PDF; α–ἐπ only) |
+| `l` | LSJ — the way back from a Pape or DGE entry |
 | `B` | Bailly |
 | `p` | Passow |
 | `t` | TGL |
