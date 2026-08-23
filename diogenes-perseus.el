@@ -2565,22 +2565,74 @@ more than one count is covered.  See `diogenes-latin-try-spelling-variants\='."
 			       append (ignore-errors (funcall rule v))))))
       (delete-dups variants))))
 
+(defcustom diogenes-latin-expand-contractions t
+  "Whether a circumflex in a Latin form is read as a contraction.
+The editions the corpora print do not mark quantity, so a circumflex in
+them is not decoration: it marks a contracted syllable, the vowel standing
+for the two it was made from.  `desîmus' is `desiimus', `dî' is `dii'.
+Non-nil reads it that way.
+
+The distinction decides which word you are shown, because both spellings
+can be keys.  `desîmus' is the syncopated perfect of `desino', while
+`desimus' without the mark is a key too -- the present subjunctive of
+`dēsum' -- and a text that meant that verb would not have printed the
+circumflex.  Strip the mark as though it said nothing and the answer is
+confidently the wrong verb.
+
+Nil treats a circumflex like any other mark, to be removed."
+  :type 'boolean
+  :group 'diogenes)
+
+(defun diogenes--latin-expand-contractions (word)
+  "WORD with each circumflexed vowel written as the pair it stands for.
+Returns nil when WORD carries no circumflex, so a caller can tell the
+expansion from the form itself.  Works on the decomposition, so a
+precomposed `î' and an `i' followed by a combining circumflex are treated
+alike, and any other marks are left for `diogenes--strip-diacritics'."
+  (let ((out nil)
+        (found nil))
+    (dolist (c (string-to-list (ucs-normalize-NFD-string (or word ""))))
+      (if (= c ?\N{COMBINING CIRCUMFLEX ACCENT})
+          ;; The mark says the letter just read stands for two of itself.
+          (when out
+            (push (car out) out)
+            (setq found t))
+        (push c out)))
+    (and found (apply #'string (nreverse out)))))
+
 (defun diogenes--latin-parse-candidates (word)
-  "WORD and, if it differs, WORD with its diacritics removed.
-The analyses file is keyed by bare ASCII forms, while the corpora print the
-quantities and contractions their editors chose: the PHI text of Plautus
-has `desîmus', whose key is `desimus'.  Unaccented WORD comes first, so a
-form that is already a key is looked up exactly once.
+  "The spellings of Latin WORD to look for in the analyses file, in order.
+The file is keyed by bare ASCII forms, while the corpora print what their
+editors chose, so a form as printed may be no key at all.  Three spellings,
+each tried only if it differs from those before it:
+
+  WORD itself, which is the whole of the matter for an unmarked form;
+
+  WORD with its circumflexes read as contractions -- `desîmus' as
+  `desiimus', which is in the file, under `desino'.  This is the reading
+  that matters, the texts marking no quantities: a circumflex in them says
+  the syllable is contracted.  It comes BEFORE the stripped spelling
+  because `desimus' is a key as well, for the present subjunctive of
+  `dēsum', and a text meaning that verb would not have printed the mark.
+  See `diogenes-latin-expand-contractions';
+
+  WORD with every mark removed.  Last, and for two things the corpora do
+  not produce: a contraction whose expansion is not a form -- `nîl' gives
+  `niil', which is nothing, where the bare `nil' is a key -- and a word
+  from somewhere else, typed into the minibuffer with macrons or copied
+  from a dictionary headword.
 
 Normalisation, not guesswork, so this is not one of
 `diogenes-latin-spelling-rules' and not subject to
-`diogenes-latin-try-spelling-variants': the accented and unaccented
-spellings are the same word, where i-for-j is a convention two sources
-disagree about."
-  (let ((bare (diogenes--strip-diacritics word)))
-    (if (string= bare word)
-        (list word)
-      (list word bare))))
+`diogenes-latin-try-spelling-variants': i-for-j is a convention two sources
+disagree about, where these are the same word written as an editor prints
+it and as a wordlist keys it."
+  (let* ((expanded (and diogenes-latin-expand-contractions
+                        (diogenes--latin-expand-contractions word)))
+         (candidates (list word
+                           (and expanded (diogenes--strip-diacritics expanded))
+                           (diogenes--strip-diacritics word))))
+    (delete-dups (delq nil candidates))))
 
 (defun diogenes--do-parse (word lang)
   "Return the raw analyses record for WORD in LANG, or nil.
@@ -2589,9 +2641,9 @@ is then retried in lower case -- Diogenes' \"Fixed parsing of capitalized
 Latin words\".  The reshuffling of diacritics after a beta-code asterisk
 that $do_parse also does for Greek capitals is not attempted here.
 
-Beyond the application, a Latin form is also tried without its diacritics
-\(see `diogenes--latin-parse-candidates') and with j and i exchanged (see
-`diogenes--latin-form-variants')."
+Beyond the application, a Latin form is also tried as a contraction and
+without its diacritics (see `diogenes--latin-parse-candidates') and with j
+and i exchanged (see `diogenes--latin-form-variants')."
   (let* ((word (diogenes--beta-normalize-gravis
                 (diogenes--greek-ensure-beta word)))
          (variants
