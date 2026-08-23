@@ -248,5 +248,30 @@ is running."
   (clrhash diogenes-bdag--index-cache)
   (message "Diogenes BDAG index cache cleared"))
 
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
+
+;;;###autoload
+(defun diogenes-bdag-available-p ()
+  "Non-nil if BDAG (Bauer) can be opened.
+True when `diogenes-bdag-pdf-file' names a readable PDF."
+  (diogenes--path-usable-p diogenes-bdag-pdf-file 'file))
+
+(defun diogenes-bdag--register ()
+  "Announce BDAG (Bauer) to the lookup banner.  Idempotent."
+  (diogenes-lookup-register-dictionary
+   'bdag :lang "greek" :name "BDAG" :key "b" :order 30
+   :command #'diogenes-lookup-open-bdag
+   :available-p #'diogenes-bdag-available-p
+   :bind t
+   :help "Open BDAG (Bauer) at \"%s\""))
+
+(with-eval-after-load 'diogenes-perseus
+  (diogenes-bdag--register))
+
 (provide 'diogenes-bdag)
 ;;; diogenes-bdag.el ends here

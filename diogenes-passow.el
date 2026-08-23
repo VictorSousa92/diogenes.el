@@ -747,5 +747,32 @@ session benefits immediately."
                  (length vols) (if (= (length vols) 1) "" "s")
                  (abbreviate-file-name file))))))
 
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
+
+;;;###autoload
+(defun diogenes-passow-available-p ()
+  "Non-nil if Passow's Handwörterbuch can be opened.
+True when `diogenes-passow-directory' names a directory that exists.
+Whether every volume is in it is not asked here: the banner only needs to
+know whether the user has this dictionary at all."
+  (diogenes--path-usable-p diogenes-passow-directory 'directory))
+
+(defun diogenes-passow--register ()
+  "Announce Passow to the lookup banner.  Idempotent."
+  (diogenes-lookup-register-dictionary
+   'passow :lang "greek" :name "Passow" :key "p" :order 40
+   :command #'diogenes-lookup-open-passow
+   :available-p #'diogenes-passow-available-p
+   :bind t
+   :help "Open Passow at \"%s\""))
+
+(with-eval-after-load 'diogenes-perseus
+  (diogenes-passow--register))
+
 (provide 'diogenes-passow)
 ;;; diogenes-passow.el ends here

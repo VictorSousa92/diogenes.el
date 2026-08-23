@@ -271,5 +271,30 @@ running."
   (clrhash diogenes-cambridge--index-cache)
   (message "Diogenes Cambridge Greek Lexicon index cache cleared"))
 
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
+
+;;;###autoload
+(defun diogenes-cambridge-available-p ()
+  "Non-nil if the Cambridge Greek Lexicon can be opened.
+True when `diogenes-cambridge-pdf-file' names a readable PDF."
+  (diogenes--path-usable-p diogenes-cambridge-pdf-file 'file))
+
+(defun diogenes-cambridge--register ()
+  "Announce the CGL to the lookup banner.  Idempotent."
+  (diogenes-lookup-register-dictionary
+   'cambridge :lang "greek" :name "CGL" :key "c" :order 20
+   :command #'diogenes-lookup-open-cambridge
+   :available-p #'diogenes-cambridge-available-p
+   :bind t
+   :help "Open the Cambridge Greek Lexicon at \"%s\""))
+
+(with-eval-after-load 'diogenes-perseus
+  (diogenes-cambridge--register))
+
 (provide 'diogenes-cambridge)
 ;;; diogenes-cambridge.el ends here

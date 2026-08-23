@@ -27,7 +27,6 @@
 (declare-function diogenes-gaffiot-lookup-buffer-p "diogenes-gaffiot" ())
 (declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
                   (&optional word))
-(declare-function diogenes-lookup-open-georges "diogenes-georges" (&optional word))
 (declare-function diogenes-lookup-open-bdag "diogenes-bdag" (&optional word))
 (declare-function diogenes-lookup-open-passow "diogenes-passow" (&optional word))
 (declare-function diogenes-lookup-open-tgl "diogenes-tgl" (&optional word))
@@ -875,8 +874,9 @@ headword as its only argument.
 SHOW says when the dictionary appears, and is the whole of the arrangement
 the banner used to spell out by hand:
 
-  `always'         -- a print dictionary: always offered, and it explains
-                     itself when pressed if its path variable is unset.
+  `always'         -- a print dictionary: offered on every entry of its
+                     language, so long as AVAILABLE-P says this user has
+                     it.
   `unless-current' -- an electronic dictionary: offered except in its own
                      lookup buffer, where the link would lead nowhere.
                      Needs BUFFER-P, a predicate that is non-nil when the
@@ -889,9 +889,21 @@ the banner used to spell out by hand:
                      Gaffiot entry, Bailly's from a Bailly entry.
 
 AVAILABLE-P, if given, is called with no arguments and must return non-nil
-for the dictionary to be offered at all -- for a PDF companion that has no
-PDF configured, where an unset path is a reason to hide the link rather
-than to explain it.
+for the dictionary to be offered at all.  This is how a dictionary is
+optional: every one of them but the LSJ and Lewis & Short passes a
+predicate over its own path options, so a dictionary the user has not got
+is silently absent from the banner instead of being offered and then
+refusing.  The predicate is asked afresh each time an entry is drawn, so
+setting a path -- or building an XML -- takes effect at once, with no
+reload; it must therefore be cheap, and it must neither signal nor prompt.
+`diogenes--path-usable-p' is the usual way to write one.
+
+A dictionary with both an XML and a printed edition, such as Gaffiot,
+Bailly and Georges, is available when EITHER is: its command dispatches on
+which, so the one link leads to whichever the user actually has.  Its PDF
+companion, registered separately with `when-current', carries the
+PDF-only predicate, so the \"[PDF]\" link appears inside the entry only
+when there is a PDF behind it.
 
 ORDER sorts the banner, low to high; the shipped dictionaries leave gaps to
 sort between.  BIND, if non-nil, binds KEY to COMMAND in
@@ -902,7 +914,8 @@ so such modules leave BIND nil and bind the key themselves."
   (let ((entry (list :id id :name name :lang lang :key key
                      :command command :help help :show show
                      :buffer-p buffer-p :of of
-                     :available-p available-p :order order)))
+                     :available-p available-p :order order
+                     :bind bind)))
     (setq diogenes--lookup-dictionaries
           (append (cl-remove id diogenes--lookup-dictionaries
                              :key (lambda (e) (plist-get e :id)))
@@ -936,11 +949,35 @@ dictionary it converted."
          (predicate (and entry (plist-get entry :buffer-p))))
     (and predicate (funcall predicate) t)))
 
+(defun diogenes--lookup-dict-available-p (predicate)
+  "Non-nil if the dictionary guarded by PREDICATE is installed here.
+PREDICATE is a registration's AVAILABLE-P: nil for a dictionary that needs
+no configuration -- the LSJ and Lewis & Short, which come with Diogenes
+itself -- and otherwise a function of no arguments that answers whether
+this user has the dictionary.
+
+Three ways of not having it are all one answer here:
+
+  the option is unset, so the predicate returns nil;
+  the module is not loaded, so the predicate is not even defined;
+  the predicate signals, `diogenes-path' itself not being set yet.
+
+None of them is an error to report from inside a redisplay, so all three
+mean the same thing: leave that dictionary out of the banner.  The keys
+remain bound, and pressing one still explains what to set -- see
+`diogenes--require-path'."
+  (cond
+   ((null predicate) t)
+   ((not (functionp predicate)) nil)
+   (t (and (ignore-errors (funcall predicate)) t))))
+
 (defun diogenes--lookup-dict-visible-p (entry)
   "Non-nil if ENTRY should be offered on the entry now on screen.
-See `diogenes-lookup-register-dictionary' for what the SHOW values mean."
+See `diogenes-lookup-register-dictionary' for what the SHOW values mean.
+A dictionary this user has not configured is never visible, whatever its
+SHOW says: see `diogenes--lookup-dict-available-p'."
   (let ((available (plist-get entry :available-p)))
-    (and (or (null available) (funcall available))
+    (and (diogenes--lookup-dict-available-p available)
          (pcase (plist-get entry :show)
            ('always t)
            ('unless-current
@@ -968,45 +1005,22 @@ order their modules were loaded."
 
 (defun diogenes--lookup-register-shipped-dictionaries ()
   "Register the dictionaries that come with Diogenes itself.
-The print dictionaries, whose modules only open a PDF and have nothing else
-to say here, and the two dictionaries Diogenes searches by default -- the
-LSJ and Lewis & Short -- which are the way back from any other dictionary
-of their language.  Everything else registers itself: see
-`diogenes-gaffiot.el', `diogenes-pape.el' and `diogenes-bailly.el'."
-  ;; Greek, print
-  (diogenes-lookup-register-dictionary
-   'montanari :lang "greek" :name "Montanari" :key "m" :order 10
-   :command #'diogenes-lookup-open-montanari
-   :help "Open Montanari at \"%s\"")
-  (diogenes-lookup-register-dictionary
-   'cambridge :lang "greek" :name "CGL" :key "c" :order 20
-   :command #'diogenes-lookup-open-cambridge
-   :help "Open the Cambridge Greek Lexicon at \"%s\"")
-  (diogenes-lookup-register-dictionary
-   'bdag :lang "greek" :name "BDAG" :key "b" :order 30
-   :command #'diogenes-lookup-open-bdag
-   :help "Open BDAG (Bauer) at \"%s\"")
-  (diogenes-lookup-register-dictionary
-   'passow :lang "greek" :name "Passow" :key "p" :order 40
-   :command #'diogenes-lookup-open-passow
-   :help "Open Passow at \"%s\"")
-  (diogenes-lookup-register-dictionary
-   'tgl :lang "greek" :name "TGL" :key "t" :order 50
-   :command #'diogenes-lookup-open-tgl
-   :help "Open Estienne's Thesaurus Graecae Linguae at \"%s\"")
-  ;; Latin, print
-  (diogenes-lookup-register-dictionary
-   'old :lang "latin" :name "OLD" :key "o" :order 10
-   :command #'diogenes-lookup-open-old
-   :help "Open the OLD at \"%s\"")
-  (diogenes-lookup-register-dictionary
-   'tll :lang "latin" :name "TLL" :key "t" :order 20
-   :command #'diogenes-lookup-open-tll
-   :help "Open the TLL at \"%s\"")
-  (diogenes-lookup-register-dictionary
-   'georges :lang "latin" :name "Georges" :key "G" :order 30
-   :command #'diogenes-lookup-open-georges
-   :help "Open Georges at \"%s\"")
+That is now only Lewis & Short -- and, from `diogenes-pape.el', the LSJ --
+the two dictionaries Diogenes searches by default and so the way back from
+any other dictionary of their language.  They need no AVAILABLE-P: their
+files ship with Diogenes, and if they are missing nothing in this package
+works at all.
+
+Every other dictionary registers itself from its own module, with an
+AVAILABLE-P that reports whether this user has it: see
+`diogenes-old.el', `diogenes-tll.el', `diogenes-montanari.el',
+`diogenes-cambridge.el', `diogenes-bdag.el', `diogenes-passow.el',
+`diogenes-tgl.el', `diogenes-gaffiot.el', `diogenes-georges.el',
+`diogenes-pape.el', `diogenes-dge.el' and `diogenes-bailly.el'.  A
+dictionary whose module is not loaded is not registered, and one whose
+paths are unset is registered but not offered, so an installation with no
+extra dictionaries at all draws no banner and never mentions a dictionary
+it does not have."
   ;; Lewis & Short: the way back to the Latin dictionary Diogenes searches
   ;; by default, so offered in any Latin entry that is not itself one.
   (diogenes-lookup-register-dictionary
@@ -1038,13 +1052,20 @@ Clicking a link (or pressing RET on it) opens that dictionary at the page
 holding HEADWORD.  The links are inserted AT POINT, so the caller positions
 to the top of the entry they belong to; the initial lookup and each
 `diogenes-lookup-next' / `-previous' step do this once per entry, so every
-entry carries its own banner.  A link is only useful when its dictionary's
-path variable is set (`diogenes-old-pdf-file', `diogenes-tll-pdf-directory',
-`diogenes-georges-directory', `diogenes-gaffiot-file',
+entry carries its own banner.
+
+Only dictionaries this user actually has are listed: each registration's
+AVAILABLE-P reads its own path options (`diogenes-old-pdf-file',
+`diogenes-tll-pdf-directory', `diogenes-georges-directory',
+`diogenes-georges-file', `diogenes-gaffiot-file',
 `diogenes-gaffiot-pdf-file', `diogenes-montanari-pdf-file',
 `diogenes-cambridge-pdf-file', `diogenes-bdag-pdf-file',
-`diogenes-bailly-pdf-file', `diogenes-passow-directory',
-`diogenes-tgl-directory'); each says how to set it when pressed."
+`diogenes-bailly-file', `diogenes-bailly-pdf-file',
+`diogenes-passow-directory', `diogenes-tgl-directory',
+`diogenes-pape-file', `diogenes-dge-file'), and an unset one drops out of
+the banner rather than being offered and then refusing.  With none of them
+set there are no links at all, and the whole banner -- newline included --
+is omitted."
   (let ((inhibit-read-only t)
         (specs (diogenes--lookup-dict-specs lang)))
     (when specs
@@ -1576,18 +1597,17 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "C-c C-p"                       #'diogenes-lookup-previous)
     (keymap-set map "C-c C-c"                       #'diogenes-perseus-action)
     (keymap-set map "C-c C-o"                       #'diogenes-lookup-in-dictionary)
-    (keymap-set map "o"                             #'diogenes-lookup-open-old)
+    ;; Keys that dispatch between two dictionaries, or between the two
+    ;; languages, are bound here when the command that does the dispatching
+    ;; lives here too: `t' is the TLL in Latin and the TGL in Greek, and
+    ;; `l' is Lewis & Short -- redefined by `diogenes-pape--install-keys'
+    ;; into the Lewis/LSJ dispatcher once Pape is loaded.  Every other
+    ;; dictionary key is bound by the module that owns it, with `:bind t' in
+    ;; its registration or by hand -- so a dictionary whose module is not
+    ;; loaded leaves its key alone instead of binding it to a command that
+    ;; does not exist.
     (keymap-set map "t"                             #'diogenes-lookup-open-tll-or-tgl)
-    (keymap-set map "m"                             #'diogenes-lookup-open-montanari)
-    (keymap-set map "c"                             #'diogenes-lookup-open-cambridge)
-    (keymap-set map "b"                             #'diogenes-lookup-open-bdag)
-    (keymap-set map "g"                             #'diogenes-lookup-gaffiot)
     (keymap-set map "l"                             #'diogenes-lookup-lewis)
-    (keymap-set map "P"                             #'diogenes-lookup-open-gaffiot-pdf)
-    (keymap-set map "G"                             #'diogenes-lookup-open-georges)
-    (keymap-set map "p"                             #'diogenes-lookup-open-passow)
-    ;; `B' is bound by `diogenes-bailly.el', which registers itself with
-    ;; :bind t -- as any dictionary module may.
     (keymap-set map "q"                             #'diogenes--quit)
     map)
   "Basic mode map for the Diogenes Lookup Mode.")

@@ -32,7 +32,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'ucs-normalize)
-(require 'diogenes-lisp-utils)          ; diogenes--require-path
+(require 'diogenes-lisp-utils)          ; diogenes--require-path, --path-usable-p
 
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus" (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
@@ -919,6 +919,34 @@ running."
   (interactive)
   (clrhash diogenes-old--index-cache)
   (message "Diogenes OLD index cache cleared"))
+
+
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
+
+;;;###autoload
+(defun diogenes-old-available-p ()
+  "Non-nil if the printed OLD can be opened.
+True when `diogenes-old-pdf-file' names a readable PDF.  Asked by the link
+banner before offering \"[OLD (o)]\", so a user who has not got the OLD is
+not offered it."
+  (diogenes--path-usable-p diogenes-old-pdf-file 'file))
+
+(defun diogenes-old--register ()
+  "Announce the OLD to the lookup banner.  Idempotent."
+  (diogenes-lookup-register-dictionary
+   'old :lang "latin" :name "OLD" :key "o" :order 10
+   :command #'diogenes-lookup-open-old
+   :available-p #'diogenes-old-available-p
+   :bind t
+   :help "Open the OLD at \"%s\""))
+
+(with-eval-after-load 'diogenes-perseus
+  (diogenes-old--register))
 
 (provide 'diogenes-old)
 ;;; diogenes-old.el ends here

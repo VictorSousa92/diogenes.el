@@ -299,5 +299,33 @@ cleared with `diogenes-old-clear-cache'.)"
   (clrhash diogenes-tll--fascicle-cache)
   (message "Diogenes TLL fascicle cache cleared"))
 
+
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
+
+;;;###autoload
+(defun diogenes-tll-available-p ()
+  "Non-nil if the TLL can be opened.
+True when `diogenes-tll-pdf-directory' names a directory that exists.
+Which fascicles are in it is not asked here: the banner only needs to know
+whether the user has the TLL at all, and a word in a missing fascicle is
+reported when the key is actually pressed."
+  (diogenes--path-usable-p diogenes-tll-pdf-directory 'directory))
+
+(defun diogenes-tll--register ()
+  "Announce the TLL to the lookup banner.  Idempotent."
+  (diogenes-lookup-register-dictionary
+   'tll :lang "latin" :name "TLL" :key "t" :order 20
+   :command #'diogenes-lookup-open-tll
+   :available-p #'diogenes-tll-available-p
+   :help "Open the TLL at \"%s\""))
+
+(with-eval-after-load 'diogenes-perseus
+  (diogenes-tll--register))
+
 (provide 'diogenes-tll)
 ;;; diogenes-tll.el ends here

@@ -354,5 +354,31 @@ Emacs is running."
   (clrhash diogenes-montanari--index-cache)
   (message "Diogenes Montanari index cache cleared"))
 
+
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
+
+;;;###autoload
+(defun diogenes-montanari-available-p ()
+  "Non-nil if Montanari's Brill Dictionary can be opened.
+True when `diogenes-montanari-pdf-file' names a readable PDF."
+  (diogenes--path-usable-p diogenes-montanari-pdf-file 'file))
+
+(defun diogenes-montanari--register ()
+  "Announce Montanari to the lookup banner.  Idempotent."
+  (diogenes-lookup-register-dictionary
+   'montanari :lang "greek" :name "Montanari" :key "m" :order 10
+   :command #'diogenes-lookup-open-montanari
+   :available-p #'diogenes-montanari-available-p
+   :bind t
+   :help "Open Montanari at \"%s\""))
+
+(with-eval-after-load 'diogenes-perseus
+  (diogenes-montanari--register))
+
 (provide 'diogenes-montanari)
 ;;; diogenes-montanari.el ends here

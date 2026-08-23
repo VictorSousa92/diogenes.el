@@ -4094,5 +4094,31 @@ next look-up, so use this only when you know the file is current."
              (if deleted "; prebuilt index deleted (rebuild with M-x diogenes-tgl-build-index)"
                ""))))
 
+;;;; --------------------------------------------------------------------
+;;;; REGISTRATION
+;;;; --------------------------------------------------------------------
+
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
+                  (id &rest keys))
+
+;;;###autoload
+(defun diogenes-tgl-available-p ()
+  "Non-nil if Estienne's Thesaurus Graecae Linguae can be opened.
+True when `diogenes-tgl-directory' names a directory that exists.
+Whether every volume is in it is not asked here: the banner only needs to
+know whether the user has this dictionary at all."
+  (diogenes--path-usable-p diogenes-tgl-directory 'directory))
+
+(defun diogenes-tgl--register ()
+  "Announce the TGL to the lookup banner.  Idempotent."
+  (diogenes-lookup-register-dictionary
+   'tgl :lang "greek" :name "TGL" :key "t" :order 50
+   :command #'diogenes-lookup-open-tgl
+   :available-p #'diogenes-tgl-available-p
+   :help "Open Estienne's Thesaurus Graecae Linguae at \"%s\""))
+
+(with-eval-after-load 'diogenes-perseus
+  (diogenes-tgl--register))
+
 (provide 'diogenes-tgl)
 ;;; diogenes-tgl.el ends here
