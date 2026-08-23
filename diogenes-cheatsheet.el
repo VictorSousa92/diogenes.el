@@ -261,6 +261,29 @@ Such an entry needs no row of its own: the parent's row names it."
     "Windows" "Other")
   "The order the groups appear in, whichever of them turn out to be used.")
 
+(defun diogenes-cheatsheet--configured-p (binding)
+  "Whether BINDING should be shown, given what this user has installed.
+A key that opens a dictionary is worth listing only when the dictionary is
+there: the registry's own availability test decides, the same one that
+keeps an unconfigured dictionary out of an entry's link banner, so the
+cheatsheet and the banner never disagree.  A key that is not a dictionary
+opener at all -- navigation, windows, quitting -- is always shown.
+
+Keys shared between two dictionaries are shown as long as either of them
+is available: `t' is worth listing for a reader who has the TLL and not the
+TGL, and the command dispatches on the language anyway."
+  (let* ((command (cdr binding))
+         (entries (cl-remove-if-not
+                   (lambda (entry) (eq (plist-get entry :command) command))
+                   (and (boundp 'diogenes--lookup-dictionaries)
+                        diogenes--lookup-dictionaries))))
+    (or (null entries)
+        (not (fboundp 'diogenes--lookup-dict-available-p))
+        (cl-some (lambda (entry)
+                   (diogenes--lookup-dict-available-p
+                    (plist-get entry :available-p)))
+                 entries))))
+
 (defun diogenes-cheatsheet--classify (bindings)
   "Group BINDINGS into (GROUP-TITLE . LINES) pairs, in a fixed order.
 Each line is (KEY . LABEL).  A dictionary is grouped by language and kind
@@ -325,7 +348,9 @@ first, so the panel answers \"what can I press HERE\" before anything else."
 				      (lambda (s) (eq (car s) here)) all)
 				     (cl-remove-if
 				      (lambda (s) (eq (car s) here)) all))
-	     for bindings = (diogenes-cheatsheet--bindings map)
+	     for bindings = (cl-remove-if-not
+			     #'diogenes-cheatsheet--configured-p
+			     (diogenes-cheatsheet--bindings map))
 	     when bindings
 	     collect (cons (if (eq tag here) (concat title "  (here)") title)
 			   bindings)
