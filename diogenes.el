@@ -343,36 +343,65 @@ Uses the Diogenes Perl module."
 
 
 ;;; DICTIONARY LOOKUP
-;;;###autoload
-(defun diogenes-lookup-greek (word)
-  "Search for a greek word in the LSJ Greek Dictionary.
-Accepts both Unicode and Beta Code as input."
-  (interactive (list (read-from-minibuffer "Search LSJ for: "
-					   (thing-at-point 'word t))))
-  (diogenes--lookup-dict word "greek"))
+;;
+;; Each of these four goes to the dictionary Diogenes searches by default --
+;; the LSJ in Greek, Lewis & Short in Latin -- and each will ask which
+;; dictionary instead, given a prefix argument or
+;; `diogenes-lookup-always-ask-dictionary\='.  The choice is among whatever
+;; has registered itself for that language: Bailly, Pape and the DGE in
+;; Greek, Gaffiot and Georges in Latin.
+;;
+;; Useful for a word the default dictionary does not carry, and for reading
+;; a Greek word in German or French rather than in English.
 
 ;;;###autoload
-(defun diogenes-lookup-latin (word)
-  "Search for a greek word in the Lewis & Short Latin Dictionary."
-  (interactive (list (read-from-minibuffer "Search Lewis & Short for: "
-					   (thing-at-point 'word t))))
-  (diogenes--lookup-dict word "latin"))
+(defun diogenes-lookup-greek (word &optional dictionary)
+  "Search for a greek word in the LSJ Greek Dictionary.
+Accepts both Unicode and Beta Code as input.
+
+With a prefix argument, ask which Greek dictionary to search instead; see
+`diogenes-lookup-always-ask-dictionary\=' to be asked every time."
+  (interactive (diogenes--lookup-read-args "greek" "Search LSJ for: "))
+  (if dictionary
+      (diogenes--lookup-word-in-dictionary word dictionary)
+    (diogenes--lookup-dict word "greek")))
+
+;;;###autoload
+(defun diogenes-lookup-latin (word &optional dictionary)
+  "Search for a latin word in the Lewis & Short Latin Dictionary.
+
+With a prefix argument, ask which Latin dictionary to search instead; see
+`diogenes-lookup-always-ask-dictionary\=' to be asked every time."
+  (interactive (diogenes--lookup-read-args "latin" "Search Lewis & Short for: "))
+  (if dictionary
+      (diogenes--lookup-word-in-dictionary word dictionary)
+    (diogenes--lookup-dict word "latin")))
 
 ;;; MORPHEUS PARSING
 ;;;###autoload
-(defun diogenes-parse-and-lookup-greek (word)
-  "Try to parse a greek word and look it up."
-  (interactive (list (read-from-minibuffer "Parse greek word: "
-					   (thing-at-point 'word t))))
-  (diogenes--parse-and-lookup (diogenes--greek-ensure-beta word)
-			      "greek"))
+(defun diogenes-parse-and-lookup-greek (word &optional dictionary)
+  "Try to parse a greek word and look it up.
+
+With a prefix argument, ask which Greek dictionary to show it in.  The word
+is parsed either way -- an inflected form reaches its lemma -- but a chosen
+dictionary is reached by that lemma rather than by the offset Diogenes
+recorded, there being no offset for any dictionary but its own."
+  (interactive (diogenes--lookup-read-args "greek" "Parse greek word: "))
+  (if dictionary
+      (diogenes--lookup-word-in-dictionary word dictionary t)
+    (diogenes--parse-and-lookup (diogenes--greek-ensure-beta word)
+				"greek")))
 
 ;;;###autoload
-(defun diogenes-parse-and-lookup-latin (word)
-  "Try to parse a latin word and look it up."
-  (interactive (list (read-from-minibuffer "Parse latin word: "
-					   (thing-at-point 'word t))))
-  (diogenes--parse-and-lookup word "latin"))
+(defun diogenes-parse-and-lookup-latin (word &optional dictionary)
+  "Try to parse a latin word and look it up.
+
+With a prefix argument, ask which Latin dictionary to show it in; see
+`diogenes-parse-and-lookup-greek\=' on what that changes."
+  (interactive (diogenes--lookup-read-args "latin" "Parse latin word: "))
+  (if dictionary
+      (diogenes--lookup-word-in-dictionary word dictionary t)
+    (diogenes--parse-and-lookup word "latin")))
 
 ;;;###autoload
 (defun diogenes-parse-greek (query)
@@ -535,10 +564,13 @@ user interface."
     ("bc" "Browse the Christian Inscriptions" diogenes-browse-chr)
     ("bm" "Browse the Miscellaneous PHI Texts" diogenes-browse-misc)]]
   [["MORPHOLOGY & DICTIONARY LOOKUP"
-    ("lg" "Look up Greek word (LSJ)" diogenes-lookup-greek)
-    ("ll" "Look up Latin word (Lewis & Short)" diogenes-lookup-latin)
-    ("pg" "Try to parse and look up a Greek" diogenes-parse-and-lookup-greek)
-    ("pl" "Try to parse and look up a Latin" diogenes-parse-and-lookup-latin)
+    ("lg" "Look up Greek word (LSJ; C-u to choose)" diogenes-lookup-greek)
+    ("ll" "Look up Latin word (Lewis & Short; C-u to choose)"
+     diogenes-lookup-latin)
+    ("pg" "Try to parse and look up a Greek (C-u to choose)"
+     diogenes-parse-and-lookup-greek)
+    ("pl" "Try to parse and look up a Latin (C-u to choose)"
+     diogenes-parse-and-lookup-latin)
     ("mg" "Greek morphology tools" diogenes-morphology-greek)
     ("ml" "Latin morphology tools" diogenes-morphology-latin)]
    ["DUMP AN ENTIRE WORK AS PLAIN TEXT"

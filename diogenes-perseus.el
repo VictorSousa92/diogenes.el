@@ -1253,6 +1253,71 @@ another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
 	   (diogenes--latin-extra-lemma word))
       word))
 
+(defcustom diogenes-lookup-always-ask-dictionary nil
+  "Whether the language lookup commands always ask which dictionary.
+Nil, the default, sends `\\[diogenes-lookup-greek]\=' to the LSJ and
+`\\[diogenes-lookup-latin]\=' to Lewis & Short, and a prefix argument asks;
+non-nil asks every time and a prefix argument makes no difference.
+
+Worth setting for a reader who works mostly in Bailly, Georges or the DGE
+and finds the default an extra keystroke rather than a convenience."
+  :type 'boolean
+  :group 'diogenes)
+
+(defun diogenes--lookup-read-args (lang prompt)
+  "Read the arguments for a LANG lookup: (WORD DICTIONARY).
+PROMPT is used when the default dictionary is to be searched.  DICTIONARY
+is nil unless a choice was asked for, by a prefix argument or by
+`diogenes-lookup-always-ask-dictionary\=', in which case the prompt names
+what was chosen -- so the minibuffer says what it is about to do."
+  (let ((dictionary
+	 (when (or current-prefix-arg diogenes-lookup-always-ask-dictionary)
+	   (diogenes--read-dictionary lang))))
+    (list (read-from-minibuffer
+	   (if dictionary
+	       (format "Look up in %s: " (plist-get dictionary :name))
+	     prompt)
+	   (thing-at-point 'word t))
+	  dictionary)))
+
+(defun diogenes--read-dictionary (lang &optional prompt)
+  "Ask which of LANG\='s registered dictionaries to use; return its entry.
+Signals if none is registered, which is the honest answer to a request that
+cannot be met -- better than silently falling back on the default and
+leaving the reader to wonder why the choice was ignored."
+  (let ((alist (diogenes--lookup-choosable-dictionaries lang)))
+    (unless alist
+      (user-error "No searchable %s dictionary is registered: \
+load diogenes-bailly, -gaffiot, -georges, -pape or -dge" lang))
+    (cdr (assoc (completing-read (or prompt
+				     (format "Which %s dictionary: " lang))
+				 alist nil t)
+		alist))))
+
+(defun diogenes--lookup-word-in-dictionary (word dictionary &optional parse)
+  "Show WORD in DICTIONARY, a registry entry; with PARSE, its lemma instead.
+The one place that knows how to send a word to a dictionary chosen at
+runtime, used by `diogenes-lookup-in-dictionary\=' and by the language
+commands when they are asked to offer a choice."
+  (let* ((lang (plist-get dictionary :lang))
+	 (command (plist-get dictionary :command))
+	 (word (string-trim (or word "")))
+	 (target (if parse (diogenes--lookup-lemma-of word lang) word)))
+    (when (string-empty-p word)
+      (user-error "Nothing to look up"))
+    ;; The dictionary commands assert the language of the buffer they are
+    ;; called from, so that a Greek lexicon is not opened on a Latin entry.
+    ;; Here the language comes from the dictionary that was chosen, which is
+    ;; the whole point: let-binding the buffer-local tells the assertion the
+    ;; truth about what is being looked up.  And nothing may be inherited
+    ;; from the entry we are leaving: a Greek word looked up in Georges must
+    ;; not carry the Greek file along with it.
+    (let ((diogenes--lookup-lang lang)
+	  (diogenes--lookup-file nil))
+      (unless (equal target word)
+	(message "%s: looking up %s" word target))
+      (funcall command target))))
+
 ;;;###autoload
 (defun diogenes-lookup-in-dictionary (&optional word dictionary)
   "Look a word up in a dictionary of your choosing.
@@ -1307,25 +1372,7 @@ load diogenes-bailly, -gaffiot, -georges or -pape" lang)))
 	   entry)))
   (unless dictionary
     (user-error "No dictionary chosen"))
-  (let* ((lang (plist-get dictionary :lang))
-	 (command (plist-get dictionary :command))
-	 (word (string-trim (or word "")))
-	 (lemma (diogenes--lookup-lemma-of word lang)))
-    (when (string-empty-p word)
-      (user-error "Nothing to look up"))
-    ;; The dictionary commands assert the language of the buffer they are
-    ;; called from, so that a Greek lexicon is not opened on a Latin entry.
-    ;; Here the language comes from the dictionary that was chosen, which is
-    ;; the whole point: let-binding the buffer-local tells the assertion the
-    ;; truth about what is being looked up.
-    (let ((diogenes--lookup-lang lang)
-	  ;; And nothing may be inherited from the entry we are leaving: a
-	  ;; Greek word looked up in Georges must not carry the Greek file
-	  ;; along with it.
-	  (diogenes--lookup-file nil))
-      (unless (string= lemma word)
-	(message "%s: looking up %s" word lemma))
-      (funcall command lemma))))
+  (diogenes--lookup-word-in-dictionary word dictionary t))
 
 ;;;###autoload
 (defun diogenes-lookup-lewis (&optional word)
