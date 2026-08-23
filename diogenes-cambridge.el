@@ -281,8 +281,15 @@ running."
 ;;;###autoload
 (defun diogenes-cambridge-available-p ()
   "Non-nil if the Cambridge Greek Lexicon can be opened.
-True when `diogenes-cambridge-pdf-file' names a readable PDF."
-  (diogenes--path-usable-p diogenes-cambridge-pdf-file 'file))
+True when `diogenes-cambridge-pdf-file' is set, whether or not the file is
+there."
+  (diogenes--path-set-p diogenes-cambridge-pdf-file))
+
+(defconst diogenes-cambridge--declared-at-load (diogenes--declared-at-load-p)
+  "Whether the CGL was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-cambridge--register ()
   "Announce the CGL to the lookup banner.  Idempotent."
@@ -290,6 +297,8 @@ True when `diogenes-cambridge-pdf-file' names a readable PDF."
    'cambridge :lang "greek" :name "CGL" :key "c" :order 20
    :command #'diogenes-lookup-open-cambridge
    :available-p #'diogenes-cambridge-available-p
+   :declared diogenes-cambridge--declared-at-load
+   :paths '(diogenes-cambridge-pdf-file)
    :bind t
    :help "Open the Cambridge Greek Lexicon at \"%s\""))
 

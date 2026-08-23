@@ -365,8 +365,15 @@ Emacs is running."
 ;;;###autoload
 (defun diogenes-montanari-available-p ()
   "Non-nil if Montanari's Brill Dictionary can be opened.
-True when `diogenes-montanari-pdf-file' names a readable PDF."
-  (diogenes--path-usable-p diogenes-montanari-pdf-file 'file))
+True when `diogenes-montanari-pdf-file' is set, whether or not the file is
+there."
+  (diogenes--path-set-p diogenes-montanari-pdf-file))
+
+(defconst diogenes-montanari--declared-at-load (diogenes--declared-at-load-p)
+  "Whether Montanari was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-montanari--register ()
   "Announce Montanari to the lookup banner.  Idempotent."
@@ -374,6 +381,8 @@ True when `diogenes-montanari-pdf-file' names a readable PDF."
    'montanari :lang "greek" :name "Montanari" :key "m" :order 10
    :command #'diogenes-lookup-open-montanari
    :available-p #'diogenes-montanari-available-p
+   :declared diogenes-montanari--declared-at-load
+   :paths '(diogenes-montanari-pdf-file)
    :bind t
    :help "Open Montanari at \"%s\""))
 

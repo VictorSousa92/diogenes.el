@@ -4104,10 +4104,15 @@ next look-up, so use this only when you know the file is current."
 ;;;###autoload
 (defun diogenes-tgl-available-p ()
   "Non-nil if Estienne's Thesaurus Graecae Linguae can be opened.
-True when `diogenes-tgl-directory' names a directory that exists.
-Whether every volume is in it is not asked here: the banner only needs to
-know whether the user has this dictionary at all."
-  (diogenes--path-usable-p diogenes-tgl-directory 'directory))
+True when `diogenes-tgl-directory' is set.  Whether it exists, and whether
+every volume is in it, is not asked here."
+  (diogenes--path-set-p diogenes-tgl-directory))
+
+(defconst diogenes-tgl--declared-at-load (diogenes--declared-at-load-p)
+  "Whether the TGL was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-tgl--register ()
   "Announce the TGL to the lookup banner.  Idempotent."
@@ -4115,6 +4120,8 @@ know whether the user has this dictionary at all."
    'tgl :lang "greek" :name "TGL" :key "t" :order 50
    :command #'diogenes-lookup-open-tgl
    :available-p #'diogenes-tgl-available-p
+   :declared diogenes-tgl--declared-at-load
+   :paths '(diogenes-tgl-directory)
    :help "Open Estienne's Thesaurus Graecae Linguae at \"%s\""))
 
 (with-eval-after-load 'diogenes-perseus

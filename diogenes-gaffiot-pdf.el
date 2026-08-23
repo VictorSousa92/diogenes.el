@@ -305,7 +305,13 @@ whether there is a PDF at all.  Asked before offering \"[PDF (g)]\" inside a
 Gaffiot entry, where an explicit press is not a fall-through and so is not
 the fallback option's business."
   (and (boundp 'diogenes-gaffiot-pdf-file)
-       (diogenes--path-usable-p diogenes-gaffiot-pdf-file 'file)))
+       (diogenes--path-set-p diogenes-gaffiot-pdf-file)))
+
+(defconst diogenes-gaffiot-pdf--declared-at-load (diogenes--declared-at-load-p)
+  "Whether the printed Gaffiot was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-gaffiot-pdf--register ()
   "Announce the printed Gaffiot to the lookup banner.  Idempotent.
@@ -332,6 +338,8 @@ worth naming."
    :command #'diogenes-lookup-open-gaffiot-pdf
    :show 'when-current :of 'gaffiot
    :available-p #'diogenes-gaffiot-pdf-available-p
+   :declared diogenes-gaffiot-pdf--declared-at-load
+   :paths '(diogenes-gaffiot-pdf-file)
    :help "Open the printed Gaffiot at \"%s\""))
 
 (with-eval-after-load 'diogenes-perseus

@@ -621,7 +621,7 @@ pressing `B' offers to build it.  Never signals: `diogenes-path' may itself
 be unset, and this is asked while an entry is being drawn."
   (let ((file (ignore-errors (diogenes-bailly--dictionary-file))))
     (or (and file (file-readable-p file))
-        (diogenes--source-usable-p diogenes-bailly-source-file))))
+        (diogenes--source-set-p diogenes-bailly-source-file))))
 
 ;;;###autoload
 (defun diogenes-bailly-available-p ()
@@ -743,6 +743,12 @@ to the LSJ, `C-u B' looks up another word here"))
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
+(defconst diogenes-bailly--declared-at-load (diogenes--declared-at-load-p)
+  "Whether Bailly was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
+
 (defun diogenes-bailly--register ()
   "Announce Bailly to the lookup banner.  Idempotent.
 `:show unless-current' keeps the link out of a Bailly entry, where its
@@ -756,6 +762,8 @@ it needs no language dispatcher of the kind `P' and `l' have."
    :show 'unless-current
    :buffer-p #'diogenes-bailly-lookup-buffer-p
    :available-p #'diogenes-bailly-available-p
+   :declared diogenes-bailly--declared-at-load
+   :paths '(diogenes-bailly-file diogenes-bailly-source-file diogenes-bailly-pdf-file)
    :bind t
    :help "Show Bailly's entry for \"%s\""))
 

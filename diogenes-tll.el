@@ -310,11 +310,17 @@ cleared with `diogenes-old-clear-cache'.)"
 ;;;###autoload
 (defun diogenes-tll-available-p ()
   "Non-nil if the TLL can be opened.
-True when `diogenes-tll-pdf-directory' names a directory that exists.
-Which fascicles are in it is not asked here: the banner only needs to know
-whether the user has the TLL at all, and a word in a missing fascicle is
-reported when the key is actually pressed."
-  (diogenes--path-usable-p diogenes-tll-pdf-directory 'directory))
+True when `diogenes-tll-pdf-directory' is set.  Whether it exists, and
+which fascicles are in it, is not asked here: a path that is set is a
+dictionary the user means to have, so the link is offered and the key
+explains what is wrong with the path."
+  (diogenes--path-set-p diogenes-tll-pdf-directory))
+
+(defconst diogenes-tll--declared-at-load (diogenes--declared-at-load-p)
+  "Whether the TLL was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-tll--register ()
   "Announce the TLL to the lookup banner.  Idempotent."
@@ -322,6 +328,8 @@ reported when the key is actually pressed."
    'tll :lang "latin" :name "TLL" :key "t" :order 20
    :command #'diogenes-lookup-open-tll
    :available-p #'diogenes-tll-available-p
+   :declared diogenes-tll--declared-at-load
+   :paths '(diogenes-tll-pdf-directory)
    :help "Open the TLL at \"%s\""))
 
 (with-eval-after-load 'diogenes-perseus

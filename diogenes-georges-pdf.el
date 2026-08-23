@@ -338,8 +338,13 @@ Call this if you replace or re-bookmark a volume while Emacs is running."
   "Non-nil when the printed Georges can be opened.
 `diogenes-georges-directory' set to a directory that exists: enough for the
 banner to decide whether to offer the link, without reading an outline."
-  (and diogenes-georges-directory
-       (file-directory-p diogenes-georges-directory)))
+  (diogenes--path-set-p diogenes-georges-directory))
+
+(defconst diogenes-georges-pdf--declared-at-load (diogenes--declared-at-load-p)
+  "Whether the printed Georges was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-georges-pdf--register ()
   "Announce the printed Georges to the lookup banner.  Idempotent.
@@ -352,6 +357,8 @@ dispatching, so nothing is bound here."
    :command #'diogenes-lookup-open-georges-pdf
    :show 'when-current :of 'georges
    :available-p #'diogenes-georges-pdf-available-p
+   :declared diogenes-georges-pdf--declared-at-load
+   :paths '(diogenes-georges-directory)
    :help "Open the printed Georges at \"%s\""))
 
 (with-eval-after-load 'diogenes-perseus

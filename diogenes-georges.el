@@ -387,7 +387,7 @@ returns nil when neither option is set, which is unavailable too.  Never
 signals: this is asked while an entry is being drawn."
   (let ((file (ignore-errors (diogenes-georges--dictionary-file))))
     (or (and file (file-readable-p file))
-        (diogenes--source-usable-p diogenes-georges-source-file))))
+        (diogenes--source-set-p diogenes-georges-source-file))))
 
 ;;;###autoload
 (defun diogenes-georges-available-p ()
@@ -505,6 +505,12 @@ returns to Lewis & Short, `C-u G' looks up another word here"))
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
+(defconst diogenes-georges--declared-at-load (diogenes--declared-at-load-p)
+  "Whether Georges was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
+
 (defun diogenes-georges--register ()
   "Announce Georges to the lookup banner.  Idempotent.
 `:show unless-current' keeps the link out of a Georges entry, where its
@@ -519,6 +525,8 @@ have."
    :show 'unless-current
    :buffer-p #'diogenes-georges-lookup-buffer-p
    :available-p #'diogenes-georges-available-p
+   :declared diogenes-georges--declared-at-load
+   :paths '(diogenes-georges-file diogenes-georges-source-file diogenes-georges-directory)
    :bind t
    :help "Show Georges' entry for \"%s\""))
 

@@ -392,7 +392,7 @@ Never signals: `diogenes-path' may itself be unset, and this is asked while
 an entry is being drawn."
   (let ((file (ignore-errors (diogenes-gaffiot--dictionary-file))))
     (or (and file (file-readable-p file))
-        (diogenes--path-usable-p diogenes-gaffiot-source-file 'file))))
+        (diogenes--source-set-p diogenes-gaffiot-source-file))))
 
 ;;;###autoload
 (defun diogenes-gaffiot-available-p ()
@@ -543,6 +543,12 @@ M-x customize-variable"))))))
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
+(defconst diogenes-gaffiot--declared-at-load (diogenes--declared-at-load-p)
+  "Whether Gaffiot was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
+
 (defun diogenes-gaffiot--register ()
   "Announce Gaffiot to the lookup banner.  Idempotent.
 `g' is Latin-only, so `:bind t' can put it on `diogenes-lookup-gaffiot'
@@ -559,6 +565,8 @@ the dictionary Diogenes searches by default."
    :show 'unless-current
    :buffer-p #'diogenes-gaffiot-lookup-buffer-p
    :available-p #'diogenes-gaffiot-available-p
+   :declared diogenes-gaffiot--declared-at-load
+   :paths '(diogenes-gaffiot-file diogenes-gaffiot-source-file diogenes-gaffiot-pdf-file)
    :bind t
    :help "Show Gaffiot's entry for \"%s\""))
 

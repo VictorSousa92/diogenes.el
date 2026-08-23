@@ -757,10 +757,15 @@ session benefits immediately."
 ;;;###autoload
 (defun diogenes-passow-available-p ()
   "Non-nil if Passow's Handwörterbuch can be opened.
-True when `diogenes-passow-directory' names a directory that exists.
-Whether every volume is in it is not asked here: the banner only needs to
-know whether the user has this dictionary at all."
-  (diogenes--path-usable-p diogenes-passow-directory 'directory))
+True when `diogenes-passow-directory' is set.  Whether it exists, and
+whether every volume is in it, is not asked here."
+  (diogenes--path-set-p diogenes-passow-directory))
+
+(defconst diogenes-passow--declared-at-load (diogenes--declared-at-load-p)
+  "Whether Passow was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-passow--register ()
   "Announce Passow to the lookup banner.  Idempotent."
@@ -768,6 +773,8 @@ know whether the user has this dictionary at all."
    'passow :lang "greek" :name "Passow" :key "p" :order 40
    :command #'diogenes-lookup-open-passow
    :available-p #'diogenes-passow-available-p
+   :declared diogenes-passow--declared-at-load
+   :paths '(diogenes-passow-directory)
    :bind t
    :help "Open Passow at \"%s\""))
 

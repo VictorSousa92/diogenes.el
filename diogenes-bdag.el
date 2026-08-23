@@ -258,8 +258,15 @@ is running."
 ;;;###autoload
 (defun diogenes-bdag-available-p ()
   "Non-nil if BDAG (Bauer) can be opened.
-True when `diogenes-bdag-pdf-file' names a readable PDF."
-  (diogenes--path-usable-p diogenes-bdag-pdf-file 'file))
+True when `diogenes-bdag-pdf-file' is set, whether or not the file is
+there."
+  (diogenes--path-set-p diogenes-bdag-pdf-file))
+
+(defconst diogenes-bdag--declared-at-load (diogenes--declared-at-load-p)
+  "Whether BDAG was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-bdag--register ()
   "Announce BDAG (Bauer) to the lookup banner.  Idempotent."
@@ -267,6 +274,8 @@ True when `diogenes-bdag-pdf-file' names a readable PDF."
    'bdag :lang "greek" :name "BDAG" :key "b" :order 30
    :command #'diogenes-lookup-open-bdag
    :available-p #'diogenes-bdag-available-p
+   :declared diogenes-bdag--declared-at-load
+   :paths '(diogenes-bdag-pdf-file)
    :bind t
    :help "Open BDAG (Bauer) at \"%s\""))
 

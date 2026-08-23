@@ -1022,13 +1022,17 @@ True when `diogenes-bailly-pdf-file' names a readable PDF.  Asked by
 `diogenes-bailly.el' before offering the \"[PDF (B)]\" link inside an
 entry, so the link appears only when there is a PDF behind it."
   (and (boundp 'diogenes-bailly-pdf-file)
-       diogenes-bailly-pdf-file
-       (file-readable-p diogenes-bailly-pdf-file)
-       t))
+       (diogenes--path-set-p diogenes-bailly-pdf-file)))
 
 ;;;; --------------------------------------------------------------------
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
+
+(defconst diogenes-bailly-pdf--declared-at-load (diogenes--declared-at-load-p)
+  "Whether the printed Bailly was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-bailly-pdf--register ()
   "Announce the printed Bailly to the lookup banner.  Idempotent.
@@ -1044,6 +1048,8 @@ bind the key itself."
    :command #'diogenes-lookup-open-bailly-pdf
    :show 'when-current :of 'bailly
    :available-p #'diogenes-bailly-pdf-available-p
+   :declared diogenes-bailly-pdf--declared-at-load
+   :paths '(diogenes-bailly-pdf-file)
    :help "Open the printed Bailly at \"%s\""))
 
 (with-eval-after-load 'diogenes-perseus

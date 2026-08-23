@@ -931,10 +931,17 @@ running."
 ;;;###autoload
 (defun diogenes-old-available-p ()
   "Non-nil if the printed OLD can be opened.
-True when `diogenes-old-pdf-file' names a readable PDF.  Asked by the link
-banner before offering \"[OLD (o)]\", so a user who has not got the OLD is
-not offered it."
-  (diogenes--path-usable-p diogenes-old-pdf-file 'file))
+True when `diogenes-old-pdf-file' is set -- whether the file is there is
+not asked here, a path being a statement of intent.  Asked by the link
+banner before offering \"[OLD (o)]\", so a user who has said nothing about
+the OLD is not offered it."
+  (diogenes--path-set-p diogenes-old-pdf-file))
+
+(defconst diogenes-old--declared-at-load (diogenes--declared-at-load-p)
+  "Whether the OLD was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-old--register ()
   "Announce the OLD to the lookup banner.  Idempotent."
@@ -942,6 +949,8 @@ not offered it."
    'old :lang "latin" :name "OLD" :key "o" :order 10
    :command #'diogenes-lookup-open-old
    :available-p #'diogenes-old-available-p
+   :declared diogenes-old--declared-at-load
+   :paths '(diogenes-old-pdf-file)
    :bind t
    :help "Open the OLD at \"%s\""))
 

@@ -934,7 +934,7 @@ companion and this is the whole of the DGE's availability.  Never signals:
 being drawn."
   (let ((file (ignore-errors (diogenes-dge--dictionary-file))))
     (or (and file (file-readable-p file))
-        (diogenes--source-usable-p diogenes-dge-source-file))))
+        (diogenes--source-set-p diogenes-dge-source-file))))
 
 (defun diogenes-dge--file ()
   "Return the converted dictionary file, building it if the user agrees.
@@ -1015,6 +1015,12 @@ Requires a converted dictionary file; see
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
+(defconst diogenes-dge--declared-at-load (diogenes--declared-at-load-p)
+  "Whether the DGE was asked for, rather than bundled with the rest.
+Computed when this file is read: a `require' in an init file means the
+user wants this dictionary, and it is then offered whatever its paths
+say.  See `diogenes--loading-bundle'.")
+
 (defun diogenes-dge--register ()
   "Announce the DGE to the lookup banner, on \\`d'.  Idempotent.
 `:show unless-current', so the DGE is not offered inside the DGE; the way
@@ -1030,6 +1036,8 @@ declines through `diogenes--lookup-assert-lang'."
    :show 'unless-current
    :buffer-p #'diogenes-dge-lookup-buffer-p
    :available-p #'diogenes-dge-available-p
+   :declared diogenes-dge--declared-at-load
+   :paths '(diogenes-dge-file diogenes-dge-source-file)
    :bind t
    :help "Show the DGE's entry for \"%s\""))
 
