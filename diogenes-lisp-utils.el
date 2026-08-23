@@ -89,6 +89,41 @@ The value is actually the first element of ALIST whose car equals KEY."
 		    (point-min))))
     (list start end)))
 
+(defun diogenes--path-usable-p (value kind)
+  "Non-nil if VALUE names an existing file or readable directory.
+KIND is `file' or `directory'.  VALUE is what a dictionary's path option
+currently holds: nil, the empty string, or a path that does not exist all
+count as unusable.
+
+This is the half of the pair that ASKS, and it must stay cheap, silent and
+free of side effects: the link banner calls it for every dictionary each
+time it draws itself, so it may neither signal nor prompt.
+`diogenes--require-path' is the half that TELLS -- called by a command once
+the user has actually pressed a key, and which explains what to set."
+  (and (stringp value)
+       (not (string-empty-p value))
+       (if (eq kind 'directory)
+           (file-directory-p value)
+         (file-readable-p value))
+       t))
+
+(defun diogenes--source-usable-p (value)
+  "Non-nil if VALUE names TEI source material that is actually there.
+The `...-source-file' options each take any of three things -- a single XML
+file, a directory of them, or an explicit list -- so this accepts all
+three: a list is usable when any of its members is, a string when it names
+either a readable file or an existing directory.
+
+Asked when deciding whether to offer a dictionary that has not been
+converted yet: a source that is present means \\[diogenes-lookup-pape] and
+its kind can offer to build the dictionary, so the link leads somewhere
+after all.  Like `diogenes--path-usable-p', it neither signals nor
+prompts."
+  (cond
+   ((consp value) (seq-some #'diogenes--source-usable-p value))
+   (t (or (diogenes--path-usable-p value 'file)
+          (diogenes--path-usable-p value 'directory)))))
+
 (defun diogenes--require-path (value variable dictionary kind)
   "Return VALUE, or explain how to set VARIABLE if it will not serve.
 The dictionaries each need a path from the user, and a missing one should
