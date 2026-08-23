@@ -1227,10 +1227,27 @@ another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
 	  (let* ((record (diogenes--parse-analyses-record raw lang))
 		 (first (car (plist-get record :analyses))))
 	    (when first
-	      ;; The raw lemma, markers and all: every dictionary module
-	      ;; reduces a headword to its own key, and they disagree about
-	      ;; how -- Georges folds j onto i, Bailly works in beta code.
-	      (plist-get first :lemma)))))
+	      ;; Two conversions, and neither is optional.
+	      ;;
+	      ;; `:lemma' holds the field as the analyses file writes it, which
+	      ;; is the pair FORM,LEMMA -- "dei/knu_mi,dei/knumi" -- so the
+	      ;; lemma is what follows the comma, as make_latin_analyses.pl
+	      ;; also takes it (s/^.*,\s*//).  Handing a dictionary the whole
+	      ;; pair asks it about a string with a comma in the middle.
+	      ;;
+	      ;; And the field is beta code for Greek, where the dictionary
+	      ;; commands expect what `diogenes--lookup-current-headword' hands
+	      ;; them interactively: Unicode.  Each converts Unicode to its own
+	      ;; key, so given beta code they read ASCII letters as Greek and
+	      ;; land somewhere arbitrary -- consistently arbitrary across all
+	      ;; of them, which is why Bailly, Pape, the LSJ and the DGE
+	      ;; answered `δείκνυμι' alike with the neighbourhood of
+	      ;; `δίξεστον'.
+	      (let* ((field (plist-get first :lemma))
+		     (lemma (if (string-match "," field)
+				(substring field (match-end 0))
+			      field)))
+		(diogenes--munge-ls-lemma (string-trim lemma) lang))))))
       (and (fboundp 'diogenes--latin-extra-lemma)
 	   (string= lang "latin")
 	   (diogenes--latin-extra-lemma word))
