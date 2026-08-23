@@ -2013,7 +2013,12 @@ is itself a plist
   (:offset N :conf N :lemma RAW :display SHOWN :trans TRANS :info INFO)
 
 in the order the record gives them.  Nothing is dropped and nothing is
-merged; grouping is `diogenes--analyses-dicts''s job."
+merged; grouping is `diogenes--analyses-dicts''s job.
+
+`diogenes-latin-analysis-corrections' is applied here, keyed by the form
+the record itself is filed under, so every caller of a parse gets the same
+corrected morphology -- the analysis header, the entries chosen, and the
+lemma a hand-picked dictionary is asked about alike."
   (let* ((str (decode-coding-string encoded-str 'utf-8))
 	 (body (or (cadr (diogenes--split-once "\t+" str)) ""))
 	 (pos 0)
@@ -2036,7 +2041,10 @@ merged; grouping is `diogenes--analyses-dicts''s job."
 	  (while (string-match "\\[\\([0-9]+\\)\\]" extra p)
 	    (push (string-to-number (match-string 1 extra)) suppl)
 	    (setq p (match-end 0))))))
-    (list :analyses (nreverse analyses)
+    (list :analyses (diogenes--correct-analyses
+                     (car (diogenes--split-once "\t+" str))
+                     (nreverse analyses)
+                     lang)
 	  :suppl (delete-dups (nreverse suppl)))))
 
 (defun diogenes--analyses-dicts (record)
@@ -2720,6 +2728,124 @@ also answers for the form written with u and i."
   (cl-loop for variant in (diogenes--latin-form-variants word)
 	   thereis (cdr (assoc-string variant
 				    diogenes-latin-extra-lemmata t))))
+
+(defcustom diogenes-latin-mark-corrections t
+  "Whether a corrected analysis is marked as corrected.
+Non-nil appends \" [corr.]\" to any morphology that
+`diogenes-latin-analysis-corrections' has altered or added, so that what
+you are reading is never silently other than what the shipped data says.
+Nil prints the correction as though it came from the file."
+  :type 'boolean
+  :group 'diogenes)
+
+(defcustom diogenes-latin-analysis-corrections nil
+  "Corrections to the morphology the analyses file records for a Latin form.
+An alist of (FORM . PLIST).  FORM is the form as `latin-analyses.txt' keys
+it -- bare ASCII, which is what a contraction or an accented spelling has
+been resolved to by the time this is consulted.  PLIST takes:
+
+  :info STRING     -- the morphology to print instead, for every analysis
+                      of FORM.
+  :info ALIST      -- ((OLD . NEW) ...), replacing only the analyses whose
+                      morphology is OLD.  For a form with several analyses
+                      of which one is wrong.
+  :add ENTRIES     -- ((LEMMA . INFO) ...), further analyses to show after
+                      those the file gives.  LEMMA nil means the lemma the
+                      file already names, so a missing reading of the same
+                      word is added without repeating its headword; a
+                      string is a headword, whose entry is fetched and
+                      shown alongside.
+
+For example, where the batch run of Morpheus over the wordlists labels the
+deponent's imperative an active infinitive:
+
+    (setq diogenes-latin-analysis-corrections
+          \\='((\"experire\" :info \"pres imperat pass 2nd sg\")))
+
+or, to keep the file's reading and add the missing one:
+
+    (setq diogenes-latin-analysis-corrections
+          \\='((\"experire\" :add ((nil . \"pres imperat pass 2nd sg\")))))
+
+This is for a form the file analyses WRONGLY.  A form it does not analyse
+at all is `diogenes-latin-extra-lemmata'; a form whose spelling the file
+does not use is normalised before it gets here -- see
+`diogenes--latin-parse-candidates' -- and neither is a correction.
+
+A long list here is an argument for reporting the analyses upstream rather
+than for maintaining it: the data is a batch run of Morpheus, so a
+systematic error in it is one error, not a hundred."
+  :type '(alist :key-type (string :tag "Form")
+                :value-type (sexp :tag "Plist"))
+  :group 'diogenes)
+
+(defun diogenes--latin-analysis-correction (form)
+  "The correction plist `diogenes-latin-analysis-corrections' gives FORM.
+Every spelling variant is tried, so an entry written with v and j answers
+for the form written with u and i."
+  (and diogenes-latin-analysis-corrections
+       (cl-loop for variant in (diogenes--latin-form-variants form)
+                thereis (cdr (assoc-string
+                              variant diogenes-latin-analysis-corrections t)))))
+
+(defun diogenes--mark-correction (info)
+  "INFO marked as corrected, if `diogenes-latin-mark-corrections' says so."
+  (if diogenes-latin-mark-corrections
+      (concat info " [corr.]")
+    info))
+
+(defun diogenes--corrected-info (info spec)
+  "INFO as SPEC would have it: SPEC itself, its alist entry, or INFO."
+  (cond ((stringp spec) spec)
+        ((consp spec) (or (cdr (assoc-string info spec t)) info))
+        (t info)))
+
+(defun diogenes--added-analysis (lemma info model lang)
+  "An analysis of LEMMA reading INFO, shaped like the file's own.
+LEMMA nil takes the lemma and the byte offset of MODEL, the analysis the
+file gave, so a missing reading of the same word costs no lookup and lands
+on the same entry.  A LEMMA given is resolved against the dictionary's own
+keys, as `diogenes--morpheus-analyses' resolves one: found, it carries that
+offset and a confidence of 5; not found, 0, which prints the caveat about
+the headword being a guess."
+  (if (null lemma)
+      (list :offset (or (plist-get model :offset) 0)
+            :conf (or (plist-get model :conf) 5)
+            :lemma (plist-get model :lemma)
+            :display (plist-get model :display)
+            :trans ""
+            :info (diogenes--mark-correction info))
+    (let ((offset (diogenes--dict-exact-offset
+                   (diogenes--ascii-alpha-only lemma) lang)))
+      (list :offset (or offset 0)
+            :conf (if offset 5 0)
+            :lemma lemma
+            :display (diogenes--munge-ls-lemma lemma lang)
+            :trans ""
+            :info (diogenes--mark-correction info)))))
+
+(defun diogenes--correct-analyses (form analyses lang)
+  "ANALYSES of FORM, with `diogenes-latin-analysis-corrections' applied.
+Returns ANALYSES unchanged when there is no entry for FORM, which is the
+usual case and costs one `assoc-string' per lookup.  Latin only: the Greek
+analyses have no such table, there being no reported need for one."
+  (let ((spec (and (string= lang "latin")
+                   (diogenes--latin-analysis-correction form))))
+    (if (null spec)
+        analyses
+      (let ((info-spec (plist-get spec :info))
+            (model (car analyses)))
+        (append
+         (mapcar (lambda (analysis)
+                   (let* ((old (plist-get analysis :info))
+                          (new (diogenes--corrected-info old info-spec)))
+                     (if (equal old new)
+                         analysis
+                       (plist-put (copy-sequence analysis) :info
+                                  (diogenes--mark-correction new)))))
+                 analyses)
+         (cl-loop for (lemma . info) in (plist-get spec :add)
+                  collect (diogenes--added-analysis lemma info model lang)))))))
 
 
 ;;; Morpheus as a fallback
