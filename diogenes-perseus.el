@@ -1163,7 +1163,16 @@ nothing to look up.  Greek inside that prose is still recognised, tagged or
 not.
 
 In the browser there are no text properties to consult and no lookup
-buffer: the language is the one the text is being read in."
+buffer: the language is the one the text is being read in.
+
+Before any of that, the script is consulted.  A word written in Greek
+letters is Greek whatever the markup says or fails to say -- and it often
+fails to say: Gaffiot quotes his Greek untagged, so a Greek word in a
+Gaffiot article would otherwise inherit the article\='s Latin and be parsed
+as a Latin word that does not exist.  The same holds of the Greek in Lewis
+& Short, in Georges, and of a Greek word a reader has typed into a buffer
+of their own.  Script is the one piece of evidence that cannot be wrong
+about this, so it is taken first."
   (let* ((pos (or pos (point)))
 	 (prop-lang (get-text-property pos 'lang))
 	 (buf-lang (or (and (boundp 'diogenes--lookup-lang)
@@ -1172,11 +1181,10 @@ buffer: the language is the one the text is being read in."
 			    diogenes--browser-language)))
 	 (word (thing-at-point 'word t)))
     (cond
+     ;; Greek letters mean Greek, tagged or not.
+     ((and word (string-match-p "\\cg" word)) "greek")
      ((member prop-lang '("greek" "latin")) prop-lang)
-     ((and prop-lang
-	   (equal buf-lang "greek")
-	   (not (and word (string-match-p "\\cg" word))))
-      nil)
+     ((and prop-lang (equal buf-lang "greek")) nil)
      (t buf-lang))))
 
 (defun diogenes--lookup-choosable-dictionaries (&optional lang)
