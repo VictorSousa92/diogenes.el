@@ -191,6 +191,7 @@
     (keymap-set map "C-c C-p"  #'diogenes-browser-backward)
     ;; Actions
     (keymap-set map "C-c C-c" #'diogenes-browser-lookup)
+    (keymap-set map "C-c C-o" #'diogenes-lookup-in-dictionary)
     (keymap-set map "C-c C-q" #'diogenes-browser-quit)
     ;; Utilities
     (keymap-set map "C-c C--" #'diogenes-browser-remove-hyphenation)

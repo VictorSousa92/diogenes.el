@@ -1143,6 +1143,156 @@ is what a lookup buffer records."
       (thing-at-point 'word t)
       (user-error "No headword found at point")))
 
+(defun diogenes--language-at-point (&optional pos)
+  "The lookup language of the word at POS: \"greek\", \"latin\", or nil.
+The rules `C-c C-c\=' goes by, factored out so that a second command need not
+guess differently from the first.
+
+The text-property language is only useful when it is actually a lookup
+language.  In a Latin (Lewis & Short) entry the definition prose is tagged
+\"english\", so a Latin word under point carries lang=\"english\" -- not nil
+-- which is why keying on the property alone failed.  Only \"greek\" and
+\"latin\" count; otherwise the language of the entry being read is used.
+
+But not blindly.  Where the element says the text is neither Greek nor
+Latin -- the German definitions of Pape, the English glosses of the LSJ --
+falling back to a Greek entry\='s language would parse a word of prose as
+Greek and answer with whatever sorts nearest.  A Greek lemma is written in
+Greek letters, so Latin script under the cursor is prose and there is
+nothing to look up.  Greek inside that prose is still recognised, tagged or
+not.
+
+In the browser there are no text properties to consult and no lookup
+buffer: the language is the one the text is being read in."
+  (let* ((pos (or pos (point)))
+	 (prop-lang (get-text-property pos 'lang))
+	 (buf-lang (or (and (boundp 'diogenes--lookup-lang)
+			    diogenes--lookup-lang)
+		       (and (boundp 'diogenes--browser-language)
+			    diogenes--browser-language)))
+	 (word (thing-at-point 'word t)))
+    (cond
+     ((member prop-lang '("greek" "latin")) prop-lang)
+     ((and prop-lang
+	   (equal buf-lang "greek")
+	   (not (and word (string-match-p "\\cg" word))))
+      nil)
+     (t buf-lang))))
+
+(defun diogenes--lookup-choosable-dictionaries (&optional lang)
+  "The registered dictionaries a word can be looked up in, for completion.
+Returns an alist of (LABEL . ENTRY).  With LANG, only that language\='s
+dictionaries and the label is the name alone; without, every language\='s and
+the label says which: \"Bailly (greek)\".
+
+Only dictionaries with a `:command\=' and a `:buffer-p\=' are offered -- which
+is what distinguishes an electronic dictionary, searchable by headword, from
+a print one that can only be opened at a page.  `:show\=' is deliberately NOT
+consulted: the point of choosing a dictionary by hand is to reach one the
+banner is not offering, whether because the word is not in Lewis & Short at
+all or because you are already inside the dictionary the banner would
+suggest."
+  (cl-loop for entry in diogenes--lookup-dictionaries
+	   for name = (plist-get entry :name)
+	   for entry-lang = (plist-get entry :lang)
+	   when (and (plist-get entry :command)
+		     (plist-get entry :buffer-p)
+		     name entry-lang
+		     (or (null lang) (equal lang entry-lang)))
+	   collect (cons (if lang name (format "%s (%s)" name entry-lang))
+			 entry)))
+
+(defun diogenes--lookup-lemma-of (word lang)
+  "The lemma of WORD in LANG, or WORD itself if it will not parse.
+A dictionary is keyed by headword, and the word under point is usually
+inflected, so `C-c C-c\=' parses before it looks anything up.  The same
+courtesy is due a dictionary chosen by hand: `\\=e)poi/hsen\\=' should reach
+`poie/w\\=', not fail to be a headword.
+
+The whole apparatus is used -- the shipped analyses, the spelling variants,
+Morpheus where it is available -- but only the first analysis is taken.
+Where a form is ambiguous this picks the commonest reading rather than
+asking, which is the right trade for a key whose purpose is to get you into
+another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
+  (or (let ((raw (diogenes--do-parse word lang)))
+	(when raw
+	  (let* ((record (diogenes--parse-analyses-record raw lang))
+		 (first (car (plist-get record :analyses))))
+	    (when first
+	      ;; The raw lemma, markers and all: every dictionary module
+	      ;; reduces a headword to its own key, and they disagree about
+	      ;; how -- Georges folds j onto i, Bailly works in beta code.
+	      (plist-get first :lemma)))))
+      (and (fboundp 'diogenes--latin-extra-lemma)
+	   (string= lang "latin")
+	   (diogenes--latin-extra-lemma word))
+      word))
+
+;;;###autoload
+(defun diogenes-lookup-in-dictionary (&optional word dictionary)
+  "Look a word up in a dictionary of your choosing.
+Like `C-c C-c\=', but instead of going to Lewis & Short or the LSJ -- the
+dictionaries Diogenes searches by default -- it asks which dictionary, of
+those registered, and in which language, since the label names both.
+
+For a word that is in neither of the default dictionaries but is in another:
+a late or technical word Lewis & Short does not carry, a proper name, a
+sense Bailly gives and the LSJ does not.  And for reading a Greek word in
+German rather than in English, or a Latin one in French, whatever the
+language of the entry you are looking at.
+
+The language is settled the way `C-c C-c\=' settles it, by
+`diogenes--language-at-point\=': the word\='s own tagging where the markup says
+what it is, otherwise the language of the entry or text being read.  Only
+that language\='s dictionaries are then offered, since the others could not
+answer.  Where the language cannot be told, it is asked for.
+
+WORD defaults to the headword or word at point, and is parsed first, so an
+inflected form reaches its lemma.  With a prefix argument, prompt for the
+word as well.  DICTIONARY is a registry entry; interactively it is chosen by
+completion."
+  (interactive
+   (let* ((lang (or (diogenes--language-at-point)
+		    (completing-read "Language: " '("greek" "latin") nil t)))
+	  (alist (diogenes--lookup-choosable-dictionaries lang))
+	  (_ (unless alist
+	       (user-error "No searchable %s dictionary is registered: \
+load diogenes-bailly, -gaffiot, -georges or -pape" lang)))
+	  (choice (completing-read (format "Look this %s word up in: " lang)
+				   alist nil t))
+	  (entry (cdr (assoc choice alist)))
+	  (default (or (ignore-errors (diogenes--lookup-current-headword))
+		       (thing-at-point 'word t)
+		       "")))
+     (list (if (or current-prefix-arg (string-empty-p default))
+	       (read-string (if (string-empty-p default)
+				(format "Look up in %s: " choice)
+			      (format "Look up in %s (%s): " choice default))
+			    nil nil default)
+	     default)
+	   entry)))
+  (unless dictionary
+    (user-error "No dictionary chosen"))
+  (let* ((lang (plist-get dictionary :lang))
+	 (command (plist-get dictionary :command))
+	 (word (string-trim (or word "")))
+	 (lemma (diogenes--lookup-lemma-of word lang)))
+    (when (string-empty-p word)
+      (user-error "Nothing to look up"))
+    ;; The dictionary commands assert the language of the buffer they are
+    ;; called from, so that a Greek lexicon is not opened on a Latin entry.
+    ;; Here the language comes from the dictionary that was chosen, which is
+    ;; the whole point: let-binding the buffer-local tells the assertion the
+    ;; truth about what is being looked up.
+    (let ((diogenes--lookup-lang lang)
+	  ;; And nothing may be inherited from the entry we are leaving: a
+	  ;; Greek word looked up in Georges must not carry the Greek file
+	  ;; along with it.
+	  (diogenes--lookup-file nil))
+      (unless (string= lemma word)
+	(message "%s: looking up %s" word lemma))
+      (funcall command lemma))))
+
 ;;;###autoload
 (defun diogenes-lookup-lewis (&optional word)
   "Show Lewis & Short's entry for WORD in a lookup buffer.
@@ -1344,6 +1494,7 @@ Returns a list that diogenes--browse-work can be applied to."
     (keymap-set map "C-c C-n"                       #'diogenes-lookup-next)
     (keymap-set map "C-c C-p"                       #'diogenes-lookup-previous)
     (keymap-set map "C-c C-c"                       #'diogenes-perseus-action)
+    (keymap-set map "C-c C-o"                       #'diogenes-lookup-in-dictionary)
     (keymap-set map "o"                             #'diogenes-lookup-open-old)
     (keymap-set map "t"                             #'diogenes-lookup-open-tll-or-tgl)
     (keymap-set map "m"                             #'diogenes-lookup-open-montanari)
@@ -2728,33 +2879,8 @@ if nil, query interactively for their values"
 					 lang))))
       (forms (diogenes--show-all-forms (get-text-property char 'lemma)
 				       (get-text-property char 'lang)))
-      (t (let* ((prop-lang (get-text-property char 'lang))
-		(buf-lang (and (boundp 'diogenes--lookup-lang)
-			       diogenes--lookup-lang))
-		(word (thing-at-point 'word t))
-		;; The text-property language is only useful when it is
-		;; actually a lookup language.  In a Latin (Lewis & Short)
-		;; entry the definition prose is tagged "english", so a
-		;; Latin word under point carries lang="english" -- not
-		;; nil -- which is why keying on the property alone failed.
-		;; Treat only "greek"/"latin" as usable, and otherwise fall
-		;; back to the language of the entry we are reading.
-		(lang (cond
-		       ((member prop-lang '("greek" "latin")) prop-lang)
-		       ;; ...but not blindly.  Where the element says the text
-		       ;; is neither Greek nor Latin -- the German definitions
-		       ;; of Pape, the English glosses of the LSJ -- falling
-		       ;; back to a Greek entry's language would parse a word
-		       ;; of prose as Greek and answer with whatever sorts
-		       ;; nearest.  A Greek lemma is written in Greek letters,
-		       ;; so Latin script under the cursor is prose and there
-		       ;; is nothing to look up.  Greek inside that prose is
-		       ;; still recognised, tagged or not.
-		       ((and prop-lang
-			     (equal buf-lang "greek")
-			     (not (and word (string-match-p "\\cg" word))))
-			nil)
-		       (t buf-lang))))
+      (t (let* ((lang (diogenes--language-at-point char))
+		(word (thing-at-point 'word t)))
 	   (pcase lang
 	     ((or "greek" "latin")
 	      ;; Looking up a word opens its dictionary entry.  When we are
