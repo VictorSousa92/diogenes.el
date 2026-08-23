@@ -387,6 +387,45 @@ can be read")))
      (t (user-error "Cannot read the Bailly source at %s"
                     (abbreviate-file-name source))))))
 
+(defconst diogenes-bailly--quantity-marks
+  "\u0304\u0306\u00af\u02d8\u1fb0\u1fb1\u1fd0\u1fd1\u1fe0\u1fe1"
+  "The marks of vowel quantity that may trail a Bailly headword.
+Bailly gives the quantity of a doubtful vowel after the word rather than on
+it -- \u1f31\u03c3\u03c4\u03b7\u03bc\u03b9 then a breve, the breve belonging to the iota of the headword
+and not to what comes after.  Combining macron and breve, their spacing
+equivalents, and the precomposed Greek vowels that carry one.")
+
+(defun diogenes-bailly--head-and-rest (rest)
+  "Split REST, what follows a headword, into (ATTACH SPACE REMAINDER).
+ATTACH is the run of quantity marks that belongs to the headword and goes
+inside its <head>; SPACE says whether a space is then wanted; REMAINDER is
+the rest of the entry.
+
+The <head> replaces <orth> where it stood, and Bailly follows a headword
+directly with its grammar, so without this the two are rendered run
+together: `\u1f31\u03c3\u03c4\u03b7\u03bc\u03b9\u1fb0(au sens tr.\='.  Two separate things are wrong there.
+The breve wants to stay with the headword whose vowel it measures, and the
+parenthesis wants a space before it.
+
+A space is wanted before anything except clause punctuation -- a comma,
+semicolon, colon or full stop, or a closing bracket -- and except where
+there is a space already.  Tags are looked through to decide, the
+separation that matters being the one the reader sees rather than the one in
+the markup."
+  (let* ((marks (concat "[" diogenes-bailly--quantity-marks "]+"))
+	 (attach (if (string-match (concat "\\`" marks) (or rest ""))
+		     (match-string 0 rest)
+		   ""))
+	 (remainder (substring (or rest "") (length attach)))
+	 (plain (replace-regexp-in-string "<[^>]*>" "" remainder))
+	 (first (and (> (length plain) 0) (aref plain 0))))
+    (list attach
+	  ;; A regexp rather than a list of character literals: `?\;' and
+	  ;; `?\)' are correct Lisp and a nuisance to read.
+	  (and first
+	       (not (string-match-p "\\`[,;.:!?)]}[:space:]]" plain)))
+	  remainder)))
+
 (defun diogenes-bailly--rewrite-entry (body)
   "Return BODY, the inside of one TEI <entry>, as the formatter wants it.
 The four rewritings the Commentary describes: `xml:lang=\"grc\"' becomes
@@ -455,9 +494,13 @@ an <entry> may already carry attributes of its own."
                      (orth (match-string 2 body))
                      (plain (replace-regexp-in-string "<[^>]*>" "" orth))
                      (key (diogenes-bailly--key plain))
+                     (split (diogenes-bailly--head-and-rest
+                             (substring body orth-end)))
                      (line (concat (substring body 0 orth-start)
-                                   "<head" attrs ">" orth "</head>"
-                                   (substring body orth-end))))
+                                   "<head" attrs ">" orth (nth 0 split)
+                                   "</head>"
+                                   (if (nth 1 split) " " "")
+                                   (nth 2 split))))
                 (if (string-empty-p key)
                     (cl-incf skipped)
                   (setq line (diogenes-bailly--rewrite-entry line))
