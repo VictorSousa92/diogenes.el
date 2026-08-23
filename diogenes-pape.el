@@ -561,11 +561,12 @@ Pape is the first Greek dictionary to need a way back."
 ;;;###autoload
 (defun diogenes-lookup-pape-or-gaffiot-pdf ()
   "Open Pape on a Greek entry, the printed Gaffiot on a Latin one.
-Bound to \\`P' in `diogenes-lookup-mode', dispatching on the buffer-local
-`diogenes--lookup-lang' so one key serves both languages.  A prefix
-argument is passed through to the command underneath, which then prompts
-for a word.  If the language is unknown it falls back to Gaffiot, the
-historical binding of this key."
+Retained for anyone who has bound this command themselves; \\`P' no longer
+points here.  The printed Gaffiot is reached by pressing \\`g' a second time
+from inside a Gaffiot article -- as \\`B' is Bailly\='s and \\`G' Georges\=' --
+so a Latin branch on \\`P' is a second route to somewhere that now has its
+own, and one that made \\`P' mean two unrelated dictionaries depending on
+the buffer.  \\`P' is Pape, and Greek."
   (interactive)
   (let ((lang (and (boundp 'diogenes--lookup-lang) diogenes--lookup-lang)))
     (pcase lang
@@ -587,10 +588,16 @@ back to Lewis & Short, the historical binding of this key."
       (_       (call-interactively #'diogenes-lookup-lewis)))))
 
 (defun diogenes-pape--install-keys ()
-  "Point \\`P' and \\`l' at the language-dispatching commands.  Idempotent."
+  "Point \\`l' at its language-dispatching command, and \\`P' at Pape.  Idempotent.
+\\`l' has two dictionaries to choose between and must dispatch: the LSJ in
+Greek, Lewis & Short in Latin.  \\`P' no longer does.  It once opened the
+printed Gaffiot on a Latin entry, that PDF having no key of its own, but
+`g\=' pressed a second time from inside a Gaffiot article reaches it now --
+as `B\=' does in Bailly and `G\=' in Georges -- so the Latin branch only made
+one key stand for two unrelated dictionaries.  Pressed on a Latin entry
+`P\=' now says that Pape is Greek, which is the truth about the key."
   (when (boundp 'diogenes-lookup-mode-map)
-    (keymap-set diogenes-lookup-mode-map "P"
-                #'diogenes-lookup-pape-or-gaffiot-pdf)
+    (keymap-set diogenes-lookup-mode-map "P" #'diogenes-lookup-pape)
     (keymap-set diogenes-lookup-mode-map "l"
                 #'diogenes-lookup-lewis-or-lsj)))
 
@@ -606,8 +613,8 @@ Pape, and the LSJ is not offered inside the LSJ -- which
 Bailly the LSJ link appears, and in the LSJ it does not.
 
 Neither binds its key here.  `P' and `l' have to serve both languages, so
-`diogenes-pape--install-keys' puts the dispatching commands on them
-instead; see `diogenes-lookup-pape-or-gaffiot-pdf'."
+`diogenes-pape--install-keys' binds them: `l\=' to a dispatcher, since it has
+the LSJ and Lewis & Short to choose between, and `P\=' straight to Pape."
   (diogenes-lookup-register-dictionary
    'pape :lang "greek" :name "Pape" :key "P" :order 60
    :command #'diogenes-lookup-pape
