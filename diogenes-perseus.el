@@ -2565,6 +2565,23 @@ more than one count is covered.  See `diogenes-latin-try-spelling-variants\='."
 			       append (ignore-errors (funcall rule v))))))
       (delete-dups variants))))
 
+(defun diogenes--latin-parse-candidates (word)
+  "WORD and, if it differs, WORD with its diacritics removed.
+The analyses file is keyed by bare ASCII forms, while the corpora print the
+quantities and contractions their editors chose: the PHI text of Plautus
+has `desîmus', whose key is `desimus'.  Unaccented WORD comes first, so a
+form that is already a key is looked up exactly once.
+
+Normalisation, not guesswork, so this is not one of
+`diogenes-latin-spelling-rules' and not subject to
+`diogenes-latin-try-spelling-variants': the accented and unaccented
+spellings are the same word, where i-for-j is a convention two sources
+disagree about."
+  (let ((bare (diogenes--strip-diacritics word)))
+    (if (string= bare word)
+        (list word)
+      (list word bare))))
+
 (defun diogenes--do-parse (word lang)
   "Return the raw analyses record for WORD in LANG, or nil.
 `$do_parse': the form is tried as it stands and a capitalised Latin form
@@ -2572,16 +2589,20 @@ is then retried in lower case -- Diogenes' \"Fixed parsing of capitalized
 Latin words\".  The reshuffling of diacritics after a beta-code asterisk
 that $do_parse also does for Greek capitals is not attempted here.
 
-Beyond the application, a Latin form is also tried with j and i exchanged;
-see `diogenes--latin-form-variants'."
-  (let ((word (diogenes--beta-normalize-gravis
-	       (diogenes--greek-ensure-beta word))))
-    (cl-loop for variant in (if (string= lang "latin")
-				(diogenes--latin-form-variants word)
-			      (list word))
-	     thereis (or (diogenes--try-parse variant lang)
-			 (and (string-match-p "[[:upper:]]" variant)
-			      (diogenes--try-parse (downcase variant) lang))))))
+Beyond the application, a Latin form is also tried without its diacritics
+\(see `diogenes--latin-parse-candidates') and with j and i exchanged (see
+`diogenes--latin-form-variants')."
+  (let* ((word (diogenes--beta-normalize-gravis
+                (diogenes--greek-ensure-beta word)))
+         (variants
+          (if (string= lang "latin")
+              (cl-loop for base in (diogenes--latin-parse-candidates word)
+                       append (diogenes--latin-form-variants base))
+            (list word))))
+    (cl-loop for variant in (delete-dups variants)
+             thereis (or (diogenes--try-parse variant lang)
+                         (and (string-match-p "[[:upper:]]" variant)
+                              (diogenes--try-parse (downcase variant) lang))))))
 
 (defun diogenes--choose-analysis (record dicts word)
   "Ask which lemma of RECORD to show; return its (OFFSET . CONF) alone.
