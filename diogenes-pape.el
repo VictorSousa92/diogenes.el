@@ -306,8 +306,8 @@ can be read")))
   "How a TEI language tag maps onto the languages Diogenes knows.
 `diogenes--dict-handle-elt' reads the attribute `lang' and nothing in
 Diogenes reads `xml:lang', which is the only one TEI has: a conformant
-edition writes `xml:lang="grc"' where this formatter wants
-`lang="greek"'.  Only `greek' and `latin' do anything, being the two
+edition writes `xml:lang=\"grc\"' where this formatter wants
+`lang=\"greek\"'.  Only `greek' and `latin' do anything, being the two
 languages a lookup can be made in; the rest are here to say positively
 that a run of prose is NOT Greek, so that `C-c C-c' on a German word
 does not go looking for it in the LSJ.")
