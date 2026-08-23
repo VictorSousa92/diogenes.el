@@ -452,6 +452,19 @@ with an entry).  If this is the TEI file, set it as \
 M-x diogenes-pape-build-dictionary"
                   (abbreviate-file-name file)))))
 
+;;;###autoload
+(defun diogenes-pape-available-p ()
+  "Non-nil if Pape is here, or could be built without asking twice.
+True when the converted dictionary exists, and also when it does not but
+`diogenes-pape-source-file' names TEI that is there -- because then
+pressing `P' offers to build it, which is a real destination for the link.
+Pape has no printed companion in this package, so this is the whole of its
+availability.  Never signals: `diogenes-path' may itself be unset, and this
+is asked while an entry is being drawn."
+  (let ((file (ignore-errors (diogenes-pape--dictionary-file))))
+    (or (and file (file-readable-p file))
+        (diogenes--source-usable-p diogenes-pape-source-file))))
+
 (defun diogenes-pape--file ()
   "Return the converted dictionary file, building it if the user agrees.
 Signals rather than returning nil when there is nothing to search: unlike
@@ -620,6 +633,7 @@ the LSJ and Lewis & Short to choose between, and `P\=' straight to Pape."
    :command #'diogenes-lookup-pape
    :show 'unless-current
    :buffer-p #'diogenes-pape-lookup-buffer-p
+   :available-p #'diogenes-pape-available-p
    :help "Show Pape's entry for \"%s\"")
   (diogenes-lookup-register-dictionary
    'lsj :lang "greek" :name "LSJ" :key "l" :order 80

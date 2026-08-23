@@ -922,6 +922,20 @@ with an entry).  If this is the TEI file, set it as \
 M-x diogenes-dge-build-dictionary"
                   (abbreviate-file-name file)))))
 
+;;;###autoload
+(defun diogenes-dge-available-p ()
+  "Non-nil if the DGE is here, or could be built without asking twice.
+True when the converted dictionary exists, and also when it does not but
+`diogenes-dge-source-file' names TEI that is there -- because then pressing
+`d' offers to build it, which is a real destination for the link.  What the
+CSIC publishes for nothing is exactly this XML, so there is no printed
+companion and this is the whole of the DGE's availability.  Never signals:
+`diogenes-path' may itself be unset, and this is asked while an entry is
+being drawn."
+  (let ((file (ignore-errors (diogenes-dge--dictionary-file))))
+    (or (and file (file-readable-p file))
+        (diogenes--source-usable-p diogenes-dge-source-file))))
+
 (defun diogenes-dge--file ()
   "Return the converted dictionary file, building it if the user agrees.
 Signals rather than returning nil when there is nothing to search: the DGE
@@ -1015,6 +1029,7 @@ declines through `diogenes--lookup-assert-lang'."
    :command #'diogenes-lookup-dge
    :show 'unless-current
    :buffer-p #'diogenes-dge-lookup-buffer-p
+   :available-p #'diogenes-dge-available-p
    :bind t
    :help "Show the DGE's entry for \"%s\""))
 
