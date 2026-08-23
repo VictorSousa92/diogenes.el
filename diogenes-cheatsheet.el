@@ -25,6 +25,14 @@
 
 (require 'cl-lib)
 
+;; Defined by `diogenes-perseus.el', which this module does not require: the
+;; cheatsheet reads whatever keymaps and registry happen to be loaded and
+;; says nothing about the rest, so it guards every use with `fboundp' or
+;; `boundp' rather than pulling the lookup machinery in.  Declared only to
+;; keep the byte-compiler quiet about the reference.
+(declare-function diogenes--lookup-dict-available-p "diogenes-perseus"
+                  (predicate))
+
 (defvar diogenes-lookup-mode-map)
 (defvar diogenes-analysis-mode-map)
 (defvar diogenes--lookup-dictionaries)
