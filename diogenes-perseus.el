@@ -2228,6 +2228,42 @@ Used when `diogenes-lookup-show-all-entries' is nil."
 	(list (or (assq offset dicts) (cons offset 9)))
       dicts)))
 
+(defcustom diogenes-latin-extra-lemmata nil
+  "Forms Morpheus does not analyse, and the headword to look up instead.
+An alist of (FORM . HEADWORD), consulted only when a form will not parse at
+all, and before falling back on a search for the form itself.
+
+Diogenes\=' analyses are a batch run of Morpheus over wordlists harvested
+from the corpora it indexes, so a form those wordlists missed is missing
+altogether -- not misspelt, which
+`diogenes-latin-try-spelling-variants\=' would cover, but absent.  The gaps
+are not random: `illidant\=', the present subjunctive of `illido\=', whose
+fourteen other forms are all there; `aedium\=', where the wordlists have only
+the rarer `aedum\='; `transilire\='.  Each parsed as nothing and fell through
+to a search for itself, which found the nearest headword instead --
+`illico\=', `aedon\=' the nightingale, `transilis\='.
+
+HEADWORD is a headword, not an offset, so an entry here survives a rebuild
+of the Perseus data.  Matching ignores case and the spelling conventions,
+so one entry answers for `ualdissime\=' as well as `valdissime\='.
+
+Consulted AFTER the parse, never instead of it: a form Morpheus does know
+keeps its own analysis, and an entry here for such a form is simply never
+reached.  A serious accumulation of these is an argument for running
+Morpheus itself over the form -- it generates paradigms rather than
+harvesting a corpus -- rather than for a longer alist."
+  :type '(alist :key-type (string :tag "Form")
+		:value-type (string :tag "Headword"))
+  :group 'diogenes)
+
+(defun diogenes--latin-extra-lemma (word)
+  "The headword `diogenes-latin-extra-lemmata\=' gives for WORD, or nil.
+Every spelling variant of WORD is tried, so an entry written with v and j
+also answers for the form written with u and i."
+  (cl-loop for variant in (diogenes--latin-form-variants word)
+	   thereis (cdr (assoc-string variant
+				    diogenes-latin-extra-lemmata t))))
+
 (defun diogenes--parse-and-lookup (word lang)
   "Try to parse a word by looking it up in the morphological files,
 and show the entry for it in the lexica. Dispatcher function.
@@ -2236,12 +2272,21 @@ A port of `$do_parse' followed by `$format_analysis': every entry named
 in the analyses record is fetched from the byte offset recorded there.
 Only a form that will not parse falls back on searching the dictionary by
 headword, exactly as the application does."
-  (let ((raw (diogenes--do-parse word lang)))
+  (let ((raw (diogenes--do-parse word lang))
+	(extra (and (string= lang "latin")
+		    (diogenes--latin-extra-lemma word))))
     (if (not raw)
-	(progn
+	(cond
+	 ;; A form the wordlists never had.  The headword is known, even
+	 ;; though the analysis is not, so show its entry rather than
+	 ;; whatever happens to sort next to the form.
+	 (extra
+	  (message "%s does not parse; showing %s" word extra)
+	  (diogenes--lookup-dict extra lang))
+	 (t
 	  (message "No results for %s, trying to look it up in the dictionaries!"
 		   word)
-	  (diogenes--lookup-dict word lang))
+	  (diogenes--lookup-dict word lang)))
       (let* ((record (diogenes--parse-analyses-record raw lang))
 	     (dicts (diogenes--analyses-dicts record)))
 	(if (null dicts)
