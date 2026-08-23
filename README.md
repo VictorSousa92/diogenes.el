@@ -542,6 +542,54 @@ lookup buffer, it asks:
 - **yes**: the new entry replaces the view in the current window (you stay put).
 - **no**: it opens in another window, as before.
 - Either way a fresh buffer is used, so the entry you came from stays alive and reachable.
+## When an analysis is wrong
+
+Diogenes' morphology is a batch run of Morpheus over wordlists harvested
+from the corpora, so it has three distinguishable kinds of gap, and this
+package answers each in its own place.
+
+| The file | What happens | The option |
+| --- | --- | --- |
+| has the form under another spelling | the spelling is normalised before the lookup | none needed — see below |
+| has no analysis for the form | the headword you name is looked up | `diogenes-latin-extra-lemmata` |
+| analyses the form wrongly | the morphology you give is printed | `diogenes-latin-analysis-corrections` |
+
+### Spellings the file does not use
+
+The corpora print what their editors chose; the analyses file is keyed by
+bare ASCII. A Latin form is therefore tried as it stands, then with its
+circumflexes read as **contractions**, then with all marks removed.
+
+The middle step is the one that matters, because the texts mark no
+quantities: a circumflex in them says the syllable is contracted, the vowel
+standing for the two it was made from. `desîmus` is `desiimus`, the
+syncopated perfect of *desino* — and `desimus` without the mark is a key
+too, the present subjunctive of *dēsum*, so treating the mark as decoration
+answers about a word the text did not print. Set
+`diogenes-latin-expand-contractions` to nil for a text that uses the mark
+otherwise.
+
+### Analyses that are simply wrong
+
+```elisp
+(setq diogenes-latin-analysis-corrections
+      '(("experire" :info "pres imperat pass 2nd sg")))
+```
+
+`experīre` is the second singular present imperative of the deponent
+*experior*, whose infinitive is *experīrī*; the file labels it a present
+active infinitive. The lemma and the entry it points at are right, so only
+the morphology needs saying again.
+
+- `:info STRING` replaces the morphology of every analysis of that form; `:info ((OLD . NEW) …)` replaces only the ones reading OLD, for a form with several analyses of which one is wrong.
+- `:add ((LEMMA . INFO) …)` adds analyses rather than replacing. `LEMMA` nil means the lemma the file already names — use this to record a missing reading while keeping the file's; a string is a headword, whose entry is then shown alongside.
+- Keys are the form as the file files it, and are matched through the same spelling variants as everything else, so one entry answers for `experire` and `experīre` alike.
+- A corrected morphology prints with `[corr.]` after it, so what you read is never silently other than what the data says. `diogenes-latin-mark-corrections` turns that off.
+
+A long list here is an argument for reporting the analyses upstream rather
+than for maintaining it: a systematic error in a batch run is one error, not
+a hundred.
+
 ## Print dictionaries (PDF)
  
 diogenes.el can jump a scanned print dictionary (shown as a PDF) to the
