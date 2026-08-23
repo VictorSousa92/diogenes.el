@@ -153,9 +153,26 @@ Otherwise fall through to window-purpose's normal action
 ;; raises and focuses the target frame when the target is not on this one:
 ;;
 ;;   * opening a dictionary, or turning it to a new entry, focuses it;
-;;   * `Q' in the dictionary returns to the lookup;
-;;   * `D' in the lookup goes (back) to the dictionary;
-;;   * `Q' in the lookup returns to the browser.
+;;   * `C-c C-e' goes to the dictionary Entry;
+;;   * `C-c C-l' goes to the Lookup;
+;;   * `C-c C-b' goes to the Browser.
+;;
+;; One key per destination, the same in all three buffers, rather than a
+;; different letter according to where you happen to be: `C-c C-l' means the
+;; lookup whether pressed in the browser or in a dictionary, and a key
+;; pressed in the buffer it names does nothing but stay put.  Three keys and
+;; three places are easier to hold than six pairings.
+;;
+;; Prefixed rather than bare letters because `diogenes-browser-mode' derives
+;; from `text-mode' and the browser is writable -- a bare `D' there would
+;; insert a D -- and because the prefixed form matches the keys the browser
+;; already has: `C-c C-c' to look a word up, `C-c C-q' to quit, `C-c C-n'
+;; and `C-c C-p' to page.  Note that `C-c C-c' MAKES a lookup, where
+;; `C-c C-l' returns to one that exists.
+;;
+;; `C-c C-e' for the entry, and not the `C-c C-d' the mnemonic would
+;; suggest: KDE Plasma takes `Ctrl-D' for its own window management, so that
+;; sequence never reaches Emacs at all on that desktop.
 ;;
 ;; A dictionary buffer is an ordinary `pdf-view-mode' (or `doc-view-mode',
 ;; or `reader-mode') buffer, which as the Commentary above notes is not
@@ -182,16 +199,21 @@ currently showing a dictionary.")
 
 (defvar diogenes-purpose-dict-mode-map
   (let ((map (make-sparse-keymap)))
-    (keymap-set map "Q" #'diogenes-purpose-focus-lookup-window)
+    (keymap-set map "C-c C-l" #'diogenes-purpose-focus-lookup-window)
+    (keymap-set map "C-c C-b" #'diogenes-purpose-focus-browser-window)
+    (keymap-set map "C-c C-e" #'diogenes-purpose-focus-dictionary-window)
     map)
-  "Keymap for `diogenes-purpose-dict-mode'.")
+  "Keymap for `diogenes-purpose-dict-mode'.
+The same three keys as everywhere else, `C-c C-e' included: pressed in the
+dictionary it is a no-op, which is better than being an error or, worse,
+some other command.")
 
 (define-minor-mode diogenes-purpose-dict-mode
   "Mark this buffer as a Diogenes print dictionary.
 Turned on automatically in any PDF or document buffer Diogenes opens at an
-entry's page.  Provides \\<diogenes-purpose-dict-mode-map>\\[diogenes-purpose-focus-lookup-window], \
-which returns point to the lookup window, and lets
-`diogenes-purpose-focus-dictionary-window' recognise the buffer."
+entry's page.  Carries the focus keys -- \\<diogenes-purpose-dict-mode-map>\\[diogenes-purpose-focus-lookup-window] for the lookup \
+and \\[diogenes-purpose-focus-browser-window] for the browser -- and lets
+`diogenes-purpose-focus-dictionary-window' recognise the buffer as one."
   :lighter " Dio-Dict"
   :keymap diogenes-purpose-dict-mode-map)
 
@@ -290,23 +312,39 @@ forward opener funnels through and which returns the buffer it displayed."
   buffer)
 
 (defun diogenes-purpose--install-focus ()
-  "Install the dictionary advice and the `D' and `Q' lookup bindings."
+  "Install the dictionary advice and the focus bindings.
+Bare letters in the lookup and the dictionary, which are read-only; the
+browser\='s under its own `C-c C-\=' prefix, since it derives from `text-mode\='
+and is writable."
   (advice-add 'diogenes-old--display-page-buffer :filter-return
               #'diogenes-purpose--after-display-page)
-  (with-eval-after-load 'diogenes-perseus
-    (when (boundp 'diogenes-lookup-mode-map)
-      (keymap-set diogenes-lookup-mode-map "D"
-                  #'diogenes-purpose-focus-dictionary-window)
-      (keymap-set diogenes-lookup-mode-map "Q"
-                  #'diogenes-purpose-focus-browser-window))))
+  (dolist (spec '((diogenes-perseus . diogenes-lookup-mode-map)
+                  (diogenes-perseus . diogenes-analysis-mode-map)
+                  (diogenes-browser . diogenes-browser-mode-map)))
+    (let ((feature (car spec))
+          (map (cdr spec)))
+      (with-eval-after-load feature
+        (when (boundp map)
+          ;; `C-c C-e', not the `C-c C-d' the mnemonic wants: KDE Plasma
+          ;; claims Ctrl-D for window management and the sequence never
+          ;; arrives.
+          (keymap-set (symbol-value map) "C-c C-e"
+                      #'diogenes-purpose-focus-dictionary-window)
+          (keymap-set (symbol-value map) "C-c C-l"
+                      #'diogenes-purpose-focus-lookup-window)
+          (keymap-set (symbol-value map) "C-c C-b"
+                      #'diogenes-purpose-focus-browser-window))))))
 
 (defun diogenes-purpose--uninstall-focus ()
   "Undo `diogenes-purpose--install-focus'."
   (advice-remove 'diogenes-old--display-page-buffer
                  #'diogenes-purpose--after-display-page)
-  (when (boundp 'diogenes-lookup-mode-map)
-    (keymap-unset diogenes-lookup-mode-map "D" t)
-    (keymap-unset diogenes-lookup-mode-map "Q" t)))
+  (dolist (map '(diogenes-lookup-mode-map
+                 diogenes-analysis-mode-map
+                 diogenes-browser-mode-map))
+    (when (boundp map)
+      (dolist (key '("C-c C-e" "C-c C-l" "C-c C-b"))
+        (keymap-unset (symbol-value map) key t)))))
 
 ;;;###autoload
 (defun diogenes-purpose-install ()
