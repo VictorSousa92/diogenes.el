@@ -89,6 +89,50 @@ The value is actually the first element of ALIST whose car equals KEY."
 		    (point-min))))
     (list start end)))
 
+(defvar diogenes--loading-bundle nil
+  "Non-nil while `diogenes.el' loads the dictionary modules it ships with.
+This is how a module tells apart the two ways it can come to be loaded:
+
+  the user asked for it -- `(require \\='diogenes-tll)' in an init file --
+  which is a declaration that this dictionary is wanted;
+
+  `diogenes.el' loaded it along with everything else, which says nothing
+  about whether the user has it.
+
+A module reads this AT LOAD TIME, through `diogenes--declared-at-load-p',
+and passes the answer to `diogenes-lookup-register-dictionary' as
+DECLARED.  Read at load time rather than at registration because
+registration is deferred through `with-eval-after-load' and would
+otherwise run inside the bundle's own binding.
+
+`diogenes-declared-dictionaries' is the other way to declare one, and the
+one that does not depend on load order.")
+
+(defun diogenes--declared-at-load-p ()
+  "Whether the file now being loaded was asked for, rather than bundled.
+Call at the top level of a dictionary module, never from a function: the
+answer is about the moment the file is read.  See
+`diogenes--loading-bundle'."
+  (not (bound-and-true-p diogenes--loading-bundle)))
+
+(defun diogenes--path-set-p (value)
+  "Non-nil if VALUE is a path the user has actually named.
+Set-ness only: whether anything is there is not asked.  A dictionary whose
+path is set is one the user means to have, so its link is offered and the
+command explains what is wrong with the path -- a moved volume or a typo
+being a thing to report rather than a reason to make the dictionary
+disappear.  `diogenes--path-usable-p' is the stricter question, for when
+something is about to be read."
+  (and (stringp value) (not (string-empty-p value)) t))
+
+(defun diogenes--source-set-p (value)
+  "Non-nil if VALUE names TEI source material, without checking it is there.
+As `diogenes--path-set-p', but for the `...-source-file' options, which
+take a file, a directory of files, or a list of either."
+  (cond
+   ((consp value) (seq-some #'diogenes--source-set-p value))
+   (t (diogenes--path-set-p value))))
+
 (defun diogenes--path-usable-p (value kind)
   "Non-nil if VALUE names an existing file or readable directory.
 KIND is `file' or `directory'.  VALUE is what a dictionary's path option

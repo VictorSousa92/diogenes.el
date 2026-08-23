@@ -55,23 +55,33 @@
 (require 'diogenes-browser)
 (require 'diogenes-search)
 (require 'diogenes-perseus)
-(require 'diogenes-old)
-(require 'diogenes-tll)
-(require 'diogenes-montanari)
-(require 'diogenes-cambridge)
-(require 'diogenes-bdag)
-(require 'diogenes-passow)
 (require 'diogenes-dict-faces)
-(require 'diogenes-bailly)
-(require 'diogenes-bailly-pdf)
+
+;; The dictionary modules, loaded for everyone so that configuring a
+;; dictionary is enough to have it.  Loading them here is NOT a declaration
+;; that the user has any of them: `diogenes--loading-bundle' is what lets
+;; each module tell this from having been required by the user, which IS a
+;; declaration.  A module already loaded -- required in an init file before
+;; this file runs -- is untouched by the `require' below, `require' being a
+;; no-op once the feature is present, so its own answer stands.
+(let ((diogenes--loading-bundle t))
+  (require 'diogenes-old)
+  (require 'diogenes-tll)
+  (require 'diogenes-montanari)
+  (require 'diogenes-cambridge)
+  (require 'diogenes-bdag)
+  (require 'diogenes-passow)
+  (require 'diogenes-bailly)
+  (require 'diogenes-bailly-pdf)
+  (require 'diogenes-gaffiot)
+  (require 'diogenes-gaffiot-pdf)
+  (require 'diogenes-pape)
+  (require 'diogenes-dge)
+  (require 'diogenes-georges)
+  (require 'diogenes-georges-pdf)
+  (require 'diogenes-tgl))
+
 (require 'diogenes-cheatsheet)
-(require 'diogenes-gaffiot)
-(require 'diogenes-gaffiot-pdf)
-(require 'diogenes-pape)
-(require 'diogenes-dge)
-(require 'diogenes-georges)
-(require 'diogenes-georges-pdf)
-(require 'diogenes-tgl)
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)
 ;(require 'diogenes-window)
