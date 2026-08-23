@@ -345,8 +345,43 @@ Notes:
  
 - All variables go in `:init` (they must be set **before** the package loads); `:defer t` is fine, since `:init` runs regardless.
 - `("C-c d" . diogenes)` in `:bind` gives you the transient menu on `C-c d` (see below).
-- Only set the dictionaries you actually have; an unset one is simply unavailable.
+- Only set the dictionaries you actually have. An unset one is not merely unavailable: it is invisible. See [Nothing you have not got](#nothing-you-have-not-got) below.
 - For Passow and the TGL, each path is the parent folder of the per-volume material; see [Print dictionaries](#print-dictionaries-pdf) for the folder layout and the required OCR text files.
+### Nothing you have not got
+
+Every dictionary in this fork is optional, and none of them is mentioned
+to a user who has not got it. Set no dictionary paths at all and the
+package is Nitardus's original: the LSJ, Lewis & Short, the morphology and
+the corpora, with no links line above an entry and no keys that lead
+nowhere.
+
+What is gated, and on what:
+
+| You have | You get |
+| --- | --- |
+| No dictionary paths set | No links line at all, and no dictionary keys bound |
+| Some paths set | A links line naming exactly those, in the usual order |
+| Only a dictionary's XML | Its link opens the entry; no `[PDF]` link inside it |
+| Only a dictionary's PDF | Its link opens the printed page, like the OLD |
+| Both | The entry, with `[PDF]` inside it for the printed page |
+| No `diogenes-morpheus-directory` | The parse works as before, with no Morpheus fallback |
+
+The rules behind the table:
+
+- **A dictionary is hidden, not explained.** An unset path used to leave the link in place and produce a "not set up yet, here is what to set" error when pressed. Print dictionaries are now gated like the electronic ones: the banner asks each dictionary whether it is there and lists only those that answer yes. The explanatory errors remain, for the keys and for `M-x`, where they are the right answer.
+- **XML and PDF are gated separately.** Three dictionaries have both — Gaffiot, Bailly and Georges — and either half is enough. With only the XML, the `[PDF]` link is not offered inside the entry, since there would be nothing behind it. With only the PDF, the dictionary behaves like the OLD: `g` / `B` / `G` and its link open the printed page, and nothing asks you for a TEI file you do not want. With both, the entry comes first and the PDF is one more press of the same key. (Gaffiot has always worked this way, its TEI covering only A–F; Bailly and Georges now do too.)
+- **A dictionary registers itself.** Each module announces itself to the lookup banner when it loads, with a predicate over its own paths, so nothing central needs to know the list. A module you do not load is not registered, is not offered, and does not bind its key — `o`, `m`, `c`, `b`, `p`, `B`, `d`, `G`, `g` each belong to the module that defines them. Adding a dictionary is one `diogenes-lookup-register-dictionary` call in one new file; removing one is deleting that file.
+- **The predicate is asked afresh each time an entry is drawn.** Set a path, or finish a build, and the link appears on the next entry. No reload, no restart.
+- **The cheatsheet agrees with the banner.** `diogenes-cheatsheet` lists a dictionary key only when that dictionary is available, so it never advertises a key that will decline.
+- **Morpheus was already optional** and stays so. `diogenes-morpheus-directory` is nil by default; a directory that holds no built `bin/cruncher` and `stemlib` counts as unset. It is consulted only where the shipped analyses and the Latin extra-lemma table have both missed, so with it unset `diogenes-parse-and-lookup-*` behaves exactly as it did before Morpheus support existed: the form is looked up by headword instead.
+
+The predicates are public, so an init file can ask the same questions:
+`diogenes-old-available-p`, `-tll-`, `-montanari-`, `-cambridge-`,
+`-bdag-`, `-passow-`, `-tgl-`, `-pape-`, `-dge-`,
+`diogenes-gaffiot-available-p` (and `-xml-available-p`,
+`diogenes-gaffiot-pdf-available-p`), the same three for `bailly` and
+`georges`, and `diogenes-morpheus-available-p`.
+
 ## Getting started with dictionary lookup
  
 The sections above list the commands but not the everyday workflow.
@@ -390,7 +425,7 @@ Look a word up:
 The result opens in **Diogenes Lookup Mode**. What you get there:
  
 - The entry, formatted from its TEI XML.
-- A links line at the top, each link naming its key: `[OLD (o)]` `[TLL (t)]` `[Georges (G)]` `[Gaffiot (g)]` for Latin, `[Montanari (m)]` `[CGL (c)]` `[BDAG (b)]` `[Pape (P)]` `[DGE (d)]` `[Bailly (B)]` `[Passow (p)]` `[TGL (t)]` for Greek (see below).
+- A links line at the top, listing only the dictionaries you have configured, each link naming its key: `[OLD (o)]` `[TLL (t)]` `[Georges (G)]` `[Gaffiot (g)]` for Latin, `[Montanari (m)]` `[CGL (c)]` `[BDAG (b)]` `[Pape (P)]` `[DGE (d)]` `[Bailly (B)]` `[Passow (p)]` `[TGL (t)]` for Greek (see below).
 - Clickable citations: press RETURN or double-click to open the cited text in Browser Mode.
 Looking words up while reading a text (Browser Mode):
  
@@ -622,7 +657,8 @@ The feature to wait for is `diogenes-old` (the module that defines the variable)
 ### Three ways to open a dictionary
  
 **1. Clickable links.** Every entry in Diogenes Lookup Mode is preceded
-by a links line:
+by a links line — unless you have configured no dictionaries at all, in
+which case there is none:
  
 - Each link carries its key: `[TLL (t)]`, `[Georges (G)]`. The key is shown in the `help-key-binding` face, so it reads as a binding rather than as part of the name.
 - Latin entries: `[OLD (o)]` `[TLL (t)]` `[Georges (G)]` `[Gaffiot (g)]` — and inside a Gaffiot entry, `[Lewis & Short (l)]` `[PDF (P)]` in place of `[Gaffiot (g)]`
