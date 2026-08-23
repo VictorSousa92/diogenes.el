@@ -2264,6 +2264,161 @@ also answers for the form written with u and i."
 	   thereis (cdr (assoc-string variant
 				    diogenes-latin-extra-lemmata t))))
 
+
+;;; Morpheus as a fallback
+;;
+;; Diogenes' analyses are a batch run of Morpheus over wordlists harvested
+;; from the corpora it indexes, so a form those wordlists never saw is not
+;; misspelt but absent -- `transilire', `illidant', `aedium', while their
+;; sibling forms are all present.  Morpheus itself generates paradigms from
+;; stems and knows them.  If a build of it is to hand, asking it is better
+;; than falling back on a search for a form that is nobody's headword.
+;;
+;; Second, and not first.  The shipped data has two things Morpheus does not:
+;; the BYTE OFFSET of the dictionary entry, resolved at build time through
+;; `index_lewis.pl''s key index, and the short gloss.  A Morpheus lemma is a
+;; string, so its entry has to be found by name -- which is exactly the
+;; unreliable path.  Diogenes' own analyses are therefore always preferred,
+;; and Morpheus asked only where they have nothing.
+;;
+;; It also emits the same hyphenated compounds the shipped data does --
+;; `in-mitto', `con-pello', flagged `raw_preverb' -- so its lemmas go through
+;; `diogenes--assimilated-offset' like any other.  And it is fast: 2.7 ms for
+;; one word, startup included, so a process per lookup is simpler than
+;; keeping one alive and costs nothing measurable.
+
+(defcustom diogenes-morpheus-directory nil
+  "Directory of a built Morpheus, or nil not to use one.
+Must hold `bin/cruncher' and `stemlib/', which is how the tree is laid out
+by
+
+    git clone https://github.com/pjheslin/morpheus
+    cd morpheus/src && make CC=\"gcc -std=gnu17 -fpermissive\" && make install
+    cd ../stemlib/Latin && env PATH=\"$PWD/../../bin:$PATH\" MORPHLIB=\"$PWD/..\" make
+
+Johan Winge's fork, by way of Heslin's clone: the one `mk.morpheus-alatius'
+builds, and so the one whose lemmas agree with the offsets already recorded
+in `latin-analyses.txt' -- it returns `jacio', not `iacio'.  A different
+fork may spell a lemma in a way no dictionary key matches.
+
+Consulted only when a form will not parse from the shipped data, so an
+installation without this set behaves as before."
+  :type '(choice (const :tag "Do not use Morpheus" nil) directory)
+  :group 'diogenes)
+
+(defcustom diogenes-morpheus-timeout 10
+  "Seconds to wait for Morpheus before giving up on a form."
+  :type 'natnum
+  :group 'diogenes)
+
+(defun diogenes-morpheus-available-p ()
+  "Whether `diogenes-morpheus-directory' holds a usable Morpheus."
+  (and diogenes-morpheus-directory
+       (let ((bin (expand-file-name "bin/cruncher"
+				    diogenes-morpheus-directory))
+	     (lib (expand-file-name "stemlib" diogenes-morpheus-directory)))
+	 (and (file-executable-p bin) (file-directory-p lib)))))
+
+(defun diogenes--morpheus-run (word lang)
+  "Ask Morpheus about WORD in LANG; return its raw output, or nil.
+The cruncher reads forms from stdin, one per line, and wants beta code for
+Greek -- which is what it gets, `diogenes--do-parse' having converted the
+form already.  MORPHLIB must name the `stemlib' directory itself, not its
+parent: the cruncher appends the language to it."
+  (when (diogenes-morpheus-available-p)
+    (let* ((dir (file-name-as-directory
+		 (expand-file-name diogenes-morpheus-directory)))
+	   (process-environment
+	    (cons (concat "MORPHLIB=" dir "stemlib") process-environment))
+	   (args (append (when (string= lang "latin") '("-L"))
+			 nil)))
+      (with-temp-buffer
+	(let ((exit (condition-case err
+			(apply #'call-process-region
+			       (concat word "\n") nil
+			       (concat dir "bin/cruncher")
+			       nil t nil args)
+		      (error (message "Morpheus: %s" (error-message-string err))
+			     nil))))
+	  (when (and exit (or (eq exit 0) (integerp exit)))
+	    (buffer-string)))))))
+
+(defconst diogenes--morpheus-analysis-re
+  "<NL>\\([^<]*\\)</NL>"
+  "One analysis in Morpheus' output.
+The cruncher answers with the form, then its analyses run together:
+
+  <NL>V transi^li_re,transilio  pres inf act\t\t\tconj4,ire_vb</NL>
+
+which is part of speech, then form and lemma, then the morphology, then
+dialect and stem-class fields separated by tabs.")
+
+(defun diogenes--morpheus-parse-output (output lang)
+  "Turn Morpheus' OUTPUT into analyses shaped like an analyses record's.
+Each is a plist (:offset :conf :lemma :display :trans :info), the same
+shape `diogenes--parse-analyses-record' produces, so that everything
+downstream -- the stacking, the notes, the homograph sweep, navigation --
+works on it unchanged.
+
+:offset is filled in later by `diogenes--morpheus-analyses': the lemma has
+to be resolved against the dictionary's own keys, Morpheus having no notion
+of where an entry sits in a file.  :trans is empty, Morpheus giving no
+glosses."
+  (let ((pos 0) out)
+    (while (string-match diogenes--morpheus-analysis-re (or output "") pos)
+      (setq pos (match-end 0))
+      (let* ((body (match-string 1 output))
+	     (fields (split-string body "\t" nil))
+	     (head (string-trim (or (car fields) "")))
+	     ;; "V transi^li_re,transilio  pres inf act"
+	     (parts (split-string head "[[:space:]]\\{2,\\}" t))
+	     (lemma-field (string-trim (or (car parts) "")))
+	     (info (string-join (cdr parts) " "))
+	     ;; Drop the part-of-speech letter that opens the field.
+	     (lemma-field (if (string-match "\\`[A-Z] +" lemma-field)
+			      (substring lemma-field (match-end 0))
+			    lemma-field))
+	     ;; "form,lemma" -- the lemma is what follows the comma, as
+	     ;; make_latin_analyses.pl also takes it.
+	     (lemma (if (string-match "," lemma-field)
+			(substring lemma-field (match-end 0))
+		      lemma-field))
+	     (extra (string-join
+		     (seq-remove #'string-empty-p
+				 (mapcar #'string-trim (cdr fields)))
+		     " ")))
+	(when (and lemma (not (string-empty-p lemma)))
+	  (push (list :offset 0
+		      :conf 5
+		      :lemma lemma
+		      :display (diogenes--munge-ls-lemma lemma lang)
+		      :trans ""
+		      :info (string-trim
+			     (concat info (if (string-empty-p extra)
+					      ""
+					    (concat " [" extra "]")))))
+		out))))
+    (nreverse out)))
+
+(defun diogenes--morpheus-analyses (word lang)
+  "Analyses of WORD from Morpheus, with their entries resolved, or nil.
+A lemma is looked for among the dictionary's keys as it stands and, being
+possibly a hyphenated compound, under its assimilated spellings as well.
+An analysis whose lemma is found carries that offset and a confidence of 5;
+one whose lemma is not carries 0, which prints the caveat about the headword
+being a guess -- the morphology is worth showing either way, and it is more
+than the alternative of an unrelated entry and no analysis at all."
+  (let ((analyses (diogenes--morpheus-parse-output
+		   (diogenes--morpheus-run word lang) lang)))
+    (cl-loop
+     for a in analyses
+     for lemma = (plist-get a :lemma)
+     for plain = (diogenes--ascii-alpha-only lemma)
+     for offset = (or (diogenes--dict-exact-offset plain lang)
+		      (diogenes--assimilated-offset lemma lang))
+     collect (plist-put (plist-put (copy-sequence a) :offset (or offset 0))
+			:conf (if offset 5 0)))))
+
 (defun diogenes--parse-and-lookup (word lang)
   "Try to parse a word by looking it up in the morphological files,
 and show the entry for it in the lexica. Dispatcher function.
@@ -2272,11 +2427,29 @@ A port of `$do_parse' followed by `$format_analysis': every entry named
 in the analyses record is fetched from the byte offset recorded there.
 Only a form that will not parse falls back on searching the dictionary by
 headword, exactly as the application does."
-  (let ((raw (diogenes--do-parse word lang))
-	(extra (and (string= lang "latin")
-		    (diogenes--latin-extra-lemma word))))
+  (let* ((raw (diogenes--do-parse word lang))
+	 (extra (and (string= lang "latin")
+		     (diogenes--latin-extra-lemma word)))
+	 ;; Only where the shipped data has nothing: its offsets and glosses
+	 ;; are better than anything that can be recovered from a lemma.
+	 (morpheus (and (not raw) (not extra)
+			(diogenes-morpheus-available-p)
+			(diogenes--morpheus-analyses word lang))))
     (if (not raw)
 	(cond
+	 (morpheus
+	  (let* ((record (list :analyses morpheus :suppl nil))
+		 (dicts (diogenes--analyses-dicts record)))
+	    (message "%s does not parse; analysed by Morpheus" word)
+	    (let ((buffer (diogenes--show-analysis-entries
+			   (diogenes--expand-uncertain-dicts record dicts lang)
+			   lang)))
+	      (when diogenes-lookup-show-analysis
+		(with-current-buffer buffer
+		  (diogenes--lookup-insert-at-top
+		   (diogenes--format-analysis-header word lang record))
+		  (goto-char (point-min))))
+	      buffer)))
 	 ;; A form the wordlists never had.  The headword is known, even
 	 ;; though the analysis is not, so show its entry rather than
 	 ;; whatever happens to sort next to the form.
