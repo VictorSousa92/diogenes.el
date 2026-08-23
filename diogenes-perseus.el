@@ -857,9 +857,32 @@ each new dictionary -- the two link lists, the per-entry choice among them,
 and the action dispatch that ran a link.  A module that forgot one of the
 three failed in a different way each time.")
 
+(defcustom diogenes-declared-dictionaries nil
+  "Dictionaries you use, named by id, whatever their paths say.
+A list of symbols: `old', `tll', `montanari', `cambridge', `bdag',
+`passow', `tgl', `gaffiot', `gaffiot-pdf', `georges', `georges-pdf',
+`pape', `dge', `bailly', `bailly-pdf'.  Order does not matter -- this is a
+set, tested with `memq'.
+
+A declared dictionary is offered on every entry of its language, and its
+key and its link explain what to set when pressed with nothing configured.
+An undeclared one is offered when its paths are set, which is what makes
+an installation that declares nothing behave sensibly: configure a
+dictionary and it appears.
+
+    (setq diogenes-declared-dictionaries \\='(old tll bailly tgl))
+
+Loading a module yourself declares it too -- `(require \\='diogenes-tll)'
+before `diogenes.el' loads -- and saying it both ways is harmless.  See
+`diogenes--loading-bundle' for why the load-order proviso, and
+\\[diogenes-list-dictionaries] to see which dictionaries are declared, by
+which route, and what their paths are doing."
+  :type '(repeat symbol)
+  :group 'diogenes)
+
 (cl-defun diogenes-lookup-register-dictionary
     (id &key name lang key command help (show 'always) buffer-p of
-             available-p (order 50) bind)
+             available-p (order 50) bind declared paths)
   "Register the dictionary ID for the entry link banner.  Idempotent.
 Registering an ID already present replaces it, so a module may be reloaded.
 
@@ -905,6 +928,17 @@ companion, registered separately with `when-current', carries the
 PDF-only predicate, so the \"[PDF]\" link appears inside the entry only
 when there is a PDF behind it.
 
+DECLARED says the user asked for this dictionary by loading its module,
+rather than receiving it with the bundle `diogenes.el' loads; a module
+computes it at load time with `diogenes--declared-at-load-p'.  A declared
+dictionary is offered whatever its paths say, AVAILABLE-P not being
+consulted, so that a dictionary you use but have misconfigured explains
+itself instead of disappearing.  `diogenes-declared-dictionaries' declares
+one the other way, by id; either is enough and both together are harmless.
+
+PATHS is the list of option symbols this dictionary reads -- purely so
+\\[diogenes-list-dictionaries] can report on them.
+
 ORDER sorts the banner, low to high; the shipped dictionaries leave gaps to
 sort between.  BIND, if non-nil, binds KEY to COMMAND in
 `diogenes-lookup-mode-map'.  A key that must serve both languages cannot be
@@ -915,7 +949,7 @@ so such modules leave BIND nil and bind the key themselves."
                      :command command :help help :show show
                      :buffer-p buffer-p :of of
                      :available-p available-p :order order
-                     :bind bind)))
+                     :bind bind :declared declared :paths paths)))
     (setq diogenes--lookup-dictionaries
           (append (cl-remove id diogenes--lookup-dictionaries
                              :key (lambda (e) (plist-get e :id)))
@@ -971,21 +1005,36 @@ remain bound, and pressing one still explains what to set -- see
    ((not (functionp predicate)) nil)
    (t (and (ignore-errors (funcall predicate)) t))))
 
+(defun diogenes--lookup-dict-declared-p (entry)
+  "Non-nil if the user has said ENTRY's dictionary is one they use.
+Two ways of saying it, either sufficient and both together harmless:
+
+  its id is in `diogenes-declared-dictionaries';
+  its module was loaded by the user rather than by the bundle, which the
+  module recorded at load time as DECLARED.
+
+The first is a set, so the order it is written in means nothing.  The
+second depends on load order -- see `diogenes--loading-bundle' -- which is
+why the variable exists."
+  (or (plist-get entry :declared)
+      (and (memq (plist-get entry :id) diogenes-declared-dictionaries) t)))
+
 (defun diogenes--lookup-dict-visible-p (entry)
   "Non-nil if ENTRY should be offered on the entry now on screen.
-See `diogenes-lookup-register-dictionary' for what the SHOW values mean.
-A dictionary this user has not configured is never visible, whatever its
-SHOW says: see `diogenes--lookup-dict-available-p'."
-  (let ((available (plist-get entry :available-p)))
-    (and (diogenes--lookup-dict-available-p available)
-         (pcase (plist-get entry :show)
-           ('always t)
-           ('unless-current
-            (let ((predicate (plist-get entry :buffer-p)))
-              (not (and predicate (funcall predicate)))))
-           ('when-current
-            (diogenes--lookup-dict-in-buffer-p (plist-get entry :of)))
-           (_ t)))))
+Declared first, configured second: a dictionary the user has said they use
+is offered whatever its paths are doing, and one they have not is offered
+when its paths are set.  Either way the SHOW rules then decide whether it
+belongs on THIS entry -- see `diogenes-lookup-register-dictionary'."
+  (and (or (diogenes--lookup-dict-declared-p entry)
+           (diogenes--lookup-dict-available-p (plist-get entry :available-p)))
+       (pcase (plist-get entry :show)
+         ('always t)
+         ('unless-current
+          (let ((predicate (plist-get entry :buffer-p)))
+            (not (and predicate (funcall predicate)))))
+         ('when-current
+          (diogenes--lookup-dict-in-buffer-p (plist-get entry :of)))
+         (_ t))))
 
 (defun diogenes--lookup-dict-specs (lang)
   "Return (NAME KEY ID HELP) for each dictionary offered on a LANG entry.
@@ -1031,6 +1080,89 @@ it does not have."
    :help "Show Lewis & Short's entry for \"%s\""))
 
 (diogenes--lookup-register-shipped-dictionaries)
+
+
+(defun diogenes--lookup-dict-declared-how (entry)
+  "How ENTRY's dictionary came to be declared, as a short string."
+  (let ((by-module (plist-get entry :declared))
+        (by-list (memq (plist-get entry :id) diogenes-declared-dictionaries)))
+    (cond ((and by-module by-list) "declared (require + list)")
+          (by-module               "declared (require)")
+          (by-list                 "declared (list)")
+          (t                       "auto"))))
+
+(defun diogenes--lookup-dict-path-report (entry)
+  "What ENTRY's dictionary's own options are doing, as a list of strings.
+One line per option: unset, set but not there, or set and readable.  The
+middle case is the one worth seeing -- a moved volume or a mistyped path,
+which shows the link and fails on being pressed."
+  (let ((paths (plist-get entry :paths)))
+    (if (null paths)
+        (list "no paths (ships with Diogenes)")
+      (mapcar
+       (lambda (symbol)
+         (let ((value (and (boundp symbol) (symbol-value symbol))))
+           (cond
+            ((not (diogenes--source-set-p value))
+             (format "%s: unset" symbol))
+            ((consp value)
+             (format "%s: set (%d entries)" symbol (length value)))
+            ((or (file-readable-p value) (file-directory-p value))
+             (format "%s: %s" symbol (abbreviate-file-name value)))
+            (t
+             (format "%s: %s -- NOT FOUND" symbol
+                     (abbreviate-file-name value))))))
+       paths))))
+
+;;;###autoload
+(defun diogenes-list-dictionaries ()
+  "Show every registered dictionary, how it is declared, and its paths.
+The answer to \"is this dictionary going to appear, and if not why not\":
+each is listed with its language, its key, whether it is declared -- by
+`diogenes-declared-dictionaries', by having had its module loaded, or not
+at all -- and what each of its own options currently holds.
+
+A dictionary appears in an entry's link banner when it is declared, or when
+its paths are set; `Offered' says which of those it manages, before the
+per-entry rules about the dictionary you happen to be reading.  A module
+that is not loaded at all is not here, having never registered."
+  (interactive)
+  (let ((entries (sort (copy-sequence diogenes--lookup-dictionaries)
+                       (lambda (a b)
+                         (let ((la (or (plist-get a :lang) ""))
+                               (lb (or (plist-get b :lang) "")))
+                           (if (string= la lb)
+                               (< (plist-get a :order) (plist-get b :order))
+                             (string< la lb)))))))
+    (with-current-buffer (get-buffer-create "*Diogenes Dictionaries*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (propertize "Diogenes dictionaries\n\n" 'face 'bold))
+        (insert (format "diogenes-declared-dictionaries: %s\n\n"
+                        (if diogenes-declared-dictionaries
+                            (mapconcat #'symbol-name
+                                       diogenes-declared-dictionaries " ")
+                          "(empty -- every dictionary is path-detected)")))
+        (dolist (entry entries)
+          (insert (propertize (format "%s (%s)"
+                                      (or (plist-get entry :name) "?")
+                                      (plist-get entry :id))
+                              'face 'bold))
+          (insert (format "  %s" (or (plist-get entry :lang) "-")))
+          (when (plist-get entry :key)
+            (insert (format "  key %s" (plist-get entry :key))))
+          (insert "\n")
+          (insert (format "  %s, %s\n"
+                          (diogenes--lookup-dict-declared-how entry)
+                          (if (diogenes--lookup-dict-visible-p entry)
+                              "offered here"
+                            "not offered")))
+          (dolist (line (diogenes--lookup-dict-path-report entry))
+            (insert (format "  %s\n" line)))
+          (insert "\n"))
+        (goto-char (point-min))
+        (special-mode))
+      (display-buffer (current-buffer)))))
 
 
 (defun diogenes--lookup-insert-dict-links (headword lang)
