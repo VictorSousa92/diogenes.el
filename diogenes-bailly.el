@@ -428,12 +428,21 @@ the markup."
 
 (defun diogenes-bailly--rewrite-entry (body)
   "Return BODY, the inside of one TEI <entry>, as the formatter wants it.
-The four rewritings the Commentary describes: `xml:lang=\"grc\"' becomes
-the `lang=\"greek\"' that `diogenes--dict-handle-elt' actually reads,
-<etym> and <re type=\"variant\"> become labelled <sense>s so they are set
-off from the article as the print sets them off, and <bibl> becomes <cit>
-so that a citation Diogenes cannot resolve is not drawn as a link that
-fails when clicked.
+The rewritings the Commentary describes: `xml:lang=\"grc\"' becomes the
+`lang=\"greek\"' that `diogenes--dict-handle-elt' actually reads, <etym>
+and <re type=\"variant\"> become labelled <sense>s so they are set off from
+the article as the print sets them off, and <bibl> becomes <cit> so that a
+citation Diogenes cannot resolve is not drawn as a link that fails when
+clicked.
+
+And <pron notation=\"prosody\"> is bracketed.  Bailly gives the quantity of
+a doubtful vowel in an element of its own, after the headword and after any
+form whose measure is in question -- 37 845 of them in this dictionary --
+and with the element drawn as bare text it ran into whatever followed:
+\u1f31\u03c3\u03c4\u03b7\u03bc\u03b9 then a breve then `(au sens tr.\=', with nothing to say that the breve
+measured the iota of the headword rather than beginning the grammar.  In
+brackets it reads as the dictionary means it, and as the dictionary itself
+sets the same note further down the article: `\u03c3\u03c4\u03b1\u03b8\u03ae\u03c3\u03bf\u03bc\u03b1\u03b9 [\u1fb0]\='.
 
 <orth> is NOT renamed here: `diogenes-bailly--convert-buffer' does that,
 having found it already while reading the headword out."
@@ -449,6 +458,21 @@ having found it already while reading the headword out."
     (setq body (replace-regexp-in-string
                 "<re type=\"variant\">" "<sense n=\"➳\">" body t t))
     (setq body (replace-regexp-in-string "</re>" "</sense>" body t t))
+    ;; Prosody: bracketed, and set off by a space from whatever precedes
+    ;; it, which is a headword or a form.  The brackets are the
+    ;; dictionary's own for this note; a <pron> left as text abuts what
+    ;; follows and reads as part of it.
+    (setq body (replace-regexp-in-string
+                "<pron\\(?:[[:space:]][^>]*\\)?>[[:space:]]*"
+                " [" body t))
+    (setq body (replace-regexp-in-string "[[:space:]]*</pron>" "]" body t))
+    ;; The form group and the grammar that follows it are adjacent in the
+    ;; source and both render inline, so `</form><gramGrp>' comes out as
+    ;; \u1f31\u03c3\u03c4\u03b7\u03bc\u03b9 run into `(au sens tr.\=' -- with or without a prosody note
+    ;; between them.  One space at that boundary, which is where the
+    ;; headword ends and the article begins.
+    (setq body (replace-regexp-in-string
+                "</form>[[:space:]]*<gramGrp" "</form> <gramGrp" body t))
     ;; Citations: a face, not a dead link.
     (setq body (replace-regexp-in-string "<bibl>" "<cit>" body t t))
     (setq body (replace-regexp-in-string "</bibl>" "</cit>" body t t))
