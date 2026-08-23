@@ -149,6 +149,7 @@
 (require 'subr-x)
 (require 'ucs-normalize)
 (require 'diogenes-dict-faces)
+(require 'diogenes-lisp-utils)          ; diogenes--path-usable-p
 
 (declare-function diogenes--search-dict "diogenes-perseus"
                   (word lang sort-fn key-fn &optional file))
@@ -611,6 +612,28 @@ first entry).  If this is the TEI file, set it as \
 M-x diogenes-bailly-build-dictionary"
                   (abbreviate-file-name file)))))
 
+;;;###autoload
+(defun diogenes-bailly-xml-available-p ()
+  "Non-nil if Bailly's XML is here, or could be built without asking twice.
+True when the converted dictionary exists, and also when it does not but
+`diogenes-bailly-source-file' names TEI that is there -- because then
+pressing `B' offers to build it.  Never signals: `diogenes-path' may itself
+be unset, and this is asked while an entry is being drawn."
+  (let ((file (ignore-errors (diogenes-bailly--dictionary-file))))
+    (or (and file (file-readable-p file))
+        (diogenes--source-usable-p diogenes-bailly-source-file))))
+
+;;;###autoload
+(defun diogenes-bailly-available-p ()
+  "Non-nil if Bailly can be reached at all, as XML or as a printed page.
+Either half is enough, `diogenes-lookup-bailly' dispatching on which is
+actually there: with the XML converted the link opens the entry, with only
+`diogenes-bailly-pdf-file' set it opens the page instead, as the OLD and
+Montanari do.  With neither the link is not offered."
+  (or (diogenes-bailly-xml-available-p)
+      (and (require 'diogenes-bailly-pdf nil t)
+           (diogenes-bailly-pdf-available-p))))
+
 (defun diogenes-bailly--file ()
   "Return the converted dictionary file, building it if the user agrees.
 Signals rather than returning nil when there is nothing to search: unlike
@@ -659,10 +682,14 @@ word returns to the LSJ, and the print-dictionary banner opens Montanari,
 the CGL, BDAG, Passow and the TGL.
 
 Bailly's XML is complete -- it is the whole of the Bailly 2020 edition, the
-same text its PDF prints -- so there is no coverage to check and nothing
-to fall back on: a word that is not in it produces the nearest entry, with
-a message saying so, exactly as the LSJ does.  In particular this command
-never opens the PDF, however Bailly is configured.
+same text its PDF prints -- so there is no coverage to check: a word that
+is not in it produces the nearest entry, with a message saying so, exactly
+as the LSJ does.
+
+With only `diogenes-bailly-pdf-file' set and no XML converted, Bailly is
+simply a print dictionary like the OLD, and this command opens the page
+rather than explaining what is not installed.  Where the XML IS there, this
+command never opens the PDF except in the case below.
 
 Pressed a second time, from INSIDE the entry it has just shown, it opens
 that word's page in the printed Bailly instead -- see
@@ -670,8 +697,8 @@ that word's page in the printed Bailly instead -- see
 the only way to the PDF, and `C-u B' looks another word up in the XML from
 there.
 
-Requires a converted dictionary file; see
-\\[diogenes-bailly-build-dictionary]."
+Requires either a converted dictionary file (see
+\\[diogenes-bailly-build-dictionary]) or a PDF of the printed edition."
   (interactive
    (progn
      (diogenes--lookup-assert-lang "greek" "Bailly")
@@ -688,16 +715,29 @@ Requires a converted dictionary file; see
         (user-error "This entry is Bailly already; set \
 `diogenes-bailly-pdf-file' to reach the printed page from here, `l' returns \
 to the LSJ, `C-u B' looks up another word here"))
-    (let* ((word (string-trim (or word (diogenes--lookup-current-headword))))
-           (file (diogenes-bailly--file))
-           (key (diogenes-bailly--key word)))
-      (when (string-empty-p key)
-        (user-error "Nothing to look up in \"%s\"" word))
-      (let ((diogenes--lookup-same-window diogenes-bailly-display-in-same-window))
-        (diogenes--search-dict key "greek"
-                               #'diogenes--beta-sort-function
-                               #'diogenes--xml-key-fn
-                               file)))))
+    (let ((word (string-trim (or word (diogenes--lookup-current-headword)))))
+      (cond
+       ;; No XML, and none to build: whatever Bailly the user has is the
+       ;; printed one, so send the word there instead of asking for a TEI
+       ;; file that is not wanted.
+       ((not (diogenes-bailly-xml-available-p))
+        (if (and (require 'diogenes-bailly-pdf nil t)
+                 (diogenes-bailly-pdf-available-p))
+            (diogenes-lookup-open-bailly-pdf word)
+          ;; Neither half configured: let `diogenes-bailly--file' say so,
+          ;; rather than repeating its message here.
+          (diogenes-bailly--file)))
+       (t
+        (let ((file (diogenes-bailly--file))
+              (key (diogenes-bailly--key word)))
+          (when (string-empty-p key)
+            (user-error "Nothing to look up in \"%s\"" word))
+          (let ((diogenes--lookup-same-window
+                 diogenes-bailly-display-in-same-window))
+            (diogenes--search-dict key "greek"
+                                   #'diogenes--beta-sort-function
+                                   #'diogenes--xml-key-fn
+                                   file))))))))
 
 ;;;; --------------------------------------------------------------------
 ;;;; REGISTRATION
@@ -715,6 +755,7 @@ it needs no language dispatcher of the kind `P' and `l' have."
    :command #'diogenes-lookup-bailly
    :show 'unless-current
    :buffer-p #'diogenes-bailly-lookup-buffer-p
+   :available-p #'diogenes-bailly-available-p
    :bind t
    :help "Show Bailly's entry for \"%s\""))
 

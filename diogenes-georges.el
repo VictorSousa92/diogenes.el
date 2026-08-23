@@ -50,6 +50,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'ucs-normalize)
+(require 'diogenes-lisp-utils)          ; diogenes--path-usable-p
 
 (declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
                   (id &rest keys))
@@ -376,6 +377,29 @@ first entry).  If this is the TEI file, set it as \
 M-x diogenes-georges-build-dictionary"
                   (abbreviate-file-name file)))))
 
+;;;###autoload
+(defun diogenes-georges-xml-available-p ()
+  "Non-nil if the Georges XML is here, or could be built without asking twice.
+True when the converted dictionary exists, and also when it does not but
+`diogenes-georges-source-file' names TEI that is there -- because then
+pressing `G' offers to build it.  `diogenes-georges--dictionary-file'
+returns nil when neither option is set, which is unavailable too.  Never
+signals: this is asked while an entry is being drawn."
+  (let ((file (ignore-errors (diogenes-georges--dictionary-file))))
+    (or (and file (file-readable-p file))
+        (diogenes--source-usable-p diogenes-georges-source-file))))
+
+;;;###autoload
+(defun diogenes-georges-available-p ()
+  "Non-nil if Georges can be reached at all, as XML or as printed volumes.
+Either half is enough, `diogenes-lookup-georges' dispatching on which is
+actually there: with the XML converted the link opens the entry, with only
+`diogenes-georges-directory' set it opens the page instead, as the OLD and
+the TLL do.  With neither the link is not offered."
+  (or (diogenes-georges-xml-available-p)
+      (and (require 'diogenes-georges-pdf nil t)
+           (diogenes-georges-pdf-available-p))))
+
 (defun diogenes-georges--file ()
   "Return the converted dictionary file, building it if the user agrees.
 Falls back on nothing: unlike Gaffiot, whose TEI covers part of the
@@ -426,13 +450,17 @@ the TLL and Gaffiot.
 A word Georges does not have produces the nearest entry, with a message
 saying so, exactly as Lewis & Short does.
 
+With only `diogenes-georges-directory' set and no XML converted, Georges is
+simply a print dictionary like the OLD, and this command opens the page
+rather than explaining what is not installed.
+
 Pressed a second time, from INSIDE the entry it has just shown, it opens
 that word's page in the printed Handwörterbuch instead -- see
 `diogenes-lookup-open-georges-pdf'.  `C-u G' looks another word up in the
 XML from there.
 
-Requires a converted dictionary file; see
-\\[diogenes-georges-build-dictionary]."
+Requires either a converted dictionary file (see
+\\[diogenes-georges-build-dictionary]) or the printed volumes."
   (interactive
    (progn
      (diogenes--lookup-assert-lang "latin" "Georges")
@@ -449,17 +477,29 @@ Requires a converted dictionary file; see
         (user-error "This entry is Georges already; set \
 `diogenes-georges-directory' to reach the printed page from here, `l' \
 returns to Lewis & Short, `C-u G' looks up another word here"))
-    (let* ((word (string-trim (or word (diogenes--lookup-current-headword))))
-           (file (diogenes-georges--file))
-           (key (diogenes-georges--key word)))
-      (when (string-empty-p key)
-        (user-error "Nothing to look up in \"%s\"" word))
-      (let ((diogenes--lookup-same-window
-             diogenes-georges-display-in-same-window))
-        (diogenes--search-dict key "latin"
-                               #'diogenes--ascii-sort-function
-                               #'diogenes--xml-key-fn
-                               file)))))
+    (let ((word (string-trim (or word (diogenes--lookup-current-headword)))))
+      (cond
+       ;; No XML, and none to build: whatever Georges the user has is the
+       ;; printed one, so send the word there instead of asking for a TEI
+       ;; file that is not wanted.
+       ((not (diogenes-georges-xml-available-p))
+        (if (and (require 'diogenes-georges-pdf nil t)
+                 (diogenes-georges-pdf-available-p))
+            (diogenes-lookup-open-georges-pdf word)
+          ;; Neither half configured: let `diogenes-georges--file' say so,
+          ;; rather than repeating its message here.
+          (diogenes-georges--file)))
+       (t
+        (let ((file (diogenes-georges--file))
+              (key (diogenes-georges--key word)))
+          (when (string-empty-p key)
+            (user-error "Nothing to look up in \"%s\"" word))
+          (let ((diogenes--lookup-same-window
+                 diogenes-georges-display-in-same-window))
+            (diogenes--search-dict key "latin"
+                                   #'diogenes--ascii-sort-function
+                                   #'diogenes--xml-key-fn
+                                   file))))))))
 
 ;;;; --------------------------------------------------------------------
 ;;;; REGISTRATION
@@ -478,6 +518,7 @@ have."
    :command #'diogenes-lookup-georges
    :show 'unless-current
    :buffer-p #'diogenes-georges-lookup-buffer-p
+   :available-p #'diogenes-georges-available-p
    :bind t
    :help "Show Georges' entry for \"%s\""))
 

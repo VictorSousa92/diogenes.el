@@ -71,6 +71,7 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'diogenes-dict-faces)
+(require 'diogenes-lisp-utils)          ; diogenes--path-usable-p
 (require 'seq)
 (require 'subr-x)
 (require 'ucs-normalize)
@@ -381,6 +382,29 @@ there is."
        diogenes-gaffiot-pdf-file
        (file-readable-p diogenes-gaffiot-pdf-file)))
 
+;;;###autoload
+(defun diogenes-gaffiot-xml-available-p ()
+  "Non-nil if Gaffiot's XML is here, or could be built without asking twice.
+True when the converted dictionary exists, and also when it does not but
+`diogenes-gaffiot-source-file' names a readable TEI file -- because then
+pressing `g' offers to build it, which is a real destination for the link.
+Never signals: `diogenes-path' may itself be unset, and this is asked while
+an entry is being drawn."
+  (let ((file (ignore-errors (diogenes-gaffiot--dictionary-file))))
+    (or (and file (file-readable-p file))
+        (diogenes--path-usable-p diogenes-gaffiot-source-file 'file))))
+
+;;;###autoload
+(defun diogenes-gaffiot-available-p ()
+  "Non-nil if Gaffiot can be reached at all, as XML or as a printed page.
+Either half is enough, `diogenes-lookup-gaffiot' dispatching on which is
+actually there: with only the TEI converted the link opens the entry, with
+only `diogenes-gaffiot-pdf-file' set it opens the page, and with both the
+entry as far as F and the page beyond it.  With neither the link is not
+offered."
+  (or (diogenes-gaffiot-xml-available-p)
+      (diogenes-gaffiot--pdf-available-p)))
+
 (defun diogenes-gaffiot--file ()
   "Return the converted dictionary file, or nil if there is none.
 Builds it, with the user\'s agreement, when `diogenes-gaffiot-source-file'
@@ -521,14 +545,21 @@ M-x customize-variable"))))))
 
 (defun diogenes-gaffiot--register ()
   "Announce Gaffiot to the lookup banner.  Idempotent.
-`g' is Latin-only, so it can be bound from here; Lewis & Short, the way
-back, is registered by `diogenes-perseus.el' itself, being the dictionary
-Diogenes searches by default."
+`g' is Latin-only, so `:bind t' can put it on `diogenes-lookup-gaffiot'
+from here: the key belongs to this module, and an installation that does
+not load it leaves `g' unbound rather than bound to a command that is not
+defined.  `:available-p' hides the link when the user has neither the
+converted XML nor a PDF of the printed edition; with only one of them,
+`diogenes-lookup-gaffiot' takes the word to whichever it is.  Lewis &
+Short, the way back, is registered by `diogenes-perseus.el' itself, being
+the dictionary Diogenes searches by default."
   (diogenes-lookup-register-dictionary
    'gaffiot :lang "latin" :name "Gaffiot" :key "g" :order 60
    :command #'diogenes-lookup-gaffiot
    :show 'unless-current
    :buffer-p #'diogenes-gaffiot-lookup-buffer-p
+   :available-p #'diogenes-gaffiot-available-p
+   :bind t
    :help "Show Gaffiot's entry for \"%s\""))
 
 (with-eval-after-load 'diogenes-perseus

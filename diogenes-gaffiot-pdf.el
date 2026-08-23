@@ -295,11 +295,27 @@ Call this if you replace or re-bookmark the PDF while Emacs is running."
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
+;;;###autoload
+(defun diogenes-gaffiot-pdf-available-p ()
+  "Non-nil if the printed Gaffiot can be opened.
+True when `diogenes-gaffiot-pdf-file' names a readable PDF, and nothing
+else: unlike `diogenes-gaffiot--pdf-available-p', which governs whether a
+word past F FALLS THROUGH to the print automatically, this answers only
+whether there is a PDF at all.  Asked before offering \"[PDF (g)]\" inside a
+Gaffiot entry, where an explicit press is not a fall-through and so is not
+the fallback option's business."
+  (and (boundp 'diogenes-gaffiot-pdf-file)
+       (diogenes--path-usable-p diogenes-gaffiot-pdf-file 'file)))
+
 (defun diogenes-gaffiot-pdf--register ()
   "Announce the printed Gaffiot to the lookup banner.  Idempotent.
-Offered inside a Gaffiot entry, as before.  Unlike Bailly's PDF this one is
-NOT gated on being configured: the proofread TEI stops at F, so a word past
-it has nowhere else to go and the link must be there to explain itself.
+Offered inside a Gaffiot entry, and only when there is a PDF to open:
+`:available-p' keeps \\\"[PDF (g)]\\\" out of the banner of a user who has
+converted the TEI and nothing more, for whom the link would lead nowhere.
+The TEI stopping at F is still explained where it matters -- by
+`diogenes-lookup-gaffiot', when a word past F is looked up and there is no
+printed dictionary to send it to.
+
 The key announced is `g', shared with `diogenes-lookup-gaffiot', which
 dispatches: pressed inside a Gaffiot article it opens the printed page, as
 `B' does in Bailly and `G' in Georges.  So the banner here reads
@@ -315,6 +331,7 @@ worth naming."
    'gaffiot-pdf :lang "latin" :name "PDF" :key "g" :order 90
    :command #'diogenes-lookup-open-gaffiot-pdf
    :show 'when-current :of 'gaffiot
+   :available-p #'diogenes-gaffiot-pdf-available-p
    :help "Open the printed Gaffiot at \"%s\""))
 
 (with-eval-after-load 'diogenes-perseus
