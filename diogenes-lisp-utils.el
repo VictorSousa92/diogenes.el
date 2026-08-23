@@ -12,6 +12,7 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'seq)
+(require 'ucs-normalize)                ; diogenes--ascii-alpha-only folds NFD
 
 (defmacro diogenes--replace-regexes-in-string (str &rest subst-lists)
   "Apply a list of regex-substitutions to a string in sequence.
@@ -203,8 +204,24 @@ run M-x customize-variable RET %s RET"
   (or (<= 65 letter 90)
       (<= 97 letter 122)))
 
-(defsubst diogenes--ascii-alpha-only (str)
-  (cl-remove-if-not #'diogenes--ascii-alpha-p str))
+(defun diogenes--ascii-alpha-only (str)
+  "Return the ASCII letters of STR, accented letters folded to their base.
+Decomposes to NFD first, so a letter that carries a mark contributes the
+letter: `desîmus' gives `desimus', not `desmus'.
+
+That distinction is the whole point of the decomposition.  Everything but
+ASCII letters is then discarded, and an accented letter that had NOT been
+decomposed would be discarded with it -- so a Latin form printed with a
+quantity or a contraction mark, as the PHI texts print `desîmus', lost the
+marked letter altogether.  The comparators built on this then placed it
+past the end of its own letter block (`desmus' sorts after `desivare'), and
+a lookup landed on whatever entry happened to be there.
+
+Ligatures are not spelt out here: NFD leaves æ alone, there being no
+canonical decomposition for it.  A dictionary whose headwords use them
+handles them in its own key function -- see `diogenes-gaffiot--key'."
+  (cl-remove-if-not #'diogenes--ascii-alpha-p
+                    (ucs-normalize-NFD-string (or str ""))))
 
 (defun diogenes--string-equal-letters-only (str-a str-b)
   "Compare two string, making them equal if they contain the same letters"
