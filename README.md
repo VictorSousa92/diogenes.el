@@ -359,12 +359,58 @@ What is gated, and on what:
 
 | You have | You get |
 | --- | --- |
-| No dictionary paths set | No links line at all, and no dictionary keys bound |
+| No dictionary paths set, nothing declared | No links line at all, and no dictionary keys bound |
+| A dictionary declared, paths unset | Its link and key appear, and explain what to set |
+| A path set but broken (typo, moved file) | Its link appears; pressing it says what could not be read |
 | Some paths set | A links line naming exactly those, in the usual order |
 | Only a dictionary's XML | Its link opens the entry; no `[PDF]` link inside it |
 | Only a dictionary's PDF | Its link opens the printed page, like the OLD |
 | Both | The entry, with `[PDF]` inside it for the printed page |
 | No `diogenes-morpheus-directory` | The parse works as before, with no Morpheus fallback |
+
+### Declaring a dictionary
+
+The table above describes the default, which is path-detected: configure a
+dictionary and it appears. You can also **declare** one, which says "I use
+this" independently of whether its paths currently work — the link, the key
+and the chooser entry are all there, and pressing one with nothing
+configured gives the "not set up yet: set `diogenes-tll-pdf-directory`…"
+message rather than nothing at all.
+
+Two ways to declare, either sufficient, and both together harmless:
+
+```elisp
+;; by id, in any order -- this is a set, not a sequence
+(setq diogenes-declared-dictionaries '(old tll bailly tgl))
+```
+
+```elisp
+;; or by loading the module yourself, BEFORE diogenes.el loads
+(use-package diogenes
+  :init
+  (require 'diogenes-tll)
+  ...)
+```
+
+The ids are `old`, `tll`, `montanari`, `cambridge`, `bdag`, `passow`,
+`tgl`, `gaffiot`, `gaffiot-pdf`, `georges`, `georges-pdf`, `pape`, `dge`,
+`bailly`, `bailly-pdf`.
+
+- The variable is read afresh whenever an entry is drawn, so editing it takes effect at once, in both directions, with no restart.
+- The `require` route depends on load order, and this is the one thing about it worth remembering. `diogenes.el` loads every dictionary module itself, and `require` is a no-op once a feature is present — so a `require` that runs *after* `diogenes.el` (in `use-package`'s `:config`, or a `with-eval-after-load`) does not re-read the file and does not declare anything. It fails silently. Put declaring requires in `:init`, or use the variable, which does not care.
+- Order in the list means nothing. Banner order comes from each dictionary's registered `:order`, unchanged.
+
+`M-x diogenes-list-dictionaries` shows every registered dictionary, whether
+it is declared and by which route, whether it is being offered, and what
+each of its own path options currently holds — including the case worth
+seeing, a path that is set but points at nothing.
+
+### A path that is set but broken
+
+A path is a statement of intent, so a dictionary whose path is set counts as
+wanted even when the path is wrong: a moved volume, a typo, an unmounted
+drive. The link is offered and the command says what it could not read.
+Only an unset path — and no declaration — leaves a dictionary out.
 
 The rules behind the table:
 
