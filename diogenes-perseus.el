@@ -1286,8 +1286,17 @@ load diogenes-bailly, -gaffiot, -georges or -pape" lang)))
 	  (choice (completing-read (format "Look this %s word up in: " lang)
 				   alist nil t))
 	  (entry (cdr (assoc choice alist)))
-	  (default (or (ignore-errors (diogenes--lookup-current-headword))
-		       (thing-at-point 'word t)
+	  ;; The word under the cursor, and only then the entry's headword.
+	  ;; `diogenes--lookup-current-headword' answers with the headword of
+	  ;; the ARTICLE, which is what the dictionary keys want when the whole
+	  ;; article is the subject -- and quite wrong here, where the point of
+	  ;; the command is the word you are looking at.  Reading Gaffiot on
+	  ;; `dico', it took `dico' rather than the Greek word under point;
+	  ;; `dico' read as beta code is δ-ι-ξ-ο, which is how a Greek lookup
+	  ;; came to answer with `δίξεστον'.  `C-c C-c' takes the word at point
+	  ;; and this must agree with it.
+	  (default (or (thing-at-point 'word t)
+		       (ignore-errors (diogenes--lookup-current-headword))
 		       "")))
      (list (if (or current-prefix-arg (string-empty-p default))
 	       (read-string (if (string-empty-p default)
