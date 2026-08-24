@@ -1466,7 +1466,26 @@ commands when they are asked to offer a choice."
     ;; from the entry we are leaving: a Greek word looked up in Georges must
     ;; not carry the Greek file along with it.
     (let ((diogenes--lookup-lang lang)
-	  (diogenes--lookup-file nil))
+	  (diogenes--lookup-file nil)
+	  ;; Where the entry appears has to be decided here too, and the
+	  ;; same way `diogenes-perseus-action' decides it: reading an entry
+	  ;; and asking for another is staying in one place, so the new one
+	  ;; takes the window rather than popping open a second.  Left
+	  ;; unbound, this inherited the global nil, `display-buffer' then
+	  ;; chose the window, and from a browser buffer it chose the
+	  ;; browser's own -- the text being read replaced by a dictionary
+	  ;; entry.
+	  ;;
+	  ;; Only from a lookup buffer, and only when the entry had
+	  ;; somewhere else it could have gone: with one window there is no
+	  ;; choice to make.  Elsewhere this stays nil and the window is
+	  ;; `display-buffer''s business -- which is what `diogenes-purpose'
+	  ;; is for, a lookup buffer carrying a purpose of its own being how
+	  ;; it stops displacing a text.
+	  (diogenes--lookup-same-window
+	   (and (derived-mode-p 'diogenes-lookup-mode)
+		(or (= (count-windows) 1)
+		    (y-or-n-p "Open the result in this same window? ")))))
       (unless (equal target word)
 	(message "%s: looking up %s" word target))
       (funcall command target))))
