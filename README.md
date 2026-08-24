@@ -284,8 +284,10 @@ package is already there, so without it every start-up fails. Update with
 
 ## Configuration
 
-One block, everything in `:init`. Delete the dictionaries you do not have —
-an unset one is invisible rather than broken.
+Settings go in `:init`, which runs before the package loads; anything that
+names something the package itself defines goes in `:config`, which runs
+after. Delete the dictionaries you do not have — an unset one is invisible
+rather than broken.
 
 ```elisp
 (use-package diogenes
@@ -331,12 +333,32 @@ an unset one is invisible rather than broken.
   (setq diogenes-latin-analysis-corrections
         '(("experire" :info "pres imperat pass 2nd sg")))
 
+  ;; Forms the analyses file has no entry for (see below)
+  (setq diogenes-latin-extra-lemmata
+        '(("valdissime" . "validus")
+          ("valde"      . "validus")
+          ("valdius"    . "validus")))
+
   ;; PDF viewer: 'auto, 'pdf-tools or 'emacs-reader
   (setq diogenes-old-pdf-viewer 'auto)
+
+  :config
+  ;; Optional, if you use flyspell: it has nothing useful to say about Greek
+  ;; or Latin, and marks most of an entry as a misspelling.
+  (dolist (hook '(diogenes-lookup-mode-hook
+                  diogenes-analysis-mode-hook))
+    (add-hook hook (lambda () (flyspell-mode -1))))
+
+  ;; Optional, if you use window-purpose (see below)
+  (diogenes-purpose-install)
+
   :bind ("C-c d" . diogenes))
 ```
 
-- Everything goes in `:init`, which runs before the package loads. That matters for one case only — declaring a dictionary by `(require 'diogenes-tll)` — but keeping every setting in one place costs nothing.
+- Every option goes in `:init`. It runs before the package loads, which matters for one case only — declaring a dictionary by `(require 'diogenes-tll)` — but keeping the settings in one place costs nothing.
+- `:config` is for the two lines above and anything like them: a `keymap-set` in one of the package's maps, an `add-to-list` on one of its variables, advice on its functions. In `:init` those are void-variable errors, the symbols not existing yet.
+- The flyspell lines are worth having if you use it globally. `diogenes-browser-mode-hook` too, if you read texts in the browser.
+- `(diogenes-purpose-install)` is only needed if you have uninstalled the purposes within a session; loading `diogenes-purpose` installs them already. Harmless either way, and it makes the intent visible.
 - `diogenes-path` is the variable; there is no `diogenes-library-path`.
 - Passow and the TGL take the **parent** folder of the per-volume material; see [The dictionaries themselves](#the-dictionaries-themselves) for the layout and the OCR text files they need.
 - The XML dictionaries are built once from their TEI source: `-source-file` is what you downloaded, `-file` is where the built dictionary goes. Pressing the key offers to build it.
@@ -792,6 +814,22 @@ The middle step is the one that matters:
 - `desîmus` is `desiimus`, the syncopated perfect of *desino*.
 - `desimus` without the mark is a key too — the present subjunctive of *dēsum* — so treating the mark as decoration answers about a word the text did not print.
 - `diogenes-latin-expand-contractions` set to nil turns the reading off, for a text that uses the mark otherwise.
+
+### Forms with no analysis at all
+
+Where the file has no entry and you know the headword, name it:
+
+```elisp
+(setq diogenes-latin-extra-lemmata
+      '(("valdissime" . "validus")
+        ("valde"      . "validus")
+        ("valdius"    . "validus")))
+```
+
+- Consulted before Morpheus, so an entry here suppresses whatever Morpheus would have said. That is worth knowing: Morpheus returns the morphology as well as the lemma, where this can only say *"valdius does not parse; showing validus"* and open the entry.
+- So it earns its keep for forms Morpheus does not have either — the comparative and superlative of the adverb `valde` are a real example, its stems carrying the adverb without its comparison — and for a form where you want a headword other than the one either source picks.
+- Keys are matched through the same spelling variants as everything else, so one entry answers for the u/v and i/j spellings alike.
+- On a machine with no Morpheus built, this is the only fallback there is.
 
 ### Forms the wordlists never saw
 
