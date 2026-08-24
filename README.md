@@ -526,6 +526,13 @@ Eleven of them, in two kinds — and three exist as both.
 | Pape | Gr | `diogenes-pape-source-file` | `diogenes-pape-file` | complete | — |
 | DGE | Gr | `diogenes-dge-source-file` | `diogenes-dge-file` | α–ἐπισκήπτω | — |
 
+Where the sources came from:
+
+- **Pape, Gaffiot and Georges** are built from the FDB databases published by the Institut für Klassische Philologie at Zürich: <https://www.iaka.uzh.ch/de/klph/it/mls.html>.
+- **Bailly** was tested against a TEI XML built from the GoldenDict version: <https://chaerephon.e-monsite.com/pages/litterature/grec-ancien/bailly2020.html>.
+- **The DGE** is the CSIC's own XML, below.
+- The **printed Georges** the page lookup expects is the 1913 edition as digitised at <http://www.zeno.org/Georges-1913>; the printed **Bailly** is the typeset *Bailly 2020 – Hugo Chávez* (<http://gerardgreco.free.fr/spip.php?article24&lang=fr>).
+
 What is true of all five:
 
 - Built once with `M-x diogenes-<name>-build-dictionary`; pressing the key with nothing built offers to do it. `-source-file` is what you downloaded, `-file` where the built dictionary goes — unset, it lands beside the other Diogenes dictionaries, which is often a root-owned directory, so name a path you can write.
@@ -535,7 +542,8 @@ What is true of all five:
 - A word the dictionary lacks gives the nearest entry, with a message — except past the DGE's published boundary, where there is nothing to be near.
 
 Below, only what is peculiar to each. **Pape** has nothing peculiar: it is
-complete, has no printed companion here, and `P` opens it.
+complete, built from the Zürich FDB database, has no printed companion here,
+and `P` opens it.
 
 ### Bailly
 
@@ -608,8 +616,8 @@ has its own path variable, which must be set before use.
 Notes on the data:
  
 - OLD, TLL, Montanari, CGL, BDAG: page index comes from each PDF's own bookmarks and embedded OCR layer. No extra files needed.
-- Bailly: its bookmarks name a word *somewhere* on the page rather than the page's bounds, so they give no page interval; the index comes from the **running heads** instead (`first lemma — page number — last lemma`), read from the PDF's text layer. No extra files needed, and nothing is built up front: a lookup reads only the dozen pages its binary search touches. Written for the freely available typeset edition *Bailly 2020 – Hugo Chávez* (http://gerardgreco.free.fr/spip.php?article24&lang=fr); optionally run `M-x diogenes-bailly-build-index` once to read every head and write a portable `<pdf-name>-index.eld` beside the PDF.
-- Georges: bookmarked once per page, and each bookmark names **every entry on that page** (`Bd1_Sp0005-0006_a-3_abacinus_abactio_…`), which gives some 43 000 headword-to-page pairs. A word among them lands on its exact page; one that is not — an entry a crowded bookmark could not list (those end in `ua13`, *und andere*), a spelling filed differently, or a word Georges lacks — lands where it would stand alphabetically, and the echo area says so. Volumes are routed by the letters each covers, read from its own bookmarks. No extra files needed.
+- Bailly: its bookmarks name a word *somewhere* on the page rather than the page's bounds, so they give no page interval; the index comes from the **running heads** instead (`first lemma — page number — last lemma`), read from the PDF's text layer. No extra files needed, and nothing is built up front: a lookup reads only the dozen pages its binary search touches. Written for the typeset *Bailly 2020* named above; optionally run `M-x diogenes-bailly-build-index` once to read every head and write a portable `<pdf-name>-index.eld` beside the PDF.
+- Georges: bookmarked once per page, and each bookmark names **every entry on that page** (`Bd1_Sp0005-0006_a-3_abacinus_abactio_…`), which gives some 43 000 headword-to-page pairs. A word among them lands on its exact page; one that is not — an entry a crowded bookmark could not list (those end in `ua13`, *und andere*), a spelling filed differently, or a word Georges lacks — lands where it would stand alphabetically, and the echo area says so. Volumes are routed by the letters each covers, read from its own bookmarks. No extra files needed. Built after the zeno.org digitisation named above.
 - Passow and TGL: each volume folder needs **two files**, the volume PDF and a plain-text OCR `.txt` of the same volume. Lookups run against the `.txt`, so it is required.
   - First `*.pdf` and first `*.txt` in the folder are used (override with `diogenes-passow-pdf-regexp` / `-text-regexp`, and the `diogenes-tgl-*` equivalents).
   - The OCR `.txt` must delimit pages with lines `----- N / TOTAL -----`.
