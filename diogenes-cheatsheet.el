@@ -499,33 +499,53 @@ columns the sections are spread over."
   (setq diogenes-cheatsheet--frame nil))
 
 (defun diogenes-cheatsheet--show-child-frame (buffer width height)
-  "Show BUFFER, WIDTH by HEIGHT, in a child frame over the selected frame."
+  "Show BUFFER, WIDTH by HEIGHT, in a child frame over the selected frame.
+The panel is transient and shows one buffer, so the frame is made with
+everything that would otherwise decide what a new frame displays turned
+off.  `initial-buffer-choice' is the one that matters: a configuration
+which sets it -- Spacemacs sets it to a function returning its home buffer
+-- has that buffer pulled into a window as the frame comes up, and it is
+the window BEHIND the panel that is left showing it.  The reported symptom
+was the home screen appearing in place of a dictionary entry on pressing
+the cheatsheet key.
+
+`after-make-frame-functions' is bound away for the same reason, a hook
+there being free to display whatever it likes; `display-buffer-alist' so
+that no display rule, and no `window-purpose' redirection, has a say; and
+the parent's own window is put back if something got past all three."
   (let* ((parent (selected-frame))
+	 (parent-window (selected-window))
+	 (parent-buffer (window-buffer parent-window))
 	 (char-w (frame-char-width parent))
 	 (char-h (frame-char-height parent))
 	 (left (max 0 (/ (- (frame-pixel-width parent) (* width char-w)) 2)))
 	 (top (max 0 (/ (- (frame-pixel-height parent) (* height char-h)) 3)))
 	 (frame
-	  (make-frame
-	   `((parent-frame . ,parent)
-	     (undecorated . t)
-	     (no-accept-focus . t)
-	     (no-focus-on-map . t)
-	     (min-width . 1) (min-height . 1)
-	     (width . ,width) (height . ,height)
-	     (left . ,left) (top . ,top)
-	     (internal-border-width . 12)
-	     (child-frame-border-width . 1)
-	     (left-fringe . 0) (right-fringe . 0)
-	     (vertical-scroll-bars . nil)
-	     (horizontal-scroll-bars . nil)
-	     (menu-bar-lines . 0) (tool-bar-lines . 0)
-	     (tab-bar-lines . 0)
-	     (line-spacing . 0)
-	     (unsplittable . t)
-	     (no-other-frame . t)
-	     (cursor-type . nil)
-	     (desktop-dont-save . t)))))
+	  (let ((initial-buffer-choice nil)
+		(inhibit-startup-screen t)
+		(after-make-frame-functions nil)
+		(display-buffer-alist nil))
+	    (make-frame
+	     `((parent-frame . ,parent)
+	       (minibuffer . nil)
+	       (undecorated . t)
+	       (no-accept-focus . t)
+	       (no-focus-on-map . t)
+	       (min-width . 1) (min-height . 1)
+	       (width . ,width) (height . ,height)
+	       (left . ,left) (top . ,top)
+	       (internal-border-width . 12)
+	       (child-frame-border-width . 1)
+	       (left-fringe . 0) (right-fringe . 0)
+	       (vertical-scroll-bars . nil)
+	       (horizontal-scroll-bars . nil)
+	       (menu-bar-lines . 0) (tool-bar-lines . 0)
+	       (tab-bar-lines . 0)
+	       (line-spacing . 0)
+	       (unsplittable . t)
+	       (no-other-frame . t)
+	       (cursor-type . nil)
+	       (desktop-dont-save . t))))))
     (set-face-background 'child-frame-border
 			 (face-foreground 'diogenes-cheatsheet-border nil t)
 			 frame)
@@ -533,6 +553,12 @@ columns the sections are spread over."
       (set-window-buffer window buffer)
       (set-window-dedicated-p window t)
       (set-window-parameter window 'mode-line-format 'none))
+    ;; Whatever the frame did on its way up, the window the reader was
+    ;; looking at should still hold what it held.
+    (when (and (window-live-p parent-window)
+	       (buffer-live-p parent-buffer)
+	       (not (eq (window-buffer parent-window) parent-buffer)))
+      (set-window-buffer parent-window parent-buffer))
     (setq diogenes-cheatsheet--frame frame)))
 
 ;;;###autoload
