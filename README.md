@@ -399,7 +399,7 @@ asked for rather than assumed.
 - Inside a dictionary's own entry, its link becomes the way back: `[Lewis & Short (l)]`, `[LSJ (l)]`.
 - Where that dictionary also has a scan, `[PDF]` joins it — so `g` inside a Gaffiot entry, or `B` inside a Bailly one, opens that word in the printed edition.
 
-## `C-c C-c` on words inside dictionary entries
+## `C-c C-c` on words
  
 This is the main way to move around while reading. Put the cursor on
 anything in an entry and press `C-c C-c` (or RET, or double-click).
