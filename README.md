@@ -364,6 +364,18 @@ an unset one is invisible rather than broken.
 - Greek input works in Unicode or Beta Code. Internally everything becomes Beta Code, so Beta Code is occasionally more reliable.
 - With no exact match, the nearest entry is shown and a message says so.
 
+### `C-c C-o` — any dictionary, by name
+
+`C-c C-o` (`diogenes-lookup-in-dictionary`) is `C-c C-c` with the dictionary
+asked for rather than assumed.
+
+- For a word that is in neither default dictionary but is in another: a late or technical word Lewis & Short does not carry, a proper name, a sense Bailly gives and the LSJ does not.
+- And for reading a Greek word in German or a Latin one in French, whatever the language of the entry you are looking at.
+- The language is settled as `C-c C-c` settles it — the word's own tagging where the markup says, otherwise the language being read — and only that language's dictionaries are offered. Where it cannot be told, it is asked for.
+- The word defaults to the headword or word at point and is **parsed first**, so an inflected form reaches its lemma. A prefix argument prompts for the word too.
+- Every registered dictionary of that language is listed, declared or not, so this is also the way to reach one whose paths you have not set — it will then say what to set.
+- `diogenes-lookup-always-ask-dictionary` set to non-nil makes the plain `diogenes-lookup-greek` and `-latin` ask every time, which is worth it for a reader who works mostly in Bailly or Georges rather than the defaults.
+
 ### In a lookup buffer
 
 - The entry is formatted from its TEI XML.
@@ -431,6 +443,23 @@ lookup buffer, it asks:
 - **yes**: the new entry replaces the view in the current window (you stay put).
 - **no**: it opens in another window, as before.
 - Either way a fresh buffer is used, so the entry you came from stays alive and reachable.
+
+## Forgetting the keys
+
+`M-x diogenes-cheatsheet` shows them in a floating panel that vanishes at the
+next keystroke.
+
+- Read from the **live keymaps**, so it lists what this installation actually has: the dictionaries you configured, the `diogenes-purpose` focus keys if that module is loaded, and nothing that would decline.
+- The current buffer's keys come first, then the other Diogenes buffers', then the commands that get you into one.
+- Laid out in as many columns as the frame has room for. On a terminal frame, where there are no child frames, it falls back to an ordinary help window.
+- `diogenes-cheatsheet-max-height` (0.8 of the frame) and `diogenes-cheatsheet-column-gap` adjust the panel; `diogenes-cheatsheet-uninteresting-commands` hides editing and mouse commands the browser inherits from `text-mode`.
+
+Worth binding, since it is the one command that tells you the rest:
+
+```elisp
+(with-eval-after-load 'diogenes
+  (keymap-set diogenes-lookup-mode-map "?" #'diogenes-cheatsheet))
+```
 
 ## Which dictionaries appear
 
@@ -841,6 +870,87 @@ its file. To group them, name them:
 
 Single-file dictionaries have predictable names; the directory-based ones
 (TLL, Passow, TGL) open one file per volume, so theirs vary.
+
+# Appendix: other commands
+
+Everything below is reachable from the transient menu (`M-x diogenes`) as
+well. `M-x diogenes-cheatsheet` lists whatever is bound in the buffer you are
+in; this is the rest.
+
+**Building an XML dictionary** — once, from its TEI source. Pressing the
+dictionary's key with nothing built offers to run these for you.
+
+- `diogenes-gaffiot-build-dictionary`
+- `diogenes-bailly-build-dictionary`
+- `diogenes-georges-build-dictionary`
+- `diogenes-pape-build-dictionary`
+- `diogenes-dge-build-dictionary`
+
+**Prebuilt page indexes** — optional, one per machine, for the
+directory-based print dictionaries. See [Prebuilt indexes](#prebuilt-indexes-passow-tgl-bailly).
+
+- `diogenes-passow-build-index`, `diogenes-tgl-build-index`, `diogenes-bailly-build-index`
+
+**Forgetting a cached page index** — after replacing or re-bookmarking a PDF
+while Emacs is running.
+
+- `diogenes-old-clear-cache`, `diogenes-tll-clear-cache`
+- `diogenes-montanari-clear-cache`, `diogenes-cambridge-clear-cache`, `diogenes-bdag-clear-cache`
+- `diogenes-gaffiot-pdf-clear-cache`, `diogenes-georges-pdf-clear-cache`
+- `diogenes-passow-clear-cache`, `diogenes-tgl-clear-cache`, `diogenes-bailly-clear-cache`
+
+**Morphology beyond a single lookup**
+
+- `diogenes-show-all-forms-latin` / `-greek` — every attested form of a lemma
+- `diogenes-show-all-lemmata-latin` / `-greek` — every lemma and form matching a query
+- `diogenes-analysis-cycle` — fold a heading in an analysis buffer
+
+**Opening a print dictionary by name**, rather than by its key from an
+entry. Each takes a word, or a prefix argument to be asked for one.
+
+- `diogenes-lookup-open-old`, `diogenes-lookup-open-tll-or-tgl` (Latin gives the TLL, Greek the TGL)
+- `diogenes-lookup-open-montanari`, `diogenes-lookup-open-cambridge`, `diogenes-lookup-open-bdag`, `diogenes-lookup-open-passow`, `diogenes-lookup-open-tgl`
+- `diogenes-lookup-open-gaffiot-pdf`, `diogenes-lookup-open-bailly-pdf`, `diogenes-lookup-open-georges-pdf`
+
+**Diagnostics**
+
+- `diogenes-list-dictionaries` — which dictionaries are declared, offered, and what their paths hold
+- `diogenes-tgl-explain` — how a word is resolved in the TGL: collation key, volume, caps opening, index neighbourhood, the column and page it settles on
+
+**Text utilities**, on the region or the buffer
+
+- `diogenes-strip-diacritics`, `diogenes-remove-hyphenation`, `diogenes-iota-subscript-to-adscript`, `diogenes-apostrophe`
+
+**Corpora**
+
+- `diogenes-manage-user-corpora`, `diogenes-add-user-corpus`
+
+**Searching and browsing** have one command per corpus, with the same seven
+suffixes throughout — `tlg`, `phi`, `ddp`, `ins`, `chr`, `cop`, `misc`:
+
+- `diogenes-search-tlg` … `diogenes-search-misc`
+- `diogenes-browse-tlg` … `diogenes-browse-misc`
+- `diogenes-dump-tlg` … `diogenes-dump-misc`
+
+**In a search-result buffer**
+
+- `diogenes-search-next` / `diogenes-search-previous` — between hits
+- `diogenes-search-browse-passage` — open the hit in Browser Mode
+- `diogenes-search-delete` — drop a hit from the list
+
+**Moving in a browser or lookup buffer.** The arrow keys and `C-c C-n` /
+`C-c C-p` are the everyday way; the commands behind them are
+`diogenes-browser-forward-line`, `-backward-line`,
+`-beginning-of-buffer`, `-end-of-buffer`, `-lookup`, `-quit`, and the same
+five named `diogenes-lookup-…`. `diogenes-lookup-lewis-or-lsj` is `l`, the
+way back to the language's own dictionary. `diogenes-undo` undoes in a
+read-only buffer.
+
+**Window management** (only with `diogenes-purpose` loaded)
+
+- `diogenes-purpose-focus-lookup-window`, `diogenes-purpose-focus-browser-window`
+- `diogenes-purpose-focus-dictionary-window` — bound to `Q` in a dictionary buffer, the way back from the page to the entry it came from
+- `diogenes-purpose-install`, `diogenes-purpose-uninstall`
 
 # Appendix: how TGL lookups stay on target
 
