@@ -151,11 +151,16 @@ All of them go into the one converted dictionary."
   :group 'diogenes)
 
 (defcustom diogenes-pape-display-in-same-window t
-  "If non-nil, show a Pape entry in the window it was invoked from.
-The LSJ entry you came from is not destroyed either way -- each lookup gets
-a fresh buffer -- so with the default you stay in one window and can return
-through the buffer history.  Nil lets `display-buffer' place it as it sees
-fit."
+  "Whether a Pape entry replaces the entry it was called from.
+Non-nil reuses the window, as a dictionary consulted about the entry in
+front of you should; nil opens it as `display-buffer' sees fit.
+
+Either way this applies only when there IS an entry in front of you --
+when the lookup was made from a lookup buffer.  Asked for from a browser,
+or from anywhere else, the entry never takes the window it was called
+from: the text being read would be the thing replaced.  Where it goes
+then is `display-buffer''s to decide, which is what `pop-up-frames' and
+`diogenes-purpose' are for."
   :type 'boolean
   :group 'diogenes)
 
@@ -530,7 +535,9 @@ Requires a converted dictionary file; see
          (key (diogenes-pape--key word)))
     (when (string-empty-p key)
       (user-error "Nothing to look up in \"%s\"" word))
-    (let ((diogenes--lookup-same-window diogenes-pape-display-in-same-window))
+    (let ((diogenes--lookup-same-window
+           (and diogenes-pape-display-in-same-window
+                (derived-mode-p 'diogenes-lookup-mode))))
       (diogenes--search-dict key "greek"
                              #'diogenes--beta-sort-function
                              #'diogenes--xml-key-fn

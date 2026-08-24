@@ -133,11 +133,16 @@ anywhere and be deleted once converted."
   :group 'diogenes)
 
 (defcustom diogenes-gaffiot-display-in-same-window t
-  "If non-nil, show a Gaffiot entry in the window it was invoked from.
-The Lewis & Short entry you came from is not destroyed either way -- each
-lookup gets a fresh buffer -- so with the default you stay in one window
-and can return through the buffer history.  Nil lets `display-buffer'
-place it as it sees fit."
+  "Whether a Gaffiot entry replaces the entry it was called from.
+Non-nil reuses the window, as a dictionary consulted about the entry in
+front of you should; nil opens it as `display-buffer' sees fit.
+
+Either way this applies only when there IS an entry in front of you --
+when the lookup was made from a lookup buffer.  Asked for from a browser,
+or from anywhere else, the entry never takes the window it was called
+from: the text being read would be the thing replaced.  Where it goes
+then is `display-buffer''s to decide, which is what `pop-up-frames' and
+`diogenes-purpose' are for."
   :type 'boolean
   :group 'diogenes)
 
@@ -529,7 +534,9 @@ returns to Lewis & Short, `C-u g' looks up another word here"))
     (cond
      ;; The converted XML has this word: show the entry.
      ((and file (diogenes-gaffiot--entry-exists-p key file))
-      (let ((diogenes--lookup-same-window diogenes-gaffiot-display-in-same-window))
+      (let ((diogenes--lookup-same-window
+             (and diogenes-gaffiot-display-in-same-window
+                  (derived-mode-p 'diogenes-lookup-mode))))
         (diogenes--search-dict key "latin"
                                #'diogenes--ascii-sort-function
                                #'diogenes--xml-key-fn
