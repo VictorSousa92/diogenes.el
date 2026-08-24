@@ -300,7 +300,7 @@ an unset one is invisible rather than broken.
   ;; Latin, XML with a printed edition beside it
   (setq diogenes-gaffiot-source-file "/path/to/gaffiot.tei.xml")  ; to build from
   (setq diogenes-gaffiot-file        "/path/to/build/gaffiot.xml") ; where it goes
-  (setq diogenes-gaffiot-pdf-file    "/path/to/Gaffiot.pdf")       ; A-F in XML, rest here
+  (setq diogenes-gaffiot-pdf-file    "/path/to/Gaffiot.pdf")       ; whatever the XML lacks
   (setq diogenes-georges-source-file "/path/to/georges.tei.xml")
   (setq diogenes-georges-file        "/path/to/build/georges.xml")
   (setq diogenes-georges-directory   "/path/to/Georges/volumes/")
@@ -521,14 +521,15 @@ Eleven of them, in two kinds — and three exist as both.
 | Dictionary | Lang | Source | Built to | Coverage | Also in print |
 | --- | --- | --- | --- | --- | --- |
 | Bailly | Gr | `diogenes-bailly-source-file` | `diogenes-bailly-file` | complete | `diogenes-bailly-pdf-file` |
-| Gaffiot | La | `diogenes-gaffiot-source-file` | `diogenes-gaffiot-file` | A–F | `diogenes-gaffiot-pdf-file` |
+| Gaffiot | La | `diogenes-gaffiot-source-file` | `diogenes-gaffiot-file` | complete, or A–F — see below | `diogenes-gaffiot-pdf-file` |
 | Georges | La | `diogenes-georges-source-file` | `diogenes-georges-file` | complete | `diogenes-georges-directory` |
 | Pape | Gr | `diogenes-pape-source-file` | `diogenes-pape-file` | complete | — |
 | DGE | Gr | `diogenes-dge-source-file` | `diogenes-dge-file` | α–ἐπισκήπτω | — |
 
 Where the sources came from:
 
-- **Pape, Gaffiot and Georges** are built from the FDB databases published by the Institut für Klassische Philologie at Zürich: <https://www.iaka.uzh.ch/de/klph/it/mls.html>.
+- **Pape, Gaffiot and Georges** are built from the FDB databases published by the Institut für Klassische Philologie at Zürich: <https://www.iaka.uzh.ch/de/klph/it/mls.html>. Those are databases rather than TEI, so they need converting first — and the Gaffiot among them is **complete**.
+- **Gaffiot** also exists as ready-made TEI at <https://digital-gaffiot.sourceforge.net/>, which needs no conversion but stops at F. See below.
 - **Bailly** was tested against a TEI XML built from the GoldenDict version: <https://chaerephon.e-monsite.com/pages/litterature/grec-ancien/bailly2020.html>.
 - **The DGE** is the CSIC's own XML, below.
 - The **printed Georges** the page lookup expects is the 1913 edition as digitised at <http://www.zeno.org/Georges-1913>; the printed **Bailly** is the typeset *Bailly 2020 – Hugo Chávez* (<http://gerardgreco.free.fr/spip.php?article24&lang=fr>).
@@ -561,10 +562,15 @@ and `P` opens it.
 Gaffiot's *Dictionnaire illustré latin-français*. `g` opens the entry, `l`
 returns to Lewis & Short.
 
-**Coverage: A–F only** (about 28 000 entries), that being as far as the
-proofread Unicode TEI in circulation goes. For the rest of the alphabet:
+**Two sources, trading completeness against the work of getting there:**
 
-- Point `diogenes-gaffiot-pdf-file` at a PDF of the 2016 typeset edition and `g` falls through to it — A–F the XML entry, G–Z the printed page.
+- The **FDB database at Zürich** (<https://www.iaka.uzh.ch/de/klph/it/mls.html>) is **complete, A–Z** — but it is a database, so it has to be turned into TEI before it can be built here.
+- The **TEI at <https://digital-gaffiot.sourceforge.net/>** is **already TEI**, needing no such step, but is proofread as far as **F** only (some 28 000 entries).
+
+With the complete one there is nothing more to do. With the sourceforge TEI,
+for the rest of the alphabet:
+
+- Point `diogenes-gaffiot-pdf-file` at a PDF of the 2016 typeset edition and `g` falls through to it — the XML entry where the file has one, the printed page otherwise.
 - That edition bookmarks the first headword of **every** page (1 379 of them), so the page is found by binary search with no interpolation.
 - Its 944 illustration bookmarks are indexed separately; when a word has a plate, the echo area says which page.
 - `diogenes-gaffiot-pdf-fallback` set to nil keeps the two apart.

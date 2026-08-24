@@ -12,7 +12,7 @@
 ;;
 ;; The Gaffiot TEI XML that `diogenes-gaffiot.el' searches has been proofread
 ;; only as far as F.  This PDF is the whole dictionary, so the two together
-;; cover it: `g' shows the XML entry when the word is in A-F -- a real lookup
+;; cover it: `g' shows the XML entry when the file has the word -- a real lookup
 ;; buffer, with entry navigation and `C-c C-c' -- and falls through to this
 ;; module beyond it, which opens the page.  Nothing here duplicates the XML
 ;; side; it is the supplement, and the seam is `diogenes-gaffiot-pdf-fallback'.

@@ -30,12 +30,11 @@
 ;;
 ;; Either source will do on its own, and together they divide the work:
 ;;
-;;   * XML only -- entries for A-F, and a word past F reports that the TEI
-;;     goes no further;
+;;   * XML only -- entries for whatever the file covers, and a word it does
+;;     not have reports that the file goes no further;
 ;;   * PDF only (`diogenes-gaffiot-pdf-file\') -- Gaffiot behaves like the
 ;;     other print dictionaries, opening the page for any word;
-;;   * both -- the XML entry where there is one, the printed page for the
-;;     rest of the alphabet.
+;;   * both -- the XML entry where there is one, the printed page otherwise.
 ;;
 ;; ---------------------------------------------------------------------
 ;; THE DICTIONARY FILE
@@ -62,11 +61,24 @@
 ;; COVERAGE
 ;; ---------------------------------------------------------------------
 ;;
-;; Mind which Gaffiot you have.  The proofread Unicode TEI in circulation
-;; covers the letters A to F only (some 28 000 entries); a word past that is
-;; not missing from Gaffiot, merely from the file.  Rather than show you the
-;; last entry of F and call it a near miss, this module reads the range its
-;; file actually spans and says so.
+;; Mind which Gaffiot you have; there are two, and they trade completeness
+;; against the work of getting there.
+;;
+;;   * The FDB database published at Zurich
+;;     (https://www.iaka.uzh.ch/de/klph/it/mls.html) is COMPLETE, A to Z,
+;;     but is a database rather than TEI, so it has to be converted before
+;;     it can be converted again into the one-entry-per-line form here.
+;;   * The TEI at https://digital-gaffiot.sourceforge.net/ is ALREADY TEI
+;;     and needs no such step, but is proofread as far as F only (some
+;;     28 000 entries).
+;;
+;; Nothing here assumes either.  A word the file does not have is not
+;; missing from Gaffiot, merely from the file, so rather than show the
+;; nearest entry and call it a near miss this module asks whether the key is
+;; there exactly (`diogenes-gaffiot--entry-exists-p') and, failing that,
+;; sends the word to the printed dictionary or says the file goes no
+;; further.  With the complete database converted, the question never
+;; arises.
 
 ;;; Code:
 (require 'cl-lib)
@@ -528,14 +540,15 @@ returns to Lewis & Short, `C-u g' looks up another word here"))
      ((diogenes-gaffiot--pdf-available-p)
       (diogenes-lookup-open-gaffiot-pdf word))
      (file
-      (user-error "Gaffiot: no entry for \"%s\" in %s.  The proofread TEI \
-covers A-F only; set `diogenes-gaffiot-pdf-file' to a PDF of the printed \
+      (user-error "Gaffiot: no entry for \"%s\" in %s.  If that file is the \
+sourceforge TEI it is proofread to F only, and the Zurich FDB database is \
+complete; or set `diogenes-gaffiot-pdf-file' to a PDF of the printed \
 dictionary to reach the rest"
                   word (abbreviate-file-name file)))
      (t
       (user-error "Gaffiot is not set up yet: set `diogenes-gaffiot-pdf-file' \
 to a PDF of the printed dictionary, or `diogenes-gaffiot-source-file' to the \
-TEI XML (which covers A-F) and run M-x diogenes-gaffiot-build-dictionary.  \
+TEI XML and run M-x diogenes-gaffiot-build-dictionary.  \
 Either in your init file before Diogenes loads, or through \
 M-x customize-variable"))))))
 
