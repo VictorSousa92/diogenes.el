@@ -534,10 +534,19 @@ returns to Lewis & Short, `C-u g' looks up another word here"))
                                #'diogenes--ascii-sort-function
                                #'diogenes--xml-key-fn
                                file)))
-     ;; It does not -- because the TEI is proofread only as far as F, or
-     ;; because there is no converted XML here at all.  The printed
-     ;; dictionary has the whole alphabet.
+     ;; It does not -- because the file is proofread only as far as F, or
+     ;; because there is no converted XML here at all, or because the word
+     ;; asked for is not a headword.  The printed dictionary has the whole
+     ;; alphabet, so send it there; but SAY SO, because these are different
+     ;; reasons and the reader cannot tell them apart from a page of a scan
+     ;; appearing.  `frugalitatis' opened the printed page for a third
+     ;; reason again -- an inflected form reached the dictionary because the
+     ;; parse had failed to give `frugalitas' -- and nothing on screen
+     ;; distinguished that from a word past F.
      ((diogenes-gaffiot--pdf-available-p)
+      (message "Gaffiot: no entry for \"%s\"%s; opening the printed page"
+               word
+               (if file (format " in %s" (abbreviate-file-name file)) ""))
       (diogenes-lookup-open-gaffiot-pdf word))
      (file
       (user-error "Gaffiot: no entry for \"%s\" in %s.  If that file is the \

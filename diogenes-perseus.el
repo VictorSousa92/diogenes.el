@@ -1404,6 +1404,27 @@ another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
       (and (fboundp 'diogenes--latin-extra-lemma)
 	   (string= lang "latin")
 	   (diogenes--latin-extra-lemma word))
+      ;; Morpheus, which the two lines above and the parse before them have
+      ;; between them failed to answer for.  The order is
+      ;; `diogenes--parse-and-lookup''s: the shipped analyses, then the
+      ;; hand-written table, then the cruncher.
+      ;;
+      ;; Without this the promise of the docstring was not kept, and the
+      ;; consequence was worse than a form that would not resolve.  A
+      ;; dictionary is keyed by headword; handed an inflected form it does
+      ;; not have, it reports no exact entry -- and Gaffiot, told there is no
+      ;; entry, opens the printed page instead.  So `C-c C-o' on
+      ;; `frugalitatis', a form the wordlists never harvested, showed a scan
+      ;; of the page rather than the article on `frugalitas', with nothing
+      ;; said about why.
+      (and (diogenes-morpheus-available-p)
+	   (let ((first (car (diogenes--morpheus-analyses word lang))))
+	     (when first
+	       (let* ((field (plist-get first :lemma))
+		      (lemma (if (string-match "," field)
+				 (substring field (match-end 0))
+			       field)))
+		 (diogenes--munge-ls-lemma (string-trim lemma) lang)))))
       word))
 
 (defcustom diogenes-lookup-always-ask-dictionary nil
