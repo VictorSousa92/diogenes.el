@@ -509,11 +509,87 @@ declared and by which route, whether it is being offered, and what each of
 its own paths holds — including a path that is set but points at nothing.
 
 ## The dictionaries themselves
- 
-diogenes.el can jump a scanned print dictionary (shown as a PDF) to the
-page for a given entry. Each dictionary has its own path variable, which
-must be set before use.
- 
+
+Eleven of them, in two kinds — and three exist as both.
+
+- **As entries.** Five come as TEI XML and are shown as formatted entries in a lookup buffer, like the LSJ and Lewis & Short: **Bailly**, **Gaffiot**, **Georges**, **Pape**, the **DGE**. Each is built once from its source and then behaves as a dictionary of the package.
+- **As pages.** Ten are scans, jumped to the page for an entry: **OLD**, **TLL**, **Montanari**, **CGL**, **BDAG**, **Passow**, **TGL**, and the printed **Gaffiot**, **Bailly** and **Georges**.
+- **As both.** Gaffiot, Bailly and Georges have an XML and a scan, and either half alone is enough. With both, the entry comes first and the same key opens the page from inside it.
+
+### Dictionaries as entries (XML)
+
+| Dictionary | Lang | Source | Built to | Coverage | Also in print |
+| --- | --- | --- | --- | --- | --- |
+| Bailly | Gr | `diogenes-bailly-source-file` | `diogenes-bailly-file` | complete | `diogenes-bailly-pdf-file` |
+| Gaffiot | La | `diogenes-gaffiot-source-file` | `diogenes-gaffiot-file` | A–F | `diogenes-gaffiot-pdf-file` |
+| Georges | La | `diogenes-georges-source-file` | `diogenes-georges-file` | complete | `diogenes-georges-directory` |
+| Pape | Gr | `diogenes-pape-source-file` | `diogenes-pape-file` | complete | — |
+| DGE | Gr | `diogenes-dge-source-file` | `diogenes-dge-file` | α–ἐπισκήπτω | — |
+
+What is true of all five:
+
+- Built once with `M-x diogenes-<name>-build-dictionary`; pressing the key with nothing built offers to do it. `-source-file` is what you downloaded, `-file` where the built dictionary goes — unset, it lands beside the other Diogenes dictionaries, which is often a root-owned directory, so name a path you can write.
+- Reached by its key or its link from any entry of its language; `l` is the way back to the LSJ or Lewis & Short.
+- Everything a lookup buffer does comes with it: `C-c C-n` / `C-c C-p` walk the dictionary, `C-c C-c` looks a word up, the print dictionaries' links open the scans, and each entry gets its own buffer, so the one you came from stays live.
+- Keys are the headword reduced to bare letters, so quantities, ligatures, daggers, asterisks and leading numerals do not stand between an LSJ or Lewis & Short headword and its entry here.
+- A word the dictionary lacks gives the nearest entry, with a message — except past the DGE's published boundary, where there is nothing to be near.
+
+Below, only what is peculiar to each. **Pape** has nothing peculiar: it is
+complete, has no printed companion here, and `P` opens it.
+
+### Bailly
+
+- The XML is the whole of the Bailly 2020 edition — the same text its PDF prints — so there is no coverage boundary and nothing to fall back on.
+- With only `diogenes-bailly-pdf-file` set and no XML built, `B` opens the printed page instead, and Bailly behaves like the OLD.
+- Pressed a second time from inside a Bailly entry, `B` opens that word's page in the print. That is the only route to the PDF; `C-u B` looks another word up in the XML.
+
+### Georges
+
+- Complete, and `G` works the same way: the entry, then the printed page from inside it.
+- With only `diogenes-georges-directory` set, `G` opens the page directly.
+
+### Gaffiot
+
+Gaffiot's *Dictionnaire illustré latin-français*. `g` opens the entry, `l`
+returns to Lewis & Short.
+
+**Coverage: A–F only** (about 28 000 entries), that being as far as the
+proofread Unicode TEI in circulation goes. For the rest of the alphabet:
+
+- Point `diogenes-gaffiot-pdf-file` at a PDF of the 2016 typeset edition and `g` falls through to it — A–F the XML entry, G–Z the printed page.
+- That edition bookmarks the first headword of **every** page (1 379 of them), so the page is found by binary search with no interpolation.
+- Its 944 illustration bookmarks are indexed separately; when a word has a plate, the echo area says which page.
+- `diogenes-gaffiot-pdf-fallback` set to nil keeps the two apart.
+- `M-x diogenes-lookup-open-gaffiot-pdf` opens the PDF for any word regardless.
+
+### DGE
+
+The CSIC's *Diccionario Griego-Español*. `d` opens the entry, `l` returns to
+the LSJ.
+
+- Definitions are in Spanish and tagged as such, so `C-c C-c` on one does not go looking for it in the LSJ.
+- The build takes a minute or two. The XML is at <https://github.com/dge-csic/xdge_xml>: one file per volume (`xdge1.xml` … `xdge8.xml`), 112 MB in all. `diogenes-dge-source-file` takes a single file, a **directory**, or a list; point it at the clone and every `*.xml` in it is read.
+- Licence CC BY-NC-SA 3.0 ES: free to convert and to read, not to sell.
+- The build reads 64 373 entries and writes about 80 MB; the TEI can then be deleted.
+
+**Coverage: α to ἐπισκήπτω**, eight volumes so far, with 30 259 of the 64 373
+entries under α alone. A working dictionary, not a finished one.
+
+- Beyond the boundary there is nothing to show and no printed supplement to fall through to — what the CSIC publishes for nothing is exactly this XML. So `ὕβρις` gets *The DGE reaches ἐπισκήπτω so far; "ὕβρις" is not written yet*, rather than the last entry of vol. VIII offered as a near match.
+- Inside the published range, a word with no article behaves as everywhere else: nearest entry, with a message.
+- The boundary is read from the dictionary itself, so adding vol. IX and rebuilding is all that is needed. `diogenes-dge-check-coverage` turns the check off.
+
+Also:
+
+- Articles are large — `ἐπί` alone is 431 KB — and an entry is parsed in Lisp before display, so the prepositions and commonest verbs take a few seconds where an ordinary entry is instantaneous.
+- Epigraphic letterforms are set in the private-use area of New Athena Unicode. Entries keep them as published, so install that font to see them rather than boxes; they are spelled out for sorting only (`diogenes-dge-epichoric-substitutions`).
+- Etymologies get a labelled block of their own, since in a reflowed paragraph they would run on from the last citation. The label (`diogenes-dge-etymology-label`, "Etim.") is ours: the print sets them off by position alone.
+
+### Dictionaries as pages (scans)
+
+diogenes.el jumps a scanned dictionary to the page for a given entry. Each
+has its own path variable, which must be set before use.
+
 | Abbr. | Dictionary | Lang | Path variable | Layout |
 | --- | --- | --- | --- | --- |
 | **Latin** | | | | |
@@ -547,71 +623,6 @@ variables at them. The TGL and Passow copies I tested are the OCR'd MDZ
 volumes (DAFO dataset) from the [Bavarian State Library's
 MDZ](https://www.digitale-sammlungen.de/en/).
  
-
-### Gaffiot (a lookup, not a PDF)
-
-Gaffiot's *Dictionnaire illustré latin-français* comes as TEI XML, so it is
-shown as an entry in a lookup buffer, like the LSJ and Lewis & Short.
-
-- **In:** `g` or `[Gaffiot]` from any Latin entry. **Out:** `l` or `[Lewis & Short]`.
-- Everything a lookup buffer does comes with it: `C-c C-n` / `C-c C-p` walk the dictionary, `C-c C-c` looks up a Latin word (a Greek one goes to the LSJ), `[OLD]` and `[TLL]` open the scans, and each entry gets its own buffer, so the one you came from stays live.
-- Keys are the headword reduced to ASCII letters, so the macrons of `fŭtūtrīx`, the ligature in `cælum` and the numeral of `1 ăbactus` do not stand between a Lewis & Short headword and its Gaffiot entry.
-
-**Setup.** Convert the TEI once into the one-entry-per-line form Diogenes
-searches:
-
-```elisp
-(setq diogenes-gaffiot-source-file "/path/to/gaffiot-unicode.xml")
-(setq diogenes-gaffiot-file "/path/to/gaffiot.xml")     ; the converted file
-```
-
-- Then `M-x diogenes-gaffiot-build-dictionary` — a few seconds. Pressing `g` with no converted file offers to do it for you.
-- Leaving `diogenes-gaffiot-file` unset puts it beside the other Diogenes dictionaries.
-
-**Coverage: A–F only** (about 28 000 entries), that being as far as the
-proofread Unicode TEI in circulation goes. For the rest of the alphabet:
-
-- Point `diogenes-gaffiot-pdf-file` at a PDF of the 2016 typeset edition and `g` falls through to it — A–F the XML entry, G–Z the printed page.
-- That edition bookmarks the first headword of **every** page (1 379 of them), so the page is found by binary search with no interpolation.
-- Its 944 illustration bookmarks are indexed separately; when a word has a plate, the echo area says which page.
-- `diogenes-gaffiot-pdf-fallback` set to nil keeps the two apart.
-- `M-x diogenes-lookup-open-gaffiot-pdf` opens the PDF for any word regardless.
-
-### DGE (a lookup, not a PDF)
-
-The CSIC's *Diccionario Griego-Español* comes as TEI XML, so it too is shown
-as an entry in a lookup buffer.
-
-- **In:** `d` or `[DGE]` from any Greek entry. **Out:** `l` or `[LSJ]`.
-- `C-c C-n` / `C-c C-p` walk the dictionary; `C-c C-c` looks a Greek word up; `[Montanari]` `[CGL]` `[BDAG]` `[Passow]` `[TGL]` open the scans; each entry gets its own buffer.
-- Definitions are in Spanish and tagged as such, so `C-c C-c` on one does not go looking for it in the LSJ.
-- Keys are the headword reduced to bare beta-code letters, so the quantities of `ἀγκῡροειδής`, the dagger of `†ἀαναίμα·`, the asterisk of `*ἀϜαλαλκάνα` and the numeral of `1 ἄᾰτος` do not stand between an LSJ headword and its DGE entry.
-
-**Setup.** Convert the TEI once:
-
-```elisp
-(setq diogenes-dge-source-file "/path/to/xdge_xml")   ; the clone, or one file
-(setq diogenes-dge-file "/path/to/dge.xml")           ; the converted file
-```
-
-- Then `M-x diogenes-dge-build-dictionary` — a minute or two. Pressing `d` with no converted file offers to do it.
-- The XML is at <https://github.com/dge-csic/xdge_xml>: one file per volume (`xdge1.xml` … `xdge8.xml`), 112 MB in all. `diogenes-dge-source-file` takes a single file, a **directory**, or a list; point it at the clone and every `*.xml` in it is read.
-- Licence CC BY-NC-SA 3.0 ES: free to convert and to read, not to sell.
-- The build reads 64 373 entries and writes about 80 MB; the TEI can then be deleted.
-- Leaving `diogenes-dge-file` unset puts it beside the other Diogenes dictionaries — often a root-owned directory, so name a path you can write.
-
-**Coverage: α to ἐπισκήπτω**, eight volumes so far, with 30 259 of the 64 373
-entries under α alone. A working dictionary, not a finished one.
-
-- Beyond the boundary there is nothing to show and no printed supplement to fall through to — what the CSIC publishes for nothing is exactly this XML. So `ὕβρις` gets *The DGE reaches ἐπισκήπτω so far; "ὕβρις" is not written yet*, rather than the last entry of vol. VIII offered as a near match.
-- Inside the published range, a word with no article behaves as everywhere else: nearest entry, with a message.
-- The boundary is read from the dictionary itself, so adding vol. IX and rebuilding is all that is needed. `diogenes-dge-check-coverage` turns the check off.
-
-Three things peculiar to this dictionary:
-
-- Articles are large — `ἐπί` alone is 431 KB — and an entry is parsed in Lisp before display, so the prepositions and commonest verbs take a few seconds where an ordinary entry is instantaneous.
-- Epigraphic letterforms are set in the private-use area of New Athena Unicode. Entries keep them as published, so install that font to see them rather than boxes; they are spelled out for sorting only (`diogenes-dge-epichoric-substitutions`).
-- Etymologies get a labelled block of their own, since in a reflowed paragraph they would run on from the last citation. The label (`diogenes-dge-etymology-label`, "Etim.") is ours: the print sets them off by position alone.
 
 ### Prebuilt indexes (Passow, TGL, Bailly)
  
