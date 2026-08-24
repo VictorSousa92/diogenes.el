@@ -322,7 +322,7 @@ an unset one is invisible rather than broken.
   (setq diogenes-bailly-pdf-file     "/path/to/Bailly.pdf")
 
   ;; Morphology
-  (setq diogenes-morpheus-directory  "/path/to/morpheus")          ; optional fallback
+  (setq diogenes-morpheus-directory  "/path/to/morpheus")          ; optional, see below
 
   ;; Dictionaries you use whatever their paths say (see below)
   (setq diogenes-declared-dictionaries '(old tll bailly tgl))
@@ -723,6 +723,7 @@ package answers each in its own place.
 | --- | --- | --- |
 | has the form under another spelling | the spelling is normalised before the lookup | none needed — see below |
 | has no analysis for the form | the headword you name is looked up | `diogenes-latin-extra-lemmata` |
+| has no analysis, and you would rather not name one | Morpheus is asked | `diogenes-morpheus-directory` |
 | analyses the form wrongly | the morphology you give is printed | `diogenes-latin-analysis-corrections` |
 
 ### Spellings the file does not use
@@ -737,6 +738,37 @@ The middle step is the one that matters:
 - `desîmus` is `desiimus`, the syncopated perfect of *desino*.
 - `desimus` without the mark is a key too — the present subjunctive of *dēsum* — so treating the mark as decoration answers about a word the text did not print.
 - `diogenes-latin-expand-contractions` set to nil turns the reading off, for a text that uses the mark otherwise.
+
+### Forms the wordlists never saw
+
+The shipped analyses are a batch run over words that occur in the corpora, so
+a form none of those texts happens to use is absent rather than misspelt —
+`transilire`, `illidant`, `aedium`, while their sibling forms are all there.
+Morpheus generates paradigms from stems and knows them, so it can be asked
+directly.
+
+```elisp
+(setq diogenes-morpheus-directory "/path/to/morpheus")
+```
+
+- Consulted **only** after the shipped analyses and `diogenes-latin-extra-lemmata` have both missed, so leaving it unset changes nothing.
+- The directory must hold `bin/cruncher` and `stemlib/`; one without them counts as unset.
+- `diogenes-morpheus-timeout` (10 seconds) bounds the wait.
+- A lemma Morpheus returns is resolved against the dictionary's own keys, Morpheus having no notion of file offsets. Found, the entry is shown as usual; not found, the morphology is still shown, with the caveat that the headword is a guess.
+
+**Which Morpheus.** Use my fork, which has the more complete stems and is the
+one this was tested against:
+
+```sh
+git clone https://github.com/VictorSousa92/morpheus
+cd morpheus/src && make CC="gcc -std=gnu17 -fpermissive" && make install
+cd ../stemlib/Latin && env PATH="$PWD/../../bin:$PATH" MORPHLIB="$PWD/.." make
+```
+
+Nothing in the package requires that particular build — any Morpheus laid out
+the same way is run the same way — but another one must print the
+`<NL>…</NL>` output the parser reads, and must spell its lemmata as Lewis &
+Short keys them.
 
 ### Analyses that are simply wrong
 

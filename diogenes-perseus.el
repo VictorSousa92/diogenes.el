@@ -2875,14 +2875,24 @@ analyses have no such table, there being no reported need for one."
 Must hold `bin/cruncher' and `stemlib/', which is how the tree is laid out
 by
 
-    git clone https://github.com/pjheslin/morpheus
+    git clone https://github.com/VictorSousa92/morpheus
     cd morpheus/src && make CC=\"gcc -std=gnu17 -fpermissive\" && make install
     cd ../stemlib/Latin && env PATH=\"$PWD/../../bin:$PATH\" MORPHLIB=\"$PWD/..\" make
 
-Johan Winge's fork, by way of Heslin's clone: the one `mk.morpheus-alatius'
-builds, and so the one whose lemmas agree with the offsets already recorded
-in `latin-analyses.txt' -- it returns `jacio', not `iacio'.  A different
-fork may spell a lemma in a way no dictionary key matches.
+That fork is the one this was tested against, and the recommended one: its
+stems are more complete, so it answers for forms another build declines.
+
+Nothing here requires it.  Any Morpheus laid out the same way is run the
+same way -- the cruncher reading forms from stdin, `-L' for Latin, MORPHLIB
+naming `stemlib' -- and two things have to hold of whichever is used.  Its
+output must carry the `<NL>...</NL>' wrappers the parser reads (see
+`diogenes--morpheus-analysis-re'), and it must spell a lemma as Lewis & Short
+keys it, since Morpheus has no notion of where an entry sits in a file and
+the lemma is resolved against the dictionary's own keys.  Beyond the initial
+`j' that `diogenes-latin-fold-letters' folds and the prefixes
+`diogenes-latin-assimilate-prefixes' assimilates, a lemma spelt otherwise
+gets a confidence of 0 and the caveat about the headword being a guess,
+rather than a wrong entry.
 
 Consulted only when a form will not parse from the shipped data, so an
 installation without this set behaves as before."
