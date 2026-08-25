@@ -92,13 +92,39 @@ Passow and the TGL bind this to their own equivalents; see
   :type 'boolean
   :group 'diogenes)
 
+(defun diogenes-old-display-in-lookup-window (buffer alist)
+  "Show BUFFER in a window showing a lookup or an analysis, if there is one.
+A `display-buffer\=' action function, and the last resort before
+`display-buffer\=' is left to its own devices.
+
+Wanted because the alternative is worse.  With no document window open and
+nothing preferred, `display-buffer\=' picks a window by its own lights --
+which may be the browser\='s, so a dictionary covered the text the word was
+read in.  The entry\='s window is the right one: it holds the answer to the
+same question, it is what the reader was looking at, and `q\=' brings the
+entry back to it.
+
+Comes AFTER the document reuse, so a dictionary still joins a dictionary
+where one is open, and before `display-buffer\=' decides, so the browser is
+not chosen by accident."
+  (let ((window
+         (catch 'found
+           (dolist (w (window-list nil 'no-minibuffer))
+             (when (with-current-buffer (window-buffer w)
+                     (derived-mode-p 'diogenes-lookup-mode
+                                     'diogenes-analysis-mode))
+               (throw 'found w))))))
+    (when window
+      (window--display-buffer buffer window 'reuse alist))))
+
 (define-obsolete-variable-alias 'diogenes-old-reader-display-action
   'diogenes-old-pdf-display-action "modular"
   "Renamed: the action is no longer the Emacs Reader's alone.")
 
 (defcustom diogenes-old-pdf-display-action
   '((display-buffer-reuse-window
-     display-buffer-reuse-mode-window)
+     display-buffer-reuse-mode-window
+     diogenes-old-display-in-lookup-window)
     (mode . (reader-mode pdf-view-mode doc-view-mode))
     (reusable-frames . visible)
     (inhibit-same-window . t))
@@ -109,13 +135,17 @@ document, then any window showing a document at all -- `reader-mode',
 after another replaces the page on screen instead of splitting the frame
 again.
 
+Then, failing both, the window showing the ENTRY -- see
+`diogenes-old-display-in-lookup-window'.  A dictionary belongs beside the
+question it answers, and `q' brings the entry back to that window.
+
 There is deliberately no `display-buffer-use-some-window' here, and that
 matters more than it looks.  It takes ANY window, and the browser's is a
 window: with purpose in charge this action was never reached, and without
 purpose it sent the first dictionary into the frame the text was being read
-in.  A dictionary should land on a dictionary or nowhere -- if no document
-window exists, the list is exhausted and `display-buffer' falls back to its
-own behaviour, which is what honours `pop-up-frames' and opens the frame.
+in.  A dictionary should land on a dictionary, or on the entry, or nowhere --
+with none of the three, the list is exhausted and `display-buffer' falls back
+to its own behaviour, which is what honours `pop-up-frames'.
 
 `reusable-frames' is `visible' because the reuse functions otherwise look at
 the selected frame alone: with `pop-up-frames' non-nil, or any setup where
@@ -775,6 +805,47 @@ the ordinary way, `pop-up-frames' and all."
   (and diogenes-old-reader-reuse-document-frame
        (diogenes-old--document-window)))
 
+(defcustom diogenes-old-open-quietly t
+  "Whether a dictionary is opened without the machinery a file usually gets.
+A scanned dictionary is a reference work of several hundred megabytes that
+will never be edited, so version control, the recent-files list, backups,
+auto-save and long-line detection have nothing to contribute -- and all of
+them are asked, on every open, about a file that answers no to each.
+
+Measured on one 549 MB dictionary on an NVMe drive: 3.65 seconds with
+everything asked, 1.97 with version control silenced, 0.09 with both that
+and `find-file-hook\=' out of the way.  Forty times, for work whose whole
+result is discarded.
+
+The cost falls where a distribution fills `find-file-hook\=' -- under Doom
+that is a dozen entries, where plain Emacs has almost none -- so it is Doom
+and Spacemacs users who wait.
+
+Nil opens a dictionary as any other file, if you have something on those
+hooks you want a PDF to see."
+  :type 'boolean
+  :group 'diogenes)
+
+(defmacro diogenes-old--with-quiet-open (&rest body)
+  "Run BODY with the file-visiting machinery a dictionary does not need.
+See `diogenes-old-open-quietly\=', which turns this off.
+
+`find-file-hook\=' is emptied rather than filtered.  Blunt, and deliberately:
+the hook is a distribution\='s to fill, its contents are not knowable here,
+and a list of exceptions would go stale.  What is knowable is that none of
+them has anything to say about a read-only scan."
+  (declare (indent 0) (debug t))
+  `(if (not diogenes-old-open-quietly)
+       (progn ,@body)
+     (let ((vc-handled-backends nil)
+           (find-file-hook nil)
+           (make-backup-files nil)
+           (auto-save-default nil)
+           (create-lockfiles nil)
+           (large-file-warning-threshold nil)
+           (inhibit-message t))
+       ,@body)))
+
 (defun diogenes-old--open-buffer-in-viewer (file viewer)
   "Return a buffer visiting FILE, opened in VIEWER's major mode.
 VIEWER is `pdf-tools', `doc-view', or `emacs-reader'.  If a buffer
@@ -790,10 +861,15 @@ open so it does not hijack the file; the mode is not otherwise forced.
 
 For `emacs-reader', the Reader's own entry point `reader-open-doc' is
 used (a manual `pdf-view-mode'/`reader-mode' switch on an
-already-loaded buffer is not equivalent)."
+already-loaded buffer is not equivalent).
+
+Either way the open is wrapped in `diogenes-old--with-quiet-open', which
+takes version control, the recent-files list, backups and the rest out of
+the way of a file that has nothing to say to any of them -- see
+`diogenes-old-open-quietly' for what that is worth in seconds."
   (or (find-buffer-visiting file)
-      (let ((large-file-warning-threshold nil))  ; huge scans: open without prompt
-        (pcase viewer
+      (diogenes-old--with-quiet-open
+       (pcase viewer
           ('emacs-reader
            ;; `reader-open-doc' is the Emacs Reader's own entry point: it sets
            ;; up the MuPDF document state and puts the buffer in `reader-mode'.
