@@ -826,6 +826,60 @@ already-loaded buffer is not equivalent)."
              (find-file-noselect file)))
           (_ (find-file-noselect file))))))
 
+(defvar-local diogenes-old--return-buffer nil
+  "The entry this document buffer was opened from, if it took its window.
+Set when a page replaces an entry in the window the lookup was made from,
+and read by `diogenes-old-return-to-entry\='.")
+
+(defun diogenes-old-return-to-entry ()
+  "Go back to the entry this page was opened from.
+Bound to `q\=' in a dictionary buffer that took an entry\='s window, in place
+of `quit-window\='.
+
+`quit-window\=' cannot be trusted with this.  It reads the window\='s
+`quit-restore\=' parameter, which records what the window held when the
+parameter was LAST set -- and that was when the entry itself was displayed,
+whose predecessor was the startup page.  Reusing the window for the page
+does not update it.  So `q\=' went back two steps at once, past the entry to
+the splash screen, which is not a place anyone asked to be.
+
+Falls back to `quit-window\=' when there is no entry to go back to: a
+dictionary opened from `M-x\=' has nothing behind it."
+  (interactive)
+  (if (buffer-live-p diogenes-old--return-buffer)
+      (switch-to-buffer diogenes-old--return-buffer)
+    (quit-window)))
+
+(defun diogenes-old-visit-dictionary ()
+  "Go to the dictionary page opened from this entry, if one is open.
+The other half of `diogenes-old-return-to-entry\=': with a page and an entry
+sharing one window, moving between them should not depend on remembering
+which buffer is which.  Bound to `C-c C-e\=' in the lookup buffer by
+`diogenes-old-install-return-keys\=', the same key `diogenes-purpose\=' uses
+for the dictionary window."
+  (interactive)
+  (let ((page (car (seq-filter
+                    (lambda (b)
+                      (eq (buffer-local-value 'diogenes-old--return-buffer b)
+                          (current-buffer)))
+                    (buffer-list)))))
+    (if page
+        (switch-to-buffer page)
+      (message "No dictionary page open from this entry"))))
+
+;;;###autoload
+(defun diogenes-old-install-return-keys ()
+  "Put `C-c C-e\=' in the lookup buffers on `diogenes-old-visit-dictionary\='.
+`q\=' in the page is bound where the page is displayed, there being nothing
+to go back to until then."
+  (with-eval-after-load 'diogenes-perseus
+    (dolist (map '(diogenes-lookup-mode-map diogenes-analysis-mode-map))
+      (when (boundp map)
+        (keymap-set (symbol-value map) "C-c C-e"
+                    #'diogenes-old-visit-dictionary)))))
+
+(diogenes-old-install-return-keys)
+
 (defun diogenes-old--display-in-this-window (buffer)
   "Put BUFFER in the selected window, and only there; return BUFFER.
 The entry the lookup was made from is left ON THE WINDOW'S HISTORY, so `q'
@@ -853,9 +907,18 @@ showing BUFFER back its previous buffer."
     (when (window-live-p window)
       (when (window-dedicated-p window)
         (set-window-dedicated-p window nil))
-      (let ((display-buffer-overriding-action nil))
+      (let ((previous (window-buffer window))
+            (display-buffer-overriding-action nil))
         (display-buffer buffer '(display-buffer-same-window
-                                 (inhibit-same-window . nil))))
+                                 (inhibit-same-window . nil)))
+        ;; Remember what the page displaced, and put `q' on going back to it.
+        ;; A buffer-local binding, so the key does this in a dictionary opened
+        ;; from an entry and its ordinary thing anywhere else.
+        (when (and (buffer-live-p previous)
+                   (not (eq previous buffer)))
+          (with-current-buffer buffer
+            (setq diogenes-old--return-buffer previous)
+            (local-set-key (kbd "q") #'diogenes-old-return-to-entry))))
       (select-window window)
       (dolist (other (get-buffer-window-list buffer nil (window-frame window)))
         (unless (eq other window)
