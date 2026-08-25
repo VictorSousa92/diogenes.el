@@ -327,6 +327,27 @@ reason `q' returns to the entry is not the window history but
         (should (eq window (selected-window)))
         (should (eq (window-buffer window) second))))))
 
+(ert-deftest diogenes-test-display-buffer-selects-the-window ()
+  "The window is selected, as the calls this replaced did.
+Regression: `pop-to-buffer' displays AND selects; `display-buffer' only
+displays.  Converting the call sites lost the selection, so an entry
+appeared in another window while point stayed in the buffer it was looked up
+from -- and `C-c C-c' there was undefined, the buffer not being an entry."
+  (diogenes-tests--with-two-windows
+    (let ((diogenes-lookup-display-action
+           '(display-buffer-use-some-window (inhibit-same-window . t)))
+          (buffer (get-buffer-create " *diogenes-test-target*")))
+      (diogenes--display-buffer buffer :kind 'lookup)
+      (should (eq (window-buffer (selected-window)) buffer))))
+  ;; And NO-SELECT leaves us where we were.
+  (diogenes-tests--with-two-windows
+    (let ((diogenes-lookup-display-action
+           '(display-buffer-use-some-window (inhibit-same-window . t)))
+          (buffer (get-buffer-create " *diogenes-test-target*"))
+          (here (selected-window)))
+      (diogenes--display-buffer buffer :kind 'lookup :no-select t)
+      (should (eq (selected-window) here)))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

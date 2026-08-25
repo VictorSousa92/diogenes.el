@@ -285,7 +285,8 @@ KIND is `lookup\=', `browser\=', `dictionary\=', or anything else for none."
     ('dictionary diogenes-dictionary-display-action)
     (_ nil)))
 
-(cl-defun diogenes--display-buffer (buffer &key kind same-window action)
+(cl-defun diogenes--display-buffer (buffer &key kind same-window action
+                                          no-select)
   "Show BUFFER and return the window it is in.
 The one place that decides where a Diogenes buffer goes, so that a reader
 who wants to change it has one thing to change and the package has one
@@ -310,7 +311,14 @@ beside it.
 
 A frame holding only a startup page is the exception to everything: there
 is a window going spare, and taking it is right whatever is configured.
-See `diogenes--sole-home-window-p\='."
+See `diogenes--sole-home-window-p\='.
+
+The window is SELECTED unless NO-SELECT, because that is what the calls
+this replaced did.  `pop-to-buffer\=' displays AND selects; `display-buffer\='
+only displays -- and a reader left in the buffer they came from, looking at
+an entry in another window, finds that the keys they expect are undefined,
+because the buffer they are in is not the entry.  The distinction is easy to
+miss and was missed here."
   (let ((chosen (or action (diogenes--display-action kind))))
     (cond
      ;; Intent, not layout: both of these are what the reader asked for by
@@ -350,7 +358,14 @@ See `diogenes--sole-home-window-p\='."
      ;; popup manager under Doom, plain `display-buffer' elsewhere.
      (t
       (display-buffer buffer))))
-  (get-buffer-window buffer t))
+  (let ((window (get-buffer-window buffer t)))
+    (when (and window (not no-select))
+      ;; On another frame, the frame has to be raised as well, which is the
+      ;; other half of what `pop-to-buffer' did for us.
+      (unless (eq (window-frame window) (selected-frame))
+        (select-frame-set-input-focus (window-frame window)))
+      (select-window window))
+    window))
 
 (defun diogenes--path-set-p (value)
   "Non-nil if VALUE is a path the user has actually named.
