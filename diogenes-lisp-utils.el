@@ -285,6 +285,55 @@ KIND is `lookup\=', `browser\=', `dictionary\=', or anything else for none."
     ('dictionary diogenes-dictionary-display-action)
     (_ nil)))
 
+(defcustom diogenes-claim-buffers t
+  "Whether a Diogenes buffer is claimed by the perspective it appears in.
+Non-nil adds it, so that `previous-buffer\=', `next-buffer\=' and the
+perspective\='s own buffer list can reach it.  Nil leaves it out, where
+`switch-to-buffer\=' by name is the only way back to it.
+
+Wanted because these buffers are made rather than visited.  persp-mode and
+perspective.el both decide what a perspective contains by watching
+`find-file\=' and `switch-to-buffer\='; a buffer created by a program and
+displayed by `display-buffer\=' is seen by neither, so it exists, is on the
+window\='s own history, and is still invisible to the keys that walk it --
+which is a confusing state, and was reported as a buffer being killed."
+  :type 'boolean
+  :group 'diogenes)
+
+(defcustom diogenes-claim-buffer-function 'auto
+  "How a Diogenes buffer is claimed by the current perspective.
+  `auto\=' -- the default -- looks for what is installed and uses it, or does
+nothing where nothing is.  persp-mode and perspective.el are both found this
+way: they share the name `persp-add-buffer\=' and both accept a buffer, which
+is all that is wanted here.
+
+A function of one argument to do it yourself, for a workspace package this
+does not know -- eyebrowse, bufler, something local.  Nil never claims, the
+same as `diogenes-claim-buffers\=' nil.
+
+Tab-bar tabs need nothing: a tab holds a window configuration rather than a
+set of buffers, so a buffer is reachable from any of them."
+  :type '(choice (const :tag "Detect what is installed" auto)
+                 (const :tag "Never" nil)
+                 function)
+  :group 'diogenes)
+
+(defun diogenes--claim-buffer (buffer)
+  "Add BUFFER to the current perspective, if there is one to add it to.
+Called for every Diogenes buffer as it is displayed -- which is one place,
+where the Doom module did it from six mode hooks and so missed any buffer
+whose mode was not among them."
+  (when (and diogenes-claim-buffers buffer)
+    (pcase diogenes-claim-buffer-function
+      ('nil nil)
+      ('auto
+       ;; persp-mode and perspective.el: different packages, same minor-mode
+       ;; name and the same function, and either takes a buffer.
+       (when (and (bound-and-true-p persp-mode) (fboundp 'persp-add-buffer))
+         (ignore-errors (persp-add-buffer buffer))))
+      ((and (pred functionp) fn)
+       (ignore-errors (funcall fn buffer))))))
+
 (cl-defun diogenes--display-buffer (buffer &key kind same-window action
                                           no-select)
   "Show BUFFER and return the window it is in.
@@ -319,6 +368,9 @@ only displays -- and a reader left in the buffer they came from, looking at
 an entry in another window, finds that the keys they expect are undefined,
 because the buffer they are in is not the entry.  The distinction is easy to
 miss and was missed here."
+  ;; Claimed BEFORE it is displayed, so that whatever watches the display --
+  ;; a perspective, a workspace -- sees a buffer that already belongs.
+  (diogenes--claim-buffer buffer)
   (let* ((chosen (or action (diogenes--display-action kind)))
          ;; The window `display-buffer' RETURNS, not one found afterwards by
          ;; searching.  An earlier version re-derived it with

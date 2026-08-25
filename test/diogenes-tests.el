@@ -375,6 +375,33 @@ window fell out of step, and `recenter' refused."
         (should (eq window (selected-window)))
         (should (eq (window-buffer window) buffer))))))
 
+(ert-deftest diogenes-test-claim-buffer ()
+  "A buffer is offered to the perspective, and only when asked for.
+Regression: a lookup buffer was alive, on the window's own history, and
+still invisible to `C-x <left>' -- persp-mode decides what a perspective
+holds by watching `find-file' and `switch-to-buffer', and a buffer made by a
+program and shown by `display-buffer' is seen by neither.  Reported as the
+buffer being killed, which it was not."
+  (let* ((claimed nil)
+         (buffer (get-buffer-create " *diogenes-test-target*"))
+         (diogenes-claim-buffers t)
+         (diogenes-claim-buffer-function (lambda (b) (push b claimed))))
+    (diogenes--claim-buffer buffer)
+    (should (equal claimed (list buffer))))
+  ;; Off, and nothing is claimed.
+  (let* ((claimed nil)
+         (buffer (get-buffer-create " *diogenes-test-target*"))
+         (diogenes-claim-buffers nil)
+         (diogenes-claim-buffer-function (lambda (b) (push b claimed))))
+    (diogenes--claim-buffer buffer)
+    (should-not claimed))
+  ;; And `auto' does nothing where no perspective package is installed,
+  ;; rather than signalling -- which is the state of this batch Emacs.
+  (let ((diogenes-claim-buffers t)
+        (diogenes-claim-buffer-function 'auto))
+    (should-not (diogenes--claim-buffer
+                 (get-buffer-create " *diogenes-test-target*")))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

@@ -119,66 +119,36 @@ Kept so that `diogenes-doom-uninstall' can remove exactly those.")
 
 ;;; Workspaces
 
-;; Doom's workspaces are persp-mode, and persp-mode filters what
-;; `previous-buffer' and `next-buffer' can reach: a buffer outside the current
-;; perspective is invisible to them, though `switch-to-buffer' still finds it
-;; by name.  A lookup buffer is created programmatically, and nothing adds it
-;; to the perspective -- so `C-x <left>' could not get back to an entry that
-;; was demonstrably alive, and demonstrably on the window's own history.
+;; This was the module's own too, and is now the core's.  persp-mode is not
+;; Doom's -- it is a package, and perspective.el poses the same problem with
+;; the same function name -- so a buffer being invisible to `previous-buffer'
+;; was never a Doom fault, only a Doom-shaped one.  `diogenes--claim-buffer'
+;; does it for anyone, from `diogenes--display-buffer', which is one place
+;; where this module used six mode hooks and so missed any buffer whose mode
+;; was not among them.
 
-(defcustom diogenes-doom-claim-buffers t
-  "Whether Diogenes buffers are added to the current workspace.
-Non-nil adds each to the perspective it was created in, so that
-`previous-buffer\=', `next-buffer\=' and the workspace's own buffer list can
-reach it.  Nil leaves them out, where `switch-to-buffer\=' by name is the only
-way back.
+(define-obsolete-variable-alias 'diogenes-doom-claim-buffers
+  'diogenes-claim-buffers "modular-customizable"
+  "The claiming moved to the core, persp-mode not being Doom's.")
 
-Does nothing without persp-mode, which is what Doom's workspaces are."
-  :type 'boolean
-  :group 'diogenes-doom)
-
-(defun diogenes-doom-claim-buffer ()
-  "Add the current buffer to the current perspective, if there is one."
-  (when (and diogenes-doom-claim-buffers
-             (bound-and-true-p persp-mode)
-             (fboundp 'persp-add-buffer))
-    (ignore-errors (persp-add-buffer (current-buffer)))))
-
-(defconst diogenes-doom--claimed-modes
-  '(diogenes-lookup-mode-hook
-    diogenes-analysis-mode-hook
-    diogenes-browser-mode-hook
-    diogenes-search-mode-hook
-    diogenes-select-forms-mode-hook
-    diogenes-corpus-mode-hook)
-  "Mode hooks on which `diogenes-doom-claim-buffer' is installed.")
-
-;;; Installing and removing the workspace hooks
+(define-obsolete-function-alias 'diogenes-doom-claim-buffer
+  'diogenes--claim-buffer "modular-customizable")
 
 ;;;###autoload
 (defun diogenes-doom-install ()
-  "Have this workspace see the Diogenes buffers.  Idempotent.
-The `display-buffer-alist' rules this used to install are gone: the core
-does the gathering now, from `diogenes--display-buffer', and did not need
-the rules to do it -- they were how the module got ahead of Doom's popup
-manager, and an overriding action gets ahead of it more simply and without
-leaving anything in a global list.
-
-What remains is the workspace, which is Doom's alone."
+  "Fold any older Doom-specific settings into their core counterparts.
+Nothing else: the rules this used to put in `display-buffer-alist' are gone,
+the gathering being the core's and done through an overriding action, and so
+are the mode hooks that claimed a buffer for the workspace."
   (interactive)
   (diogenes-doom--claim-dictionary-regexps)
-  (dolist (hook diogenes-doom--claimed-modes)
-    (add-hook hook #'diogenes-doom-claim-buffer))
   (when (called-interactively-p 'interactive)
-    (message "Diogenes buffers will be claimed by the current workspace")))
+    (message "Diogenes: nothing left to install here -- the core does it")))
 
 ;;;###autoload
 (defun diogenes-doom-uninstall ()
-  "Stop claiming Diogenes buffers for the current workspace."
+  "Remove anything an older version of this module left behind."
   (interactive)
-  (dolist (hook diogenes-doom--claimed-modes)
-    (remove-hook hook #'diogenes-doom-claim-buffer))
-  ;; Anything an older version left in `display-buffer-alist'.
   (dolist (rule diogenes-doom--rules)
     (setq display-buffer-alist (delq rule display-buffer-alist)))
   (setq diogenes-doom--rules nil))
