@@ -247,7 +247,7 @@ Then call CALLBACK with this list as its single argument."
 			   choices))))
 	 (buffer (diogenes--get-fresh-buffer "select-forms"))
 	 (inhibit-read-only t))
-    (pop-to-buffer buffer)
+    (diogenes--display-buffer buffer :kind 'lookup)
     (diogenes-select-forms-mode)
     ;; TODO: Code duplication with diogenes--format-lemma-and-forms 
     (insert (propertize (or header
@@ -296,7 +296,7 @@ Then call CALLBACK with this list as its single argument."
 		  raw-entries))
 	 (buffer (diogenes--get-fresh-buffer "select-forms"))
 	 (inhibit-read-only t))
-    (pop-to-buffer buffer)
+    (diogenes--display-buffer buffer :kind 'lookup)
     (diogenes-select-forms-mode)
     (insert (propertize (or header
 			    "Search for the following words:")

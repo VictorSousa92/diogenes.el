@@ -37,7 +37,7 @@ It can then be edited, saved to file and called directly for better testing."
 				   (diogenes--include-server)
 				   (diogenes--include-cpan))
 		    :coding  'utf-8)
-      (pop-to-buffer out-buffer))))
+      (diogenes--display-buffer out-buffer))))
 
 
 
@@ -141,9 +141,12 @@ It is associated with a buffer with the same name, in asterisks."
     ;; through here -- the browser, the searches, the dumps -- and did not,
     ;; so `bl' and `bg' from the splash screen opened a second window for a
     ;; text and left the splash occupying the first.
-    (if (diogenes--sole-home-window-p)
-	(pop-to-buffer-same-window buffer)
-      (pop-to-buffer buffer))))
+    ;; The browser, the searches and the dumps all come through here, and
+    ;; each is a text being read rather than an answer about a word -- hence
+    ;; `browser', which keeps them out of the lookup frame.  The startup-page
+    ;; guard that used to be spelled out here is now the helper's, along with
+    ;; every other rule about where a Diogenes buffer goes.
+    (diogenes--display-buffer buffer :kind 'browser)))
 
 (defun diogenes--get-fresh-buffer (type)
   "Returns a fresh buffer for the mode to use."
@@ -171,7 +174,7 @@ Mode should be a maior mode derived from comint-mode."
 			   "-e" script
 			   (diogenes--include-server)
 			   (diogenes--include-cpan))
-    (pop-to-buffer buffer)
+    (diogenes--display-buffer buffer :kind 'browser)
     (funcall mode)))
 
 

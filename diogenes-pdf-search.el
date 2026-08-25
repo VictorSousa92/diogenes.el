@@ -59,6 +59,7 @@
 
 ;;; Code:
 (require 'cl-lib)
+(require 'diogenes-lisp-utils)          ; diogenes--display-buffer
 (require 'seq)
 
 ;; Each print-dictionary module is optional at load time: we only need
@@ -384,7 +385,8 @@ Set the matching path variable (e.g. `diogenes-old-pdf-file') to this file")))
               (diogenes-old--show-page page other)
             ;; Fallback: open the file ourselves and jump.
             (let ((large-file-warning-threshold nil))
-              (pop-to-buffer (find-file-noselect other))
+              (diogenes--display-buffer (find-file-noselect other)
+                                        :kind 'dictionary)
               (diogenes-pdf-search--goto-page page)))
           (message "%s: \"%s\" -> %s p.%d"
                    (diogenes-pdf-search--name dict)

@@ -525,7 +525,7 @@ it may carry an `entry-key' (the canonical lemma of the entry)."
 All overlays added by rng-validate-mode are converted to text
 properties."
   (with-temp-buffer
-    (pop-to-buffer (current-buffer))
+    (diogenes--display-buffer (current-buffer))
     (insert str)
     (nxml-mode)
     (rng-validate-mode)
@@ -560,7 +560,7 @@ properties."
 	 (xml-buffer (diogenes--get-fresh-buffer "xml"))
 	 (map (make-sparse-keymap)))
     (keymap-set map "C-c C-c" #'diogenes--xml-submit)
-    (pop-to-buffer xml-buffer)
+    (diogenes--display-buffer xml-buffer)
     (nxml-mode)
     (insert (propertize xml
 			'lookup-buffer lookup-buffer
@@ -589,7 +589,9 @@ properties."
 	(parsed (diogenes--dict-parse-xml (buffer-string) line-start line-end))
 	(inhibit-read-only t))
     (cond (parsed (kill-buffer xml-buffer)
-		  (pop-to-buffer lookup-buffer)
+		  ;; Back to the entry being edited, which is where we were.
+		  (diogenes--display-buffer lookup-buffer
+					    :kind 'lookup :same-window t)
 		  (delete-region prop-start prop-end)
 		  (diogenes--lookup-insert-and-format parsed))
 	  (t (rng-first-error)))))
@@ -726,13 +728,14 @@ Returns the lookup buffer."
             (progn
               (with-current-buffer lookup-buffer
                 (diogenes-lookup-mode))
-              (if diogenes--lookup-same-window
-                  (pop-to-buffer-same-window lookup-buffer)
-                (pop-to-buffer lookup-buffer)))
+              (diogenes--display-buffer lookup-buffer
+                                        :kind 'lookup
+                                        :same-window
+                                        diogenes--lookup-same-window))
           ;; --- otherwise: the original order, unchanged ---
-          (if diogenes--lookup-same-window
-              (pop-to-buffer-same-window lookup-buffer)
-            (pop-to-buffer lookup-buffer))
+          (diogenes--display-buffer lookup-buffer
+                                    :kind 'lookup
+                                    :same-window diogenes--lookup-same-window)
           (diogenes-lookup-mode)))
       (setq diogenes--lookup-file (or file (diogenes--dict-file lang))
 	    diogenes--lookup-bufstart start
@@ -3136,7 +3139,8 @@ headword, exactly as the application does."
 
 (defun diogenes--add-parse-entry ()
   "Get or create an Diogenes Analysis buffer, and begin a new entry."
-  (pop-to-buffer (get-buffer-create "*Diogenes Analysis*"))
+  (diogenes--display-buffer (get-buffer-create "*Diogenes Analysis*")
+			    :kind 'lookup)
   (goto-char (point-max))
   (unless (eq major-mode #'diogenes-analysis-mode)
     (diogenes-analysis-mode))
@@ -3309,7 +3313,8 @@ if nil, query interactively for their values"
   "Show all attested forms of LEMMA in LANG."
   (let ((results (diogenes--get-all-forms lemma lang)))
     (unless results (error "No result for %s in %s" lemma lang))
-    (pop-to-buffer (get-buffer-create "*Diogenes Forms*"))
+    (diogenes--display-buffer (get-buffer-create "*Diogenes Forms*")
+			      :kind 'lookup)
     (diogenes-analysis-mode)
     (goto-char (point-max))
     (save-excursion
@@ -3329,7 +3334,8 @@ if nil, query interactively for their values"
       (diogenes--parse-and-show-choose-filter filter ignore-case no-diacritics)
    (let ((results (diogenes--query-all-lemmata query lang filter ignore-case no-diacritics)))
      (unless results (error "No results for lemma %s!" query))
-     (pop-to-buffer (get-buffer-create "*Diogenes Forms*"))
+     (diogenes--display-buffer (get-buffer-create "*Diogenes Forms*")
+			      :kind 'lookup)
      (diogenes-analysis-mode)
      (goto-char (point-max))
      (insert (propertize (format "Results for %s:\n" query)

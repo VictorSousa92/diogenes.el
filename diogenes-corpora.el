@@ -501,9 +501,9 @@ error."
   "Manage all user defined corpora."
   (interactive)
   (if-let ((corpora-buffer (get-buffer "*diogenes-corpora*")))
-      (pop-to-buffer corpora-buffer) 
+      (diogenes--display-buffer corpora-buffer) 
     (diogenes--load-user-corpora)
-    (pop-to-buffer (get-buffer-create "*diogenes-corpora*"))
+    (diogenes--display-buffer (get-buffer-create "*diogenes-corpora*"))
     (diogenes-corpus-mode)
     (save-excursion
       (let ((inhibit-read-only t))
@@ -549,7 +549,7 @@ error."
   "Edit a user defined CORPUS.
 If callback is supplied, it should either be nil or contain a
 function that will be called when the user submits the corpus."
-  (pop-to-buffer (get-buffer-create "*diogenes-edit-corpus*"))
+  (diogenes--display-buffer (get-buffer-create "*diogenes-edit-corpus*"))
   (diogenes-corpus-edit-mode)
   (setq diogenes--corpus-edit-callback callback)
   (let ((inhibit-read-only t))
