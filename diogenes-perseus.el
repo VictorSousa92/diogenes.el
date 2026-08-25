@@ -2062,19 +2062,33 @@ lemma a hand-picked dictionary is asked about alike."
 	 (pos 0)
 	 analyses suppl)
     (while (string-match diogenes--analysis-group-re body pos)
+      ;; Both captured here, before anything that could clobber the match
+      ;; data of BODY: the loop below reads EXTRA after `:display' has run.
       (let ((group (match-string 1 body))
-	    (extra (match-string 2 body)))
+	    (extra (or (match-string 2 body) "")))
 	(setq pos (match-end 0))
 	(if (not (string-match diogenes--analysis-fields-re group))
 	    (message "Diogenes: bad analysis: %s" group)
-	  (push (list :offset (string-to-number (match-string 1 group))
-		      :conf (string-to-number (match-string 2 group))
-		      :lemma (match-string 3 group)
-		      :display (diogenes--munge-ls-lemma
-				(match-string 3 group) lang)
-		      :trans (string-trim (match-string 4 group))
-		      :info (string-trim (match-string 5 group)))
-		analyses))
+	  ;; EVERY field is read before anything else is called.  The plist was
+	  ;; built inline, and `:display' -- which is
+	  ;; `diogenes--munge-ls-lemma', and so `replace-regexp-in-string' --
+	  ;; was evaluated before `:trans' and `:info' read groups 4 and 5.
+	  ;; Match data is global: by then it belonged to munge's own regexps,
+	  ;; those groups were nil, and `string-trim' was handed nil.  A latent
+	  ;; fault for as long as the code has existed, waiting for an
+	  ;; implementation that leaves fewer groups behind.
+	  (let ((offset (string-to-number (match-string 1 group)))
+		(conf (string-to-number (match-string 2 group)))
+		(lemma (match-string 3 group))
+		(trans (string-trim (or (match-string 4 group) "")))
+		(info (string-trim (or (match-string 5 group) ""))))
+	    (push (list :offset offset
+			:conf conf
+			:lemma lemma
+			:display (diogenes--munge-ls-lemma lemma lang)
+			:trans trans
+			:info info)
+		  analyses)))
 	(let ((p 0))
 	  (while (string-match "\\[\\([0-9]+\\)\\]" extra p)
 	    (push (string-to-number (match-string 1 extra)) suppl)
