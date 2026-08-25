@@ -106,16 +106,24 @@ entry back to it.
 
 Comes AFTER the document reuse, so a dictionary still joins a dictionary
 where one is open, and before `display-buffer\=' decides, so the browser is
-not chosen by accident."
-  (let ((window
-         (catch 'found
-           (dolist (w (window-list nil 'no-minibuffer))
-             (when (with-current-buffer (window-buffer w)
-                     (derived-mode-p 'diogenes-lookup-mode
-                                     'diogenes-analysis-mode))
-               (throw 'found w))))))
-    (when window
-      (window--display-buffer buffer window 'reuse alist))))
+not chosen by accident.
+
+Declines entirely when `pop-up-frames\=' is set.  There the reader has asked
+for a frame per thing, and the entry's window is in a frame of its own that
+the page has no business taking over: what is wanted is a new frame, which
+is what `display-buffer\=' does once this and the reuse above have both
+passed.  So this is the answer to \"which window\", asked only where windows
+are what there are."
+  (unless pop-up-frames
+    (let ((window
+           (catch 'found
+             (dolist (w (window-list nil 'no-minibuffer))
+               (when (with-current-buffer (window-buffer w)
+                       (derived-mode-p 'diogenes-lookup-mode
+                                       'diogenes-analysis-mode))
+                 (throw 'found w))))))
+      (when window
+        (window--display-buffer buffer window 'reuse alist)))))
 
 (define-obsolete-variable-alias 'diogenes-old-reader-display-action
   'diogenes-old-pdf-display-action "modular"
