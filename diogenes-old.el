@@ -867,18 +867,42 @@ for the dictionary window."
         (switch-to-buffer page)
       (message "No dictionary page open from this entry"))))
 
+(defcustom diogenes-old-visit-dictionary-key "C-c C-e"
+  "Key in a lookup buffer for `diogenes-old-visit-dictionary\='.
+`C-c C-e\=' by default -- the key `diogenes-purpose\=' uses for the dictionary,
+so that the way to the page is the same key whichever module is loaded, and
+`C-c C-d\=' being unavailable under KDE Plasma, which claims it for window
+management.  Nil binds nothing."
+  :type '(choice key-sequence (const :tag "Do not bind" nil))
+  :group 'diogenes)
+
 ;;;###autoload
 (defun diogenes-old-install-return-keys ()
-  "Put `C-c C-e\=' in the lookup buffers on `diogenes-old-visit-dictionary\='.
+  "Bind `diogenes-old-visit-dictionary-key\=' in the lookup buffers.
 `q\=' in the page is bound where the page is displayed, there being nothing
-to go back to until then."
-  (with-eval-after-load 'diogenes-perseus
-    (dolist (map '(diogenes-lookup-mode-map diogenes-analysis-mode-map))
-      (when (boundp map)
-        (keymap-set (symbol-value map) "C-c C-e"
-                    #'diogenes-old-visit-dictionary)))))
+to go back to until then.
+
+Does nothing when `diogenes-purpose\=' is loaded, which binds the same key to
+`diogenes-purpose-focus-dictionary-window\='.  The two are not rivals: with
+purpose the page is in a window of its own and what is wanted is to move to
+that window, while here it shares the entry\='s window and what is wanted is
+to show it.  Each module answers for the arrangement it makes, and purpose\='s
+answer is the right one where purpose is in charge."
+  (unless (or (null diogenes-old-visit-dictionary-key)
+              (featurep 'diogenes-purpose))
+    (with-eval-after-load 'diogenes-perseus
+      (dolist (map '(diogenes-lookup-mode-map diogenes-analysis-mode-map))
+        (when (boundp map)
+          (keymap-set (symbol-value map) diogenes-old-visit-dictionary-key
+                      #'diogenes-old-visit-dictionary))))))
 
 (diogenes-old-install-return-keys)
+
+;; And if `diogenes-purpose' arrives later -- it is loaded from a user's
+;; config hook, which may run after this file -- it installs its own
+;; binding for the same key, and should.  Nothing to undo here: purpose's
+;; `diogenes-purpose--install-focus' overwrites the binding, and
+;; `diogenes-old-visit-dictionary' remains available under `M-x'.
 
 (defun diogenes-old--display-in-this-window (buffer)
   "Put BUFFER in the selected window, and only there; return BUFFER.
