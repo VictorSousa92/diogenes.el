@@ -904,6 +904,23 @@ answer is the right one where purpose is in charge."
 ;; `diogenes-purpose--install-focus' overwrites the binding, and
 ;; `diogenes-old-visit-dictionary' remains available under `M-x'.
 
+(defun diogenes-old--bind-return-key ()
+  "Put `q\=' in this document buffer on `diogenes-old-return-to-entry\='.
+Bound in two places, because one is not enough.  A `local-set-key\=' reaches
+the major mode\='s own map, which is what a viewer without evil consults --
+but under evil the state maps are searched first, and Doom binds `q\=' in
+them: the page answered `kill-current-buffer\=', destroying the document
+rather than going back to the entry.  So the normal-state map is bound too
+where evil is loaded.
+
+Buffer-local either way, so `q\=' keeps its ordinary meaning in a PDF that
+was not opened from an entry."
+  (local-set-key (kbd "q") #'diogenes-old-return-to-entry)
+  (when (fboundp 'evil-local-set-key)
+    (dolist (state '(normal motion visual))
+      (ignore-errors
+        (evil-local-set-key state (kbd "q") #'diogenes-old-return-to-entry)))))
+
 (defun diogenes-old--display-in-this-window (buffer)
   "Put BUFFER in the selected window, and only there; return BUFFER.
 The entry the lookup was made from is left ON THE WINDOW'S HISTORY, so `q'
@@ -942,7 +959,7 @@ showing BUFFER back its previous buffer."
                    (not (eq previous buffer)))
           (with-current-buffer buffer
             (setq diogenes-old--return-buffer previous)
-            (local-set-key (kbd "q") #'diogenes-old-return-to-entry))))
+            (diogenes-old--bind-return-key))))
       (select-window window)
       (dolist (other (get-buffer-window-list buffer nil (window-frame window)))
         (unless (eq other window)

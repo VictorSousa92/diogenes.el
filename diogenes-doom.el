@@ -190,6 +190,42 @@ the list get their turn: normally `display-buffer-pop-up-frame'."
            (window--display-buffer buffer window 'reuse alist)))))
 
 
+;;; Workspaces
+
+;; Doom's workspaces are persp-mode, and persp-mode filters what
+;; `previous-buffer' and `next-buffer' can reach: a buffer outside the current
+;; perspective is invisible to them, though `switch-to-buffer' still finds it
+;; by name.  A lookup buffer is created programmatically, and nothing adds it
+;; to the perspective -- so `C-x <left>' could not get back to an entry that
+;; was demonstrably alive, and demonstrably on the window's own history.
+
+(defcustom diogenes-doom-claim-buffers t
+  "Whether Diogenes buffers are added to the current workspace.
+Non-nil adds each to the perspective it was created in, so that
+`previous-buffer\=', `next-buffer\=' and the workspace's own buffer list can
+reach it.  Nil leaves them out, where `switch-to-buffer\=' by name is the only
+way back.
+
+Does nothing without persp-mode, which is what Doom's workspaces are."
+  :type 'boolean
+  :group 'diogenes-doom)
+
+(defun diogenes-doom-claim-buffer ()
+  "Add the current buffer to the current perspective, if there is one."
+  (when (and diogenes-doom-claim-buffers
+             (bound-and-true-p persp-mode)
+             (fboundp 'persp-add-buffer))
+    (ignore-errors (persp-add-buffer (current-buffer)))))
+
+(defconst diogenes-doom--claimed-modes
+  '(diogenes-lookup-mode-hook
+    diogenes-analysis-mode-hook
+    diogenes-browser-mode-hook
+    diogenes-search-mode-hook
+    diogenes-select-forms-mode-hook
+    diogenes-corpus-mode-hook)
+  "Mode hooks on which `diogenes-doom-claim-buffer' is installed.")
+
 ;;; Installing and removing the rules
 
 (defun diogenes-doom--rule (regexp)
@@ -223,8 +259,10 @@ nothing to tell Doom to ignore."
       (let ((rule (diogenes-doom--rule regexp)))
         (push rule diogenes-doom--rules)
         (push rule display-buffer-alist))))
+  (dolist (hook diogenes-doom--claimed-modes)
+    (add-hook hook #'diogenes-doom-claim-buffer))
   (when (called-interactively-p 'interactive)
-    (message "Diogenes buffers will open in frames of their own")))
+    (message "Diogenes buffers gathered, and claimed by this workspace")))
 
 ;;;###autoload
 (defun diogenes-doom-uninstall ()
@@ -234,7 +272,9 @@ alone."
   (interactive)
   (dolist (rule diogenes-doom--rules)
     (setq display-buffer-alist (delq rule display-buffer-alist)))
-  (setq diogenes-doom--rules nil))
+  (setq diogenes-doom--rules nil)
+  (dolist (hook diogenes-doom--claimed-modes)
+    (remove-hook hook #'diogenes-doom-claim-buffer)))
 
 
 ;;; Getting to a frame that is already open
