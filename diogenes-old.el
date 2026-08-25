@@ -98,24 +98,30 @@ Passow and the TGL bind this to their own equivalents; see
 
 (defcustom diogenes-old-pdf-display-action
   '((display-buffer-reuse-window
-     display-buffer-reuse-mode-window
-     display-buffer-use-some-window)
+     display-buffer-reuse-mode-window)
     (mode . (reader-mode pdf-view-mode doc-view-mode))
     (reusable-frames . visible)
     (inhibit-same-window . t))
-  "`display-buffer' ACTION for showing a dictionary in the Emacs Reader.
-The Reader needs `display-buffer-overriding-action' bound to nil (see
-`diogenes-old--show-page'), which also takes window-purpose out of the
-picture -- and with it the behaviour that keeps one dictionary after
-another in a single window.  Reusing a window that already shows a
-document buffer restores it, so opening one dictionary after another
-replaces the page on screen instead of splitting the frame again.
+  "`display-buffer' ACTION for showing a dictionary page.
+Two ways of reusing a window and no third: the window already showing THIS
+document, then any window showing a document at all -- `reader-mode',
+`pdf-view-mode', `doc-view-mode', per the `mode' entry.  So one dictionary
+after another replaces the page on screen instead of splitting the frame
+again.
 
-`reusable-frames' is `visible' because the reuse functions otherwise
-look at the selected frame alone: with `pop-up-frames' non-nil, or any
-setup where the dictionary ends up in a frame of its own, the window
-holding it would not be found and a further frame would be created for
-every dictionary.  Set it to nil to keep the search to one frame.
+There is deliberately no `display-buffer-use-some-window' here, and that
+matters more than it looks.  It takes ANY window, and the browser's is a
+window: with purpose in charge this action was never reached, and without
+purpose it sent the first dictionary into the frame the text was being read
+in.  A dictionary should land on a dictionary or nowhere -- if no document
+window exists, the list is exhausted and `display-buffer' falls back to its
+own behaviour, which is what honours `pop-up-frames' and opens the frame.
+
+`reusable-frames' is `visible' because the reuse functions otherwise look at
+the selected frame alone: with `pop-up-frames' non-nil, or any setup where
+the dictionary ends up in a frame of its own, the window holding it would
+not be found and a further frame would be created for every dictionary.
+Set it to nil to keep the search to one frame.
 
 Used for every viewer EXCEPT when `diogenes-purpose' is loaded, whose own
 overriding action does the same thing for pdf-tools and doc-view.  Consulted
@@ -857,8 +863,12 @@ frame may go, not about what the user asked for."
   "Display BUFFER and return it.
 With OTHER-WINDOW non-nil, hand it to `display-buffer\' with ACTION (nil
 for the ordinary rules); otherwise put the page in the selected window, in
-place of the entry the lookup was made from."
-  (if other-window
+place of the entry the lookup was made from.
+
+A frame showing only a startup page is the exception either way: there is a
+window there and nothing in it worth keeping, so the page takes it rather
+than opening a frame beside it.  See `diogenes--sole-home-window-p'."
+  (if (and other-window (not (diogenes--sole-home-window-p)))
       (display-buffer buffer action)
     (diogenes-old--display-in-this-window buffer))
   buffer)
