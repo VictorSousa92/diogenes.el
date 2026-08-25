@@ -235,6 +235,92 @@ availability predicate is not an error anyone can act on."
              (list :id 'testdict :show 'always
                    :available-p (lambda () t))))))
 
+;;; Where a buffer goes
+
+;; `display-buffer' works headless; frames largely do not.  So these test the
+;; DECISION -- which action is chosen, and which of the three rules wins --
+;; and leave the frames to `M-x diogenes-tests-run' in a live configuration.
+
+(defmacro diogenes-tests--with-two-windows (&rest body)
+  "Run BODY in a temporary buffer with the frame split, then restore."
+  (declare (indent 0) (debug t))
+  `(save-window-excursion
+     (delete-other-windows)
+     (split-window)
+     ,@body))
+
+(ert-deftest diogenes-test-display-action-by-kind ()
+  "Each kind of buffer draws its own action, and an unknown kind none."
+  (let ((diogenes-lookup-display-action '(a))
+        (diogenes-browser-display-action '(b))
+        (diogenes-dictionary-display-action '(c)))
+    (should (equal (diogenes--display-action 'lookup) '(a)))
+    (should (equal (diogenes--display-action 'browser) '(b)))
+    (should (equal (diogenes--display-action 'dictionary) '(c)))
+    (should-not (diogenes--display-action 'something-else))
+    (should-not (diogenes--display-action nil))))
+
+(ert-deftest diogenes-test-display-buffer-same-window ()
+  "SAME-WINDOW puts the buffer where we are, whatever the action says."
+  (diogenes-tests--with-two-windows
+    (let ((diogenes-lookup-display-action
+           '(display-buffer-use-some-window (inhibit-same-window . t)))
+          (buffer (get-buffer-create " *diogenes-test-target*"))
+          (here (selected-window)))
+      (should (eq (diogenes--display-buffer buffer :kind 'lookup
+                                           :same-window t)
+                  here)))))
+
+(ert-deftest diogenes-test-display-buffer-honours-the-action ()
+  "Without SAME-WINDOW the action decides, and it can send the buffer away."
+  (diogenes-tests--with-two-windows
+    (let ((diogenes-lookup-display-action
+           '(display-buffer-use-some-window (inhibit-same-window . t)))
+          (buffer (get-buffer-create " *diogenes-test-target*"))
+          (here (selected-window)))
+      (should-not (eq (diogenes--display-buffer buffer :kind 'lookup) here)))))
+
+(ert-deftest diogenes-test-display-buffer-action-overrides-kind ()
+  "An action passed by the caller wins over the kind's own."
+  (diogenes-tests--with-two-windows
+    (let ((diogenes-lookup-display-action
+           '(display-buffer-use-some-window (inhibit-same-window . t)))
+          (buffer (get-buffer-create " *diogenes-test-target*"))
+          (here (selected-window)))
+      (should (eq (diogenes--display-buffer
+                  buffer :kind 'lookup
+                  :action '(display-buffer-same-window
+                            (inhibit-same-window . nil)))
+                  here)))))
+
+(ert-deftest diogenes-test-display-buffer-takes-a-lone-startup-window ()
+  "A frame holding only a startup page yields its window, action or no action.
+Regression: `bl' from a bare splash screen opened a second window for the
+text and left the splash occupying the first."
+  (save-window-excursion
+    (delete-other-windows)
+    (let ((home (get-buffer-create "*GNU Emacs*"))
+          (buffer (get-buffer-create " *diogenes-test-target*"))
+          (diogenes-lookup-display-action
+           '(display-buffer-use-some-window (inhibit-same-window . t))))
+      (set-window-buffer (selected-window) home)
+      (should (diogenes--sole-home-window-p))
+      (should (eq (diogenes--display-buffer buffer :kind 'lookup)
+                  (selected-window))))))
+
+(ert-deftest diogenes-test-display-buffer-records-window-history ()
+  "The buffer displaced is left on the window's history, so `q' can return.
+Regression: `set-window-buffer' records nothing, so `quit-window' in a
+dictionary page went past the entry to the startup screen."
+  (save-window-excursion
+    (delete-other-windows)
+    (let ((first (get-buffer-create " *diogenes-test-first*"))
+          (second (get-buffer-create " *diogenes-test-second*")))
+      (set-window-buffer (selected-window) first)
+      (diogenes--display-buffer second :same-window t)
+      (should (member first
+                     (mapcar #'car (window-prev-buffers (selected-window))))))))
+
 ;;; Commands: the shape a command has to have
 
 (ert-deftest diogenes-test-no-command-asks-for-arguments-it-cannot-take ()

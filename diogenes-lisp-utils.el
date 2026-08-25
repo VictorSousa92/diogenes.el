@@ -116,6 +116,87 @@ answer is about the moment the file is read.  See
 `diogenes--loading-bundle'."
   (not (bound-and-true-p diogenes--loading-bundle)))
 
+(defcustom diogenes-lookup-display-action nil
+  "Where a dictionary entry or an analysis appears.
+A `display-buffer\=' ACTION, or nil to leave the choice to Emacs -- which
+means `display-buffer-alist\=', `pop-up-frames\=' and whatever the reader has
+configured, and is the default because it is the answer that respects what
+they configured.
+
+    ;; entries share one window, replacing each other
+    (setq diogenes-lookup-display-action
+          \='((display-buffer-reuse-mode-window display-buffer-same-window)
+            (mode . (diogenes-lookup-mode diogenes-analysis-mode))))
+
+Two things this does NOT decide.  A lookup made from a frame holding only a
+startup page takes that window whatever is set here -- there is a window
+going spare and using it is never wrong.  And a `C-c C-c\=' chain stays in
+one window, that being what the reader asked for by pressing the key in an
+entry rather than a request about layout.  See `diogenes--display-buffer\='."
+  :type 'sexp
+  :group 'diogenes)
+
+(defcustom diogenes-browser-display-action nil
+  "Where a passage from the corpora appears.
+A `display-buffer\=' ACTION, or nil for Emacs\='s own choice.  A browser buffer
+is the text being read, so it wants a window of its own and a lookup should
+not displace it -- which is what `diogenes-lookup-display-action\=' is for,
+this being the other half of that arrangement."
+  :type 'sexp
+  :group 'diogenes)
+
+(defcustom diogenes-dictionary-display-action nil
+  "Where a scanned dictionary\='s page appears.
+A `display-buffer\=' ACTION, or nil for Emacs\='s own choice.  Distinct from
+the other two because a dictionary is consulted and closed where an entry is
+read: `diogenes-old-pdf-display-action\=' is the value the print dictionaries
+use today, and this is where it is heading."
+  :type 'sexp
+  :group 'diogenes)
+
+(defun diogenes--display-action (kind)
+  "The `display-buffer\=' action for a Diogenes buffer of KIND.
+KIND is `lookup\=', `browser\=', `dictionary\=', or anything else for none."
+  (pcase kind
+    ('lookup diogenes-lookup-display-action)
+    ('browser diogenes-browser-display-action)
+    ('dictionary diogenes-dictionary-display-action)
+    (_ nil)))
+
+(cl-defun diogenes--display-buffer (buffer &key kind same-window action)
+  "Show BUFFER and return the window it is in.
+The one place that decides where a Diogenes buffer goes, so that a reader
+who wants to change it has one thing to change and the package has one
+thing to get right.  Nineteen `pop-to-buffer\=' and `set-window-buffer\='
+calls answered this separately before, and the ones that answered it by
+hand were where the faults were: a `set-window-buffer\=' records no window
+history, so `q\=' had nowhere to go back to, and a bare `pop-to-buffer\='
+consults no rule, so a startup page kept its window while the text opened
+beside it.
+
+KIND selects the action -- see `diogenes--display-action\=' -- and ACTION
+overrides it, for a caller that has computed one.
+
+SAME-WINDOW puts BUFFER where we are.  Not a preference but a statement
+about what was asked: pressing a key inside an entry to see another entry
+is staying in one place, and no display rule should overrule it.  It goes
+through `display-buffer\=' all the same, so the window history is recorded
+and `quit-window\=' can undo it.
+
+A frame holding only a startup page is the exception to everything: there
+is a window going spare, and taking it is right whatever is configured.
+See `diogenes--sole-home-window-p\='."
+  (cond
+   ((diogenes--sole-home-window-p)
+    (display-buffer buffer '(display-buffer-same-window
+                             (inhibit-same-window . nil))))
+   (same-window
+    (display-buffer buffer '(display-buffer-same-window
+                             (inhibit-same-window . nil))))
+   (t
+    (display-buffer buffer (or action (diogenes--display-action kind)))))
+  (get-buffer-window buffer t))
+
 (defun diogenes--path-set-p (value)
   "Non-nil if VALUE is a path the user has actually named.
 Set-ness only: whether anything is there is not asked.  A dictionary whose
