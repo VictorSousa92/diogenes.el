@@ -308,24 +308,24 @@ text and left the splash occupying the first."
       (should (eq (diogenes--display-buffer buffer :kind 'lookup)
                   (selected-window))))))
 
-(ert-deftest diogenes-test-display-buffer-records-window-history ()
-  "The buffer displaced is left on the window's history, so `q' can return.
-Regression: `set-window-buffer' records nothing, so `quit-window' in a
-dictionary page went past the entry to the startup screen."
+(ert-deftest diogenes-test-display-buffer-same-window-displaces ()
+  "SAME-WINDOW puts the buffer in this window, and says which window that was.
+
+An earlier version of this test asserted that the displaced buffer was left
+on `window-prev-buffers', and it was wrong: `display-buffer' makes no such
+promise -- `switch-to-buffer' records the history, `window--display-buffer'
+does not.  Which corrects the reasoning behind an earlier commit as well: the
+reason `q' returns to the entry is not the window history but
+`diogenes-old--return-buffer' and the key bound beside it, which is what
+`diogenes-old-return-to-entry' reads."
   (save-window-excursion
     (delete-other-windows)
     (let ((first (get-buffer-create " *diogenes-test-first*"))
           (second (get-buffer-create " *diogenes-test-second*")))
-      ;; `switch-to-buffer' for the setup, NOT `set-window-buffer'.  The
-      ;; latter records nothing -- which is the very fact under test, and an
-      ;; earlier version of this test used it, so the history held whatever
-      ;; had been in the window before and the assertion failed against
-      ;; correct code.
       (switch-to-buffer first)
-      (diogenes--display-buffer second :same-window t)
-      (should (eq (window-buffer (selected-window)) second))
-      (should (member first
-                     (mapcar #'car (window-prev-buffers (selected-window))))))))
+      (let ((window (diogenes--display-buffer second :same-window t)))
+        (should (eq window (selected-window)))
+        (should (eq (window-buffer window) second))))))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.

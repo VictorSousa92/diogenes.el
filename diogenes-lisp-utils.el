@@ -302,8 +302,11 @@ overrides it, for a caller that has computed one.
 SAME-WINDOW puts BUFFER where we are.  Not a preference but a statement
 about what was asked: pressing a key inside an entry to see another entry
 is staying in one place, and no display rule should overrule it.  It goes
-through `display-buffer\=' all the same, so the window history is recorded
-and `quit-window\=' can undo it.
+through `display-buffer\=' all the same, rather than `set-window-buffer\=',
+so that dedication and the rest are handled properly -- but NOT because that
+records the window history, which it does not.  Getting back to what was
+displaced is `diogenes-old--return-buffer''s business, and the key bound
+beside it.
 
 A frame holding only a startup page is the exception to everything: there
 is a window going spare, and taking it is right whatever is configured.
