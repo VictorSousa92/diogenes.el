@@ -321,6 +321,50 @@ dictionary page went past the entry to the startup screen."
       (should (member first
                      (mapcar #'car (window-prev-buffers (selected-window))))))))
 
+(ert-deftest diogenes-test-buffer-role ()
+  "A buffer's kind is read from its name first and its mode second.
+Name first because a lookup buffer is DISPLAYED before its major mode is
+set, so a rule dispatching on the mode would see `fundamental-mode'."
+  (with-temp-buffer
+    (rename-buffer "*diogenes-lookup<3>*" t)
+    (should (eq (diogenes--buffer-role (current-buffer)) 'lookup)))
+  (with-temp-buffer
+    (rename-buffer "*diogenes-browser*" t)
+    (should (eq (diogenes--buffer-role (current-buffer)) 'browser)))
+  (with-temp-buffer
+    (rename-buffer " not-a-diogenes-buffer" t)
+    (should-not (diogenes--buffer-role (current-buffer))))
+  ;; And by mode, for a document buffer, which has its mode before display.
+  (with-temp-buffer
+    (rename-buffer " OLD.pdf" t)
+    (setq-local major-mode 'pdf-view-mode)
+    (should (eq (diogenes--buffer-role (current-buffer)) 'dictionary))))
+
+(ert-deftest diogenes-test-gathering-follows-pop-up-frames ()
+  "Gathering is on when frames are, and `diogenes-gather-frames' overrides.
+This is what makes Doom and Spacemacs behave alike: with `pop-up-frames'
+set, the core answers for both instead of each distribution's own
+mechanism."
+  (let ((diogenes-gather-frames 'auto))
+    (let ((pop-up-frames nil)) (should-not (diogenes--gathering-p)))
+    (let ((pop-up-frames t)) (should (diogenes--gathering-p)))
+    (let ((pop-up-frames 'graphic-only)) (should (diogenes--gathering-p))))
+  (let ((diogenes-gather-frames t) (pop-up-frames nil))
+    (should (diogenes--gathering-p)))
+  (let ((diogenes-gather-frames nil) (pop-up-frames t))
+    (should-not (diogenes--gathering-p))))
+
+(ert-deftest diogenes-test-a-set-action-beats-the-gathering ()
+  "An action the reader has set wins over the gathering, frames or no frames."
+  (diogenes-tests--with-two-windows
+    (let* ((pop-up-frames nil)          ; no frames in batch anyway
+           (diogenes-gather-frames t)
+           (diogenes-lookup-display-action
+            '(display-buffer-same-window (inhibit-same-window . nil)))
+           (buffer (get-buffer-create " *diogenes-test-target*"))
+           (here (selected-window)))
+      (should (eq (diogenes--display-buffer buffer :kind 'lookup) here)))))
+
 ;;; Commands: the shape a command has to have
 
 (ert-deftest diogenes-test-no-command-asks-for-arguments-it-cannot-take ()

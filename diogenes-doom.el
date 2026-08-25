@@ -58,83 +58,22 @@
   "Showing Diogenes buffers in frames of their own."
   :group 'diogenes)
 
-(defcustom diogenes-doom-lookup-regexp
-  "\\`\\*\\(?:diogenes-lookup\\|Diogenes Analysis\\|Diogenes Forms\\)"
-  "Buffers that share the lookup frame.
-Lookups, morphological analyses and the form lists belong together: they
-are all answers about a word, and one replaces another.  Every entry gets
-its own buffer -- `*diogenes-lookup*', `*diogenes-lookup<2>*' and so on --
-so this matches a prefix rather than a name."
-  :type 'regexp
-  :group 'diogenes-doom)
+;; The three options that named the buffers, and the switch for reusing a
+;; frame, are the core's now.  A configuration that set them still works:
+;; `diogenes-role-regexps' is the list of name-to-role rules, and adding a
+;; dictionary PDF to it is what `diogenes-doom-dictionary-regexps' was for.
 
-(defcustom diogenes-doom-browser-regexp
-  "\\`\\*diogenes-browser"
-  "Buffers that get the browser frame.
-A frame of its own, so that looking a word up never covers the text the
-word was read in."
-  :type 'regexp
-  :group 'diogenes-doom)
+(defun diogenes-doom--claim-dictionary-regexps ()
+  "Fold any `diogenes-doom-dictionary-regexps' into `diogenes-role-regexps'.
+For a configuration written against the older option: naming a dictionary
+PDF there gave the scans a frame of their own, and it still does."
+  (dolist (regexp (bound-and-true-p diogenes-doom-dictionary-regexps))
+    (add-to-list 'diogenes-role-regexps (cons regexp 'dictionary))))
 
-(defcustom diogenes-doom-dictionary-regexps nil
-  "Names of dictionary PDFs to gather into one frame of their own.
-A list of regexps.  Nothing is here by default because a dictionary PDF is
-an ordinary `pdf-view-mode' buffer named after its file, and only you know
-what your files are called:
-
-    (setq diogenes-doom-dictionary-regexps
-          \\='(\"Oxford Latin Dictionary\\\\.pdf\" \"Montanari\\\\.pdf\"))
-
-Single-file dictionaries have predictable names; the directory-based ones
-\\(the TLL, Passow, the TGL) open one file per volume, so theirs vary --
-match the directory's name if they share a prefix."
-  :type '(repeat regexp)
-  :group 'diogenes-doom)
-
-(defcustom diogenes-doom-frame-parameters
-  '((width . 90) (height . 45) (name . "Diogenes"))
-  "Parameters for a frame made for a Diogenes buffer.
-The name is worth keeping: it is what a tiling window manager can match on
-to place these frames by rule."
-  :type '(alist :key-type symbol :value-type sexp)
-  :group 'diogenes-doom)
-
-(defcustom diogenes-doom-gather 'auto
-  "When the gathering of Diogenes buffers applies.
-  `auto\=' -- the default -- follows `pop-up-frames\='.  Gathering only means
-anything where a buffer would otherwise get a frame to itself, so with
-`pop-up-frames\=' nil this module keeps out of the way entirely and Emacs
-displays a lookup as it displays anything else.  Set `pop-up-frames\=' and the
-gathering begins, with no reloading: the question is asked each time a buffer
-is displayed.
-
-  t gathers regardless, for a setup that wants Diogenes buffers kept together
-in windows.  nil never gathers.
-
-The guard against a startup page is NOT covered by this and always applies:
-a frame showing only `*doom*\=', `*spacemacs*\=' or Emacs\='s own splash has a
-window going spare, and using it is right whether or not frames are in play.
-See `diogenes-doom-display-in-home-window\='."
-  :type '(choice (const :tag "Follow pop-up-frames" auto)
-                 (const :tag "Always" t)
-                 (const :tag "Never" nil))
-  :group 'diogenes-doom)
-
-(defun diogenes-doom-gathering-p ()
-  "Whether Diogenes buffers are being gathered at the moment.
-Asked at display time, so `pop-up-frames' can be set or unset in a running
-Emacs and the answer changes with it."
-  (pcase diogenes-doom-gather
-    ('auto (and pop-up-frames t))
-    (value (and value t))))
-
-(defcustom diogenes-doom-reuse-frames t
-  "Whether a second buffer of a kind reuses the frame the first is in.
-Non-nil is the point of the module: one lookup frame, reused, however many
-entries you open.  Nil gives a frame per buffer, which is `pop-up-frames'
-without the gathering, and buries the screen."
-  :type 'boolean
-  :group 'diogenes-doom)
+(defvar diogenes-doom-dictionary-regexps nil
+  "Obsolete; add to `diogenes-role-regexps' instead.
+Kept because a configuration may set it, and
+`diogenes-doom--claim-dictionary-regexps' still reads it.")
 
 (defvar diogenes-doom--rules nil
   "The entries this module has put into `display-buffer-alist'.
@@ -143,52 +82,40 @@ Kept so that `diogenes-doom-uninstall' can remove exactly those.")
 
 ;;; Finding the frame a kind of buffer already lives in
 
+;; This was the module's own, and is now the core's: `diogenes--buffer-role',
+;; `diogenes--window-of-role' and `diogenes-display-in-role-frame' live in
+;; `diogenes-lisp-utils.el', and `diogenes--display-buffer' applies them
+;; whenever `pop-up-frames' is set -- under Doom, under Spacemacs, under
+;; plain Emacs alike.  Which is the point: the gathering was never
+;; Doom-specific, and having it here meant Spacemacs did something else with
+;; the same request.
+;;
+;; What is left below is what only this module can do: adding a buffer to the
+;; workspace it was created in, and the focus commands.  The options that
+;; belonged to the gathering now name their core counterparts, so a
+;; configuration that set them keeps working.
+
+(define-obsolete-variable-alias 'diogenes-doom-frame-parameters
+  'diogenes-frame-parameters "modular-customizable"
+  "The gathering moved to the core; so did its frame parameters.")
+
+(define-obsolete-variable-alias 'diogenes-doom-gather
+  'diogenes-gather-frames "modular-customizable"
+  "The gathering moved to the core; so did the switch for it.")
+
+(define-obsolete-function-alias 'diogenes-doom-display-in-role-frame
+  'diogenes-display-in-role-frame "modular-customizable")
+
+(define-obsolete-function-alias 'diogenes-doom-gathering-p
+  'diogenes--gathering-p "modular-customizable")
+
 (defun diogenes-doom--role (buffer)
-  "Which frame BUFFER belongs in: `lookup', `browser', `dictionary', or nil."
-  (let ((name (buffer-name (get-buffer buffer))))
-    (cond
-     ((null name) nil)
-     ((string-match-p diogenes-doom-lookup-regexp name) 'lookup)
-     ((string-match-p diogenes-doom-browser-regexp name) 'browser)
-     ((cl-some (lambda (re) (string-match-p re name))
-               diogenes-doom-dictionary-regexps)
-      'dictionary))))
+  "Which frame BUFFER belongs in.  See `diogenes--buffer-role'."
+  (diogenes--buffer-role buffer))
 
 (defun diogenes-doom--window-of-role (role)
-  "A window, on any visible frame, showing a buffer whose role is ROLE."
-  (catch 'found
-    (dolist (frame (frame-list))
-      (when (frame-visible-p frame)
-        (dolist (window (window-list frame 'no-minibuffer))
-          (when (eq role (diogenes-doom--role (window-buffer window)))
-            (throw 'found window)))))))
-
-(defun diogenes-doom-display-in-home-window (buffer alist)
-  "Show BUFFER here when here is a frame holding only a startup page.
-A `display-buffer\=' action function, and the first of them: a frame showing
-`*doom*\=', `*spacemacs*\=' or Emacs\='s own splash and nothing else is a frame
-with nothing in it, so opening another frame beside it wastes the screen.
-See `diogenes--home-buffer-p\='."
-  (when (diogenes--sole-home-window-p)
-    (window--display-buffer buffer (selected-window) 'reuse alist)))
-
-(defun diogenes-doom-display-in-role-frame (buffer alist)
-  "Show BUFFER in the frame its kind already occupies, if there is one.
-A `display-buffer' action function.  `display-buffer-reuse-window' cannot
-do this: it looks for a window showing THE SAME buffer, and every entry
-here is a new buffer.  What is wanted is a window showing a SIBLING -- any
-other lookup -- which is the frame-shaped version of what a shared
-window-purpose does.
-
-Returns nil when there is no such frame, so the actions after this one in
-the list get their turn: normally `display-buffer-pop-up-frame'."
-  (and diogenes-doom-reuse-frames
-       (diogenes-doom-gathering-p)
-       (let* ((role (diogenes-doom--role buffer))
-              (window (and role (diogenes-doom--window-of-role role))))
-         (when window
-           (window--display-buffer buffer window 'reuse alist)))))
-
+  "A window showing a buffer of role ROLE.  See `diogenes--window-of-role'."
+  (diogenes--window-of-role role))
 
 ;;; Workspaces
 
@@ -226,56 +153,35 @@ Does nothing without persp-mode, which is what Doom's workspaces are."
     diogenes-corpus-mode-hook)
   "Mode hooks on which `diogenes-doom-claim-buffer' is installed.")
 
-;;; Installing and removing the rules
-
-(defun diogenes-doom--rule (regexp)
-  "The `display-buffer-alist' entry for buffers matching REGEXP.
-Two actions and no third, both of them about reusing something already open.
-Where there is nothing to reuse the list is exhausted, `display-buffer' falls
-back to its own behaviour, and THAT is what reads `pop-up-frames' -- so a
-frame appears when frames are what the configuration asks for, and a window
-when they are not.  An earlier version named `display-buffer-pop-up-frame'
-here, which meant frames for everyone whatever they had set."
-  `(,regexp
-    (diogenes-doom-display-in-home-window
-     diogenes-doom-display-in-role-frame)
-    (inhibit-same-window . t)
-    (reusable-frames . visible)
-    (pop-up-frame-parameters . ,diogenes-doom-frame-parameters)))
+;;; Installing and removing the workspace hooks
 
 ;;;###autoload
 (defun diogenes-doom-install ()
-  "Give the Diogenes buffers frames of their own.  Idempotent.
-The rules are PREPENDED to `display-buffer-alist', which is what keeps them
-ahead of Doom's popup rules -- `display-buffer' uses the first entry that
-matches, so a Diogenes buffer never reaches the popup manager and there is
-nothing to tell Doom to ignore."
+  "Have this workspace see the Diogenes buffers.  Idempotent.
+The `display-buffer-alist' rules this used to install are gone: the core
+does the gathering now, from `diogenes--display-buffer', and did not need
+the rules to do it -- they were how the module got ahead of Doom's popup
+manager, and an overriding action gets ahead of it more simply and without
+leaving anything in a global list.
+
+What remains is the workspace, which is Doom's alone."
   (interactive)
-  (diogenes-doom-uninstall)
-  (let ((regexps (append (list diogenes-doom-lookup-regexp
-                               diogenes-doom-browser-regexp)
-                         diogenes-doom-dictionary-regexps)))
-    (dolist (regexp (reverse regexps))
-      (let ((rule (diogenes-doom--rule regexp)))
-        (push rule diogenes-doom--rules)
-        (push rule display-buffer-alist))))
+  (diogenes-doom--claim-dictionary-regexps)
   (dolist (hook diogenes-doom--claimed-modes)
     (add-hook hook #'diogenes-doom-claim-buffer))
   (when (called-interactively-p 'interactive)
-    (message "Diogenes buffers gathered, and claimed by this workspace")))
+    (message "Diogenes buffers will be claimed by the current workspace")))
 
 ;;;###autoload
 (defun diogenes-doom-uninstall ()
-  "Take this module's rules out of `display-buffer-alist'.
-Only its own: a rule you added yourself, for the same buffers, is left
-alone."
+  "Stop claiming Diogenes buffers for the current workspace."
   (interactive)
+  (dolist (hook diogenes-doom--claimed-modes)
+    (remove-hook hook #'diogenes-doom-claim-buffer))
+  ;; Anything an older version left in `display-buffer-alist'.
   (dolist (rule diogenes-doom--rules)
     (setq display-buffer-alist (delq rule display-buffer-alist)))
-  (setq diogenes-doom--rules nil)
-  (dolist (hook diogenes-doom--claimed-modes)
-    (remove-hook hook #'diogenes-doom-claim-buffer)))
-
+  (setq diogenes-doom--rules nil))
 
 ;;; Getting to a frame that is already open
 

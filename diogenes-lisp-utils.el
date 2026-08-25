@@ -128,6 +128,12 @@ they configured.
           \='((display-buffer-reuse-mode-window display-buffer-same-window)
             (mode . (diogenes-lookup-mode diogenes-analysis-mode))))
 
+Set, this takes precedence over `diogenes-purpose' and `diogenes-doom'.
+Both modules would otherwise win -- purpose through an overriding action,
+Doom through `display-buffer-alist', and Emacs consults both before the
+action a caller passes -- so an answer given here is given first refusal
+instead.  If it declines, they have their say after all.
+
 Two things this does NOT decide.  A lookup made from a frame holding only a
 startup page takes that window whatever is set here -- there is a window
 going spare and using it is never wrong.  And a `C-c C-c\=' chain stays in
@@ -153,6 +159,122 @@ read: `diogenes-old-pdf-display-action\=' is the value the print dictionaries
 use today, and this is where it is heading."
   :type 'sexp
   :group 'diogenes)
+
+(defcustom diogenes-gather-frames 'auto
+  "Whether Diogenes buffers of a kind share a frame.
+  `auto\=' -- the default -- follows `pop-up-frames\='.  Gathering only means
+anything where a buffer would otherwise get a frame to itself, so with
+`pop-up-frames\=' nil this does nothing and Emacs, `window-purpose\=' or
+whatever else is installed decides as before.  Set `pop-up-frames\=' and the
+gathering begins, with no reload: the question is asked each time a buffer is
+displayed.
+
+This is where Doom and Spacemacs come to the same behaviour.  Both put a
+mechanism of their own between a buffer and its window -- Doom a popup
+manager and `display-buffer-alist\=', Spacemacs `window-purpose\=' and window
+dedication -- and with frames in play neither is answering the question the
+reader asked.  So with `pop-up-frames\=' set this answers it for both, and
+the second entry replaces the first in its frame on either.
+
+  t gathers regardless, for a setup that wants Diogenes buffers kept
+together in windows.  nil never gathers.
+
+`diogenes-lookup-display-action\=' and its two companions still take
+precedence: an answer given there is given first refusal."
+  :type '(choice (const :tag "Follow pop-up-frames" auto)
+                 (const :tag "Always" t)
+                 (const :tag "Never" nil))
+  :group 'diogenes)
+
+(defcustom diogenes-frame-parameters
+  '((name . "Diogenes"))
+  "Parameters for a frame made to hold a Diogenes buffer.
+The name is worth keeping: it is what a tiling window manager matches on to
+place these frames by rule.  A width and a height are deliberately NOT here
+-- a tiling manager assigns the space, and a frame that asks for a size it
+cannot have leaves part of its tile empty."
+  :type '(alist :key-type symbol :value-type sexp)
+  :group 'diogenes)
+
+(defcustom diogenes-role-regexps
+  '(("\\`\\*\\(?:diogenes-lookup\\|Diogenes Analysis\\|Diogenes Forms\\)" . lookup)
+    ("\\`\\*diogenes-browser" . browser)
+    ("\\`\\*diogenes-search" . search))
+  "Buffer names and the kind of frame each belongs in.
+Matched before major modes, and that order matters: a buffer's NAME is
+settled when it is created, where `diogenes--search-dict\=' sets the major
+mode after the buffer has been displayed.  A rule dispatching on the mode
+alone would see `fundamental-mode\=' and miss.
+
+Add a dictionary PDF here to give the scans a frame of their own -- they are
+ordinary `pdf-view-mode\=' buffers named after their files, so only you know
+what they are called:
+
+    (add-to-list \='diogenes-role-regexps
+                 \='(\\\\`Oxford Latin Dictionary\\\\.pdf . dictionary))"
+  :type '(alist :key-type regexp :value-type symbol)
+  :group 'diogenes)
+
+(defconst diogenes--role-modes
+  '((diogenes-lookup-mode . lookup)
+    (diogenes-analysis-mode . lookup)
+    (diogenes-select-forms-mode . lookup)
+    (diogenes-browser-mode . browser)
+    (diogenes-search-mode . search)
+    (pdf-view-mode . dictionary)
+    (doc-view-mode . dictionary)
+    (reader-mode . dictionary))
+  "Major modes and the kind of frame each belongs in.
+Consulted after `diogenes-role-regexps\=', for a buffer already in its mode
+-- which a document buffer is, `find-file\=' having set it before display.")
+
+(defun diogenes--buffer-role (buffer)
+  "Which frame BUFFER belongs in: `lookup\=', `browser\=', `dictionary\=' or nil.
+By name first and by major mode second: see `diogenes-role-regexps\='."
+  (when-let* ((buffer (get-buffer buffer))
+              (name (buffer-name buffer)))
+    (or (cdr (cl-find-if (lambda (rule) (string-match-p (car rule) name))
+                         diogenes-role-regexps))
+        (cdr (assq (buffer-local-value 'major-mode buffer)
+                   diogenes--role-modes)))))
+
+(defun diogenes--window-of-role (role)
+  "A window on any visible frame showing a buffer whose role is ROLE."
+  (catch 'found
+    (dolist (frame (frame-list))
+      (when (frame-visible-p frame)
+        (dolist (window (window-list frame 'no-minibuffer))
+          (when (eq role (diogenes--buffer-role (window-buffer window)))
+            (throw 'found window)))))))
+
+(defun diogenes-display-in-role-frame (buffer alist)
+  "Show BUFFER in the frame its kind already occupies, if there is one.
+A `display-buffer\=' action function.  `display-buffer-reuse-window\=' cannot
+do this: it looks for a window showing the SAME buffer, and every entry is a
+new buffer.  What is wanted is a window showing a SIBLING -- any other
+lookup -- so that the second entry replaces the first instead of opening
+another frame beside it.
+
+Returns nil where there is no such frame, so the actions after it get their
+turn: normally `display-buffer-pop-up-frame\='."
+  (when-let* ((role (diogenes--buffer-role buffer))
+              (window (diogenes--window-of-role role)))
+    (window--display-buffer buffer window 'reuse alist)))
+
+(defun diogenes--gathering-p ()
+  "Whether Diogenes buffers are being gathered into frames at the moment.
+Asked at display time, so `pop-up-frames\=' may be set or unset in a running
+Emacs and the answer changes with it."
+  (pcase diogenes-gather-frames
+    ('auto (and pop-up-frames t))
+    (value (and value t))))
+
+(defun diogenes--gathering-action ()
+  "The action that keeps each kind of Diogenes buffer in one frame."
+  `((diogenes-display-in-role-frame display-buffer-pop-up-frame)
+    (inhibit-same-window . t)
+    (reusable-frames . visible)
+    (pop-up-frame-parameters . ,diogenes-frame-parameters)))
 
 (defun diogenes--display-action (kind)
   "The `display-buffer\=' action for a Diogenes buffer of KIND.
@@ -186,15 +308,45 @@ and `quit-window\=' can undo it.
 A frame holding only a startup page is the exception to everything: there
 is a window going spare, and taking it is right whatever is configured.
 See `diogenes--sole-home-window-p\='."
-  (cond
-   ((diogenes--sole-home-window-p)
-    (display-buffer buffer '(display-buffer-same-window
-                             (inhibit-same-window . nil))))
-   (same-window
-    (display-buffer buffer '(display-buffer-same-window
-                             (inhibit-same-window . nil))))
-   (t
-    (display-buffer buffer (or action (diogenes--display-action kind)))))
+  (let ((chosen (or action (diogenes--display-action kind))))
+    (cond
+     ;; Intent, not layout: both of these are what the reader asked for by
+     ;; pressing the key they pressed, and both go through
+     ;; `display-buffer-overriding-action' so that they hold under
+     ;; `diogenes-purpose', which uses an overriding action of its own, and
+     ;; under `diogenes-doom', whose rules are in `display-buffer-alist'.
+     ((or (diogenes--sole-home-window-p) same-window)
+      (let ((display-buffer-overriding-action
+             '(display-buffer-same-window (inhibit-same-window . nil))))
+        (display-buffer buffer)))
+     ;; An action the reader has set gets FIRST REFUSAL -- ahead of
+     ;; `diogenes-purpose' and of `diogenes-doom', both of which would
+     ;; otherwise win by where they put themselves.  A setting that loses to
+     ;; the module it was meant to override is not a setting.  Should it
+     ;; decline -- every function in it returning nil -- `display-buffer'
+     ;; carries on to the alist and the modules have their say after all.
+     (chosen
+      (let ((display-buffer-overriding-action chosen))
+        (display-buffer buffer)))
+     ;; Frames are in play, and nothing more specific was asked for.  This
+     ;; is where Doom and Spacemacs come to the same behaviour: both put a
+     ;; mechanism between a buffer and its window -- a popup manager and
+     ;; `display-buffer-alist' there, `window-purpose' and window dedication
+     ;; here -- and with `pop-up-frames' set neither is answering the
+     ;; question the reader asked.  So it is answered here, for both, and
+     ;; the second entry replaces the first in its frame on either.
+     ;;
+     ;; Through the overriding action for that reason: an action passed the
+     ;; ordinary way would lose to purpose, which uses an overriding action
+     ;; of its own, and to Doom, whose rules are in the alist.
+     ((diogenes--gathering-p)
+      (let ((display-buffer-overriding-action (diogenes--gathering-action)))
+        (display-buffer buffer)))
+     ;; No frames, nothing set: whatever is installed decides, exactly as it
+     ;; did before any of this -- `window-purpose' under Spacemacs, the
+     ;; popup manager under Doom, plain `display-buffer' elsewhere.
+     (t
+      (display-buffer buffer))))
   (get-buffer-window buffer t))
 
 (defun diogenes--path-set-p (value)
