@@ -134,6 +134,40 @@ take a file, a directory of files, or a list of either."
    ((consp value) (seq-some #'diogenes--source-set-p value))
    (t (diogenes--path-set-p value))))
 
+(defcustom diogenes-home-buffer-names
+  '("*spacemacs*" "*doom*" "*dashboard*" "*GNU Emacs*" "*About GNU Emacs*")
+  "Buffer names treated as a startup or home page.
+A frame showing one of these and nothing else is a frame with nothing in
+it: splitting it, or opening another frame beside it, wastes the screen
+where reusing the window is what a reader wants.  Every distribution has
+its own -- `*spacemacs*\=', Doom\='s `*doom*\=', the dashboard package\='s
+`*dashboard*\=', and Emacs\='s own splash -- and the name is looked for at
+the moment of display, so nothing here depends on which is installed."
+  :type '(repeat string)
+  :group 'diogenes)
+
+(defun diogenes--home-buffer-p (name)
+  "Non-nil if NAME is a startup or home buffer.
+`diogenes-home-buffer-names' plus whatever the distribution calls its own,
+asked of the variables the distributions define: this way a renamed or
+localised home buffer is still recognised."
+  (and name
+       (or (member name diogenes-home-buffer-names)
+           (cl-some (lambda (symbol)
+                      (and (boundp symbol)
+                           (equal name (symbol-value symbol))))
+                    '(spacemacs-buffer-name
+                      +doom-dashboard-name
+                      dashboard-buffer-name))
+           nil)))
+
+(defun diogenes--sole-home-window-p ()
+  "Non-nil if the selected frame shows a home buffer and nothing else.
+The question a display rule needs to ask before it splits or pops: there
+is a window here, and what it holds is not worth keeping."
+  (and (one-window-p)
+       (diogenes--home-buffer-p (buffer-name (window-buffer (selected-window))))))
+
 (defun diogenes--path-usable-p (value kind)
   "Non-nil if VALUE names an existing file or readable directory.
 KIND is `file' or `directory'.  VALUE is what a dictionary's path option

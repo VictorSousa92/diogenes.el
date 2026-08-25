@@ -711,19 +711,29 @@ Returns the lookup buffer."
       ;;
       ;; In both, `diogenes-lookup-mode' derives from `text-mode' and runs
       ;; `kill-all-local-variables', so the buffer-locals are assigned after.
-      (if (featurep 'diogenes-purpose)
-          ;; --- diogenes-purpose active: mode before display ---
-          (progn
-            (with-current-buffer lookup-buffer
-              (diogenes-lookup-mode))
-            (if diogenes--lookup-same-window
-                (pop-to-buffer-same-window lookup-buffer)
-              (pop-to-buffer lookup-buffer)))
-        ;; --- otherwise: the original order, unchanged ---
-        (if diogenes--lookup-same-window
-            (pop-to-buffer-same-window lookup-buffer)
-          (pop-to-buffer lookup-buffer))
-        (diogenes-lookup-mode))
+      ;; And in either case: a frame showing only a startup page is a frame
+      ;; with nothing in it, so the entry takes that window rather than
+      ;; splitting it or opening a frame beside it.  `diogenes-purpose' had
+      ;; this carve-out for the Spacemacs home buffer alone; it belongs here,
+      ;; where it holds for Doom's dashboard and Emacs's own splash too, and
+      ;; whether or not either display module is loaded.  See
+      ;; `diogenes--sole-home-window-p'.
+      (let ((diogenes--lookup-same-window
+             (or diogenes--lookup-same-window
+                 (diogenes--sole-home-window-p))))
+        (if (featurep 'diogenes-purpose)
+            ;; --- diogenes-purpose active: mode before display ---
+            (progn
+              (with-current-buffer lookup-buffer
+                (diogenes-lookup-mode))
+              (if diogenes--lookup-same-window
+                  (pop-to-buffer-same-window lookup-buffer)
+                (pop-to-buffer lookup-buffer)))
+          ;; --- otherwise: the original order, unchanged ---
+          (if diogenes--lookup-same-window
+              (pop-to-buffer-same-window lookup-buffer)
+            (pop-to-buffer lookup-buffer))
+          (diogenes-lookup-mode)))
       (setq diogenes--lookup-file (or file (diogenes--dict-file lang))
 	    diogenes--lookup-bufstart start
 	    diogenes--lookup-bufend end

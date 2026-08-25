@@ -48,6 +48,10 @@
 (defvar purpose-user-mode-purposes)
 (defvar purpose-user-name-purposes)
 
+;; `diogenes--home-buffer-p' and the list behind it: shared with the core,
+;; so that Doom's dashboard and Emacs's splash are recognised here too.
+(require 'diogenes-lisp-utils)
+
 ;; Defined in diogenes-old.el and diogenes-perseus.el, which this module does
 ;; not require: it is loaded from a Spacemacs user-config hook, possibly before
 ;; either of them.  Advising a function before it is defined is supported, and
@@ -95,19 +99,23 @@ takes effect only while `diogenes-purpose' is installed."
   :type 'boolean
   :group 'diogenes)
 
-(defcustom diogenes-purpose-home-buffer-names '("*spacemacs*" "*dashboard*" "*GNU Emacs*")
-  "Buffer names treated as the startup/home page for window reuse.
-If `spacemacs-buffer-name' is bound, its value is added automatically.
-Used by `diogenes-purpose-reuse-home-window'."
+(defcustom diogenes-purpose-home-buffer-names nil
+  "Further buffer names to treat as a startup or home page.
+Added to `diogenes-home-buffer-names', which the whole package consults and
+which already covers Spacemacs, Doom, the dashboard package and Emacs's own
+splash.  Used by `diogenes-purpose-reuse-home-window'."
   :type '(repeat string)
   :group 'diogenes)
 
 (defun diogenes-purpose--home-buffer-name-p (name)
-  "Non-nil if NAME is one of the recognised startup/home buffer names."
+  "Non-nil if NAME is one of the recognised startup/home buffer names.
+`diogenes-home-buffer-names' is the list the whole package uses -- Doom's
+dashboard and Emacs's own splash as well as Spacemacs's -- and
+`diogenes-purpose-home-buffer-names' adds to it, for a home buffer only
+this module needs to know about."
   (and name
-       (or (member name diogenes-purpose-home-buffer-names)
-           (and (boundp 'spacemacs-buffer-name)
-                (equal name spacemacs-buffer-name)))))
+       (or (diogenes--home-buffer-p name)
+           (member name diogenes-purpose-home-buffer-names))))
 
 (defun diogenes-purpose--diogenes-buffer-p (buffer)
   "Non-nil if BUFFER is a Diogenes buffer this module gives a purpose.

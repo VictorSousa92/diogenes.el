@@ -82,7 +82,7 @@ joins it -- see `diogenes-old-reader-reuse-document-frame').  Unset
 Set it to t for the side-by-side arrangement of the original Diogenes
 desktop application, which shows the dictionary text and the PDF page at
 once.  Which window, or frame, the page then goes to is decided by
-`diogenes-old-reader-display-action' and
+`diogenes-old-pdf-display-action' and
 `diogenes-old-reader-reuse-document-frame' under the Emacs Reader, and by
 `display-buffer' (with window-purpose, if you use it) otherwise.
 
@@ -92,7 +92,11 @@ Passow and the TGL bind this to their own equivalents; see
   :type 'boolean
   :group 'diogenes)
 
-(defcustom diogenes-old-reader-display-action
+(define-obsolete-variable-alias 'diogenes-old-reader-display-action
+  'diogenes-old-pdf-display-action "modular"
+  "Renamed: the action is no longer the Emacs Reader's alone.")
+
+(defcustom diogenes-old-pdf-display-action
   '((display-buffer-reuse-window
      display-buffer-reuse-mode-window
      display-buffer-use-some-window)
@@ -113,8 +117,8 @@ setup where the dictionary ends up in a frame of its own, the window
 holding it would not be found and a further frame would be created for
 every dictionary.  Set it to nil to keep the search to one frame.
 
-Used for the Reader only: with pdf-tools and doc-view, purpose's own
-overriding action is left in place and already does this.  Consulted
+Used for every viewer EXCEPT when `diogenes-purpose' is loaded, whose own
+overriding action does the same thing for pdf-tools and doc-view.  Consulted
 only when `diogenes-old-display-in-other-window' is non-nil."
   :type 'sexp
   :group 'diogenes)
@@ -137,7 +141,7 @@ not the set of frames.  So when a document window exists, `pop-up-frames'
 is bound to nil for the duration of the open (the Reader\'s own display
 then lands on the selected frame, where `save-window-excursion' does undo
 it) and of the display that follows, which goes through
-`diogenes-old-reader-display-action'.
+`diogenes-old-pdf-display-action'.
 
 Set this to nil to let `pop-up-frames' apply to every dictionary, giving
 each one its own frame.  Consulted only when
@@ -528,6 +532,45 @@ when pdf-tools is available and `doc-view' otherwise."
            'pdf-tools
          'doc-view))))
 
+(defcustom diogenes-old-pdf-fit 'width
+  "How a dictionary page is scaled when it is shown.
+`width\=' is what a dictionary wants: a column of text filling the window,
+which is also what neither pdf-tools nor doc-view does by default -- both
+open at their own last-used scale, so a page arrives at whatever zoom the
+last document was left at.  `page\=' fits the whole page, `height\=' the
+height, and nil leaves the viewer alone.
+
+Applied each time a page is shown, not once per document, because the
+window a dictionary lands in may be a different size from the last one."
+  :type '(choice (const :tag "Fit the width" width)
+                 (const :tag "Fit the whole page" page)
+                 (const :tag "Fit the height" height)
+                 (const :tag "Leave the viewer alone" nil))
+  :group 'diogenes)
+
+(defun diogenes-old--fit-page (window)
+  "Scale the document in WINDOW according to `diogenes-old-pdf-fit\='.
+Each viewer is asked in its own terms, and only if it has the command:
+pdf-tools and doc-view both have the three, the Emacs Reader has what it
+has, and a viewer without any is left as it is."
+  (when (and diogenes-old-pdf-fit (window-live-p window))
+    (with-selected-window window
+      (let ((command
+             (cl-find-if
+              #'fboundp
+              (pcase diogenes-old-pdf-fit
+                ('width  '(pdf-view-fit-width-to-window
+                           doc-view-fit-width-to-window
+                           reader-fit-to-width))
+                ('height '(pdf-view-fit-height-to-window
+                           doc-view-fit-height-to-window
+                           reader-fit-to-height))
+                (_       '(pdf-view-fit-page-to-window
+                           doc-view-fit-page-to-window
+                           reader-fit-to-page))))))
+        (when command
+          (ignore-errors (funcall command)))))))
+
 (defun diogenes-old--goto-page-in-window (buffer page)
   "Go to PAGE in the window that displays BUFFER, disturbing no other window.
 `pdf-view-goto-page' with no window argument acts on the SELECTED
@@ -549,11 +592,13 @@ Handles `pdf-view-mode', `doc-view-mode', and the Emacs Reader's
             (let ((page (if (fboundp 'pdf-info-number-of-pages)
                             (max 1 (min page (pdf-info-number-of-pages)))
                           (max 1 page))))
-              (pdf-view-goto-page page win))))
+              (pdf-view-goto-page page win)
+              (diogenes-old--fit-page win))))
          ((derived-mode-p 'doc-view-mode)
           (when win
             (with-selected-window win
-              (doc-view-goto-page (max 1 page)))))
+              (doc-view-goto-page (max 1 page)))
+            (diogenes-old--fit-page win)))
          ((and (derived-mode-p 'reader-mode) (fboundp 'reader-goto-page))
           (when win
             (with-selected-window win
@@ -838,7 +883,7 @@ buffer (lookups, browser) are unaffected.
 Taking purpose out of the loop costs one thing, though: it is purpose
 that otherwise keeps one dictionary after another in a single window,
 so without it each dictionary opened a new one.  The Reader case
-therefore displays through `diogenes-old-reader-display-action', which
+therefore displays through `diogenes-old-pdf-display-action', which
 reuses a window already showing a document buffer.  While a dictionary
 is on screen, `pop-up-frames' is bound to nil so that neither the
 Reader\'s own display nor this one moves the next dictionary to a frame
@@ -856,11 +901,25 @@ it.  See `diogenes-old-reader-reuse-document-frame'."
                (pop-up-frames (if reuse nil pop-up-frames)))
           (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer)))
             (diogenes-old--display-page-buffer
-             buffer diogenes-old-reader-display-action other-window)
+             buffer diogenes-old-pdf-display-action other-window)
             (diogenes-old--goto-page-when-ready buffer page)))
-      (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer)))
+      ;; pdf-tools and doc-view.  The action here used to be nil, on the
+      ;; understanding that window-purpose's overriding action would reuse
+      ;; the window and keep one dictionary after another in it.  Without
+      ;; purpose there is nothing doing that, so with `pop-up-frames' set --
+      ;; Doom, a tiling window manager, `diogenes-doom' -- every dictionary
+      ;; opened a frame of its own, and the second one did not join the
+      ;; first.  So the same reuse the Reader has always had, in the same
+      ;; circumstances: only when purpose is not there to do it.
+      (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer))
+            (action (unless (featurep 'diogenes-purpose)
+                      diogenes-old-pdf-display-action))
+            (pop-up-frames (if (and (not (featurep 'diogenes-purpose))
+                                    (diogenes-old--reader-reuse-window))
+                               nil
+                             pop-up-frames)))
         (diogenes-old--display-page-buffer
-         buffer nil (diogenes-old--display-other-window-p))
+         buffer action (diogenes-old--display-other-window-p))
         (diogenes-old--goto-page-when-ready buffer page)))
     page))
 

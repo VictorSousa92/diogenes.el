@@ -43,6 +43,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'diogenes-lisp-utils)          ; diogenes--sole-home-window-p
 
 (defgroup diogenes-doom nil
   "Showing Diogenes buffers in frames of their own."
@@ -124,6 +125,15 @@ Kept so that `diogenes-doom-uninstall' can remove exactly those.")
           (when (eq role (diogenes-doom--role (window-buffer window)))
             (throw 'found window)))))))
 
+(defun diogenes-doom-display-in-home-window (buffer alist)
+  "Show BUFFER here when here is a frame holding only a startup page.
+A `display-buffer\=' action function, and the first of them: a frame showing
+`*doom*\=', `*spacemacs*\=' or Emacs\='s own splash and nothing else is a frame
+with nothing in it, so opening another frame beside it wastes the screen.
+See `diogenes--home-buffer-p\='."
+  (when (diogenes--sole-home-window-p)
+    (window--display-buffer buffer (selected-window) 'reuse alist)))
+
 (defun diogenes-doom-display-in-role-frame (buffer alist)
   "Show BUFFER in the frame its kind already occupies, if there is one.
 A `display-buffer' action function.  `display-buffer-reuse-window' cannot
@@ -146,7 +156,8 @@ the list get their turn: normally `display-buffer-pop-up-frame'."
 (defun diogenes-doom--rule (regexp)
   "The `display-buffer-alist' entry for buffers matching REGEXP."
   `(,regexp
-    (diogenes-doom-display-in-role-frame
+    (diogenes-doom-display-in-home-window
+     diogenes-doom-display-in-role-frame
      display-buffer-pop-up-frame)
     (inhibit-same-window . t)
     (reusable-frames . visible)

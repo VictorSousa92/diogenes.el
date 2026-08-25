@@ -708,6 +708,11 @@ in-Emacs viewer it uses with one variable, `diogenes-old-pdf-viewer`
 - The Emacs Reader must be installed separately (see its Codeberg page); it needs MuPDF and a small C module built at install time.
 - One caveat with the Emacs Reader: it renders pages as images and exposes no text layer, so the in-PDF search (`L`, see below) still works but cannot pre-fill the prompt with the word under the cursor. Everything else (the links, the `o t m c b B p g G` keys, jumping to the right page) works with all three viewers.
 - The Emacs Reader has no "document ready" signal, so the jump to a page waits for the document to finish rendering by polling; if a very large volume ever loads too slowly for the default wait, raise `diogenes-old-reader-jump-retries` or `diogenes-old-reader-jump-retry-interval`.
+**Fitting the page.** Neither pdf-tools nor doc-view fits a page to the
+window; both open at whatever scale the last document was left at.
+`diogenes-old-pdf-fit` (default `width`) rescales each page as it is shown —
+`page`, `height` or nil for the viewer's own behaviour.
+
 **Where to set it.** In `:init` with everything else, as in the
 configuration above. It is an ordinary `defcustom` with no `:set` function,
 so a `setq` before the package loads is respected — `defcustom` installs its
@@ -902,6 +907,16 @@ state for a moment if you want its motions.
 - `diogenes-corpus-edit-mode` is not in it either: it is the one buffer meant to be typed in.
 - A mode whose state you have set yourself is left alone — an explicit `evil-set-initial-state` in your config wins.
 - `diogenes-evil-manage-initial-states` nil disables the whole thing, for anyone who would rather bind the letters into normal state by hand. That costs `o d p b t g G` inside dictionary buffers and keeps `j` and `k`.
+
+## A frame with only a startup page in it
+
+Whatever module you load, and with none, a lookup made from a frame showing
+only `*doom*`, `*spacemacs*`, `*dashboard*` or Emacs's own splash **reuses
+that window** rather than splitting it or opening a frame beside it. There is
+a window there and nothing in it worth keeping.
+
+`diogenes-home-buffer-names` is the list, and the distributions' own
+variables are consulted too, so a renamed home buffer is still recognised.
 
 ## Optional: window management
 
