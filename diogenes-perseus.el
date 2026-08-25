@@ -2077,11 +2077,22 @@ lemma a hand-picked dictionary is asked about alike."
 	  ;; those groups were nil, and `string-trim' was handed nil.  A latent
 	  ;; fault for as long as the code has existed, waiting for an
 	  ;; implementation that leaves fewer groups behind.
-	  (let ((offset (string-to-number (match-string 1 group)))
-		(conf (string-to-number (match-string 2 group)))
-		(lemma (match-string 3 group))
-		(trans (string-trim (or (match-string 4 group) "")))
-		(info (string-trim (or (match-string 5 group) ""))))
+	  ;; The five reads come first and NOTHING is called between them --
+	  ;; not even `string-trim', which is regexps like everything else and
+	  ;; clobbered group 5 for the `info' below it when the trimming was
+	  ;; done inline.  `let' binds in order, so `string-trim' on group 4
+	  ;; ran before group 5 was ever read.  The trimming and the numbers
+	  ;; happen in the second `let', where there is nothing left to lose.
+	  (let* ((raw (list (match-string 1 group)
+			    (match-string 2 group)
+			    (match-string 3 group)
+			    (match-string 4 group)
+			    (match-string 5 group)))
+		 (offset (string-to-number (nth 0 raw)))
+		 (conf (string-to-number (nth 1 raw)))
+		 (lemma (nth 2 raw))
+		 (trans (string-trim (or (nth 3 raw) "")))
+		 (info (string-trim (or (nth 4 raw) ""))))
 	    (push (list :offset offset
 			:conf conf
 			:lemma lemma

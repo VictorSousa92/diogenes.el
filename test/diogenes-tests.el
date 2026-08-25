@@ -35,8 +35,17 @@
 ;;; Code:
 
 (require 'ert)
+(require 'cl-lib)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-perseus)
+
+;; Declared so that `let' on them is DYNAMIC.  Under `lexical-binding' a
+;; `let' on an undeclared symbol binds lexically, which `boundp' inside the
+;; function under test cannot see -- so the test would fail while the code
+;; was right.  These are the distributions' own variables, absent here.
+(defvar spacemacs-buffer-name)
+(defvar +doom-dashboard-name)
+(defvar dashboard-buffer-name)
 
 ;;; Paths: what counts as a configured dictionary
 
@@ -86,7 +95,10 @@
 Regression: `desîmus' folded to `desmus', which sorts past the whole of
 `desi-', and a lookup landed on `dēsīvare' four entries later."
   (should (equal (diogenes--ascii-alpha-only "des\u00eemus") "desimus"))
-  (should (equal (diogenes--ascii-alpha-only "fu\u0306tu\u016brix") "fututurix"))
+  ;; f, u+breve, t, u, u+macron, r, i, x -- eight letters, one of them
+  ;; twice, and none of them invented: an earlier version of this test
+  ;; expected a `t' the input never had.
+  (should (equal (diogenes--ascii-alpha-only "fu\u0306tu\u016brix") "futuurix"))
   (should (equal (diogenes--ascii-alpha-only "1 abactus") "abactus"))
   (should (equal (diogenes--ascii-alpha-only "amo") "amo")))
 
@@ -142,11 +154,15 @@ any word died in `string-trim'."
     (should (= (plist-get first :offset) 66640471))
     (should (= (plist-get first :conf) 9))
     (should (equal (plist-get first :lemma) "si_derum,sidus"))
-    (should (equal (plist-get first :info) "neut gen pl"))
-    ;; The trans field of this record is a single space.
+    ;; :display exists; what it looks like is munge's business.
+    (should (stringp (plist-get first :display)))
+    ;; The trans field of this record is a single space, so it trims away.
     (should (equal (plist-get first :trans) ""))
-    ;; And :display exists -- what it looks like is munge's business.
-    (should (stringp (plist-get first :display)))))
+    ;; THE ONE THAT CAUGHT SOMETHING.  On this test's first run `:info' was
+    ;; empty, because the fix for the original bug had reintroduced it one
+    ;; scope inward: `string-trim' on group 4 was called before group 5 was
+    ;; read, and `string-trim' is regexps like anything else.
+    (should (equal (plist-get first :info) "neut gen pl"))))
 
 (ert-deftest diogenes-test-analysis-corrections ()
   "A correction replaces the morphology and says that it did."
