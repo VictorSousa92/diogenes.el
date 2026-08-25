@@ -1,0 +1,304 @@
+;;; diogenes-tests.el --- Tests for diogenes.el  -*- lexical-binding: t -*-
+
+;;; Commentary:
+
+;; Two ways to run these, and both are wanted.
+;;
+;; HEADLESS, from the package's directory:
+;;
+;;     emacs -Q -batch -L . -l test/diogenes-tests.el \
+;;           -f ert-run-tests-batch-and-exit
+;;
+;; Nothing here needs Diogenes' data, its Perl, or a display, so this runs
+;; the same on any machine and is what a Makefile or a CI job should call.
+;;
+;; IN A LIVE CONFIGURATION -- Doom, Spacemacs, plain Emacs:
+;;
+;;     M-x diogenes-tests-run
+;;
+;; Same tests, but with whatever the distribution has done to Emacs still in
+;; place: evil owning the single-letter keys, window-purpose dedicating
+;; windows, a popup manager holding `display-buffer-alist', persp-mode
+;; hiding buffers.  Every bug this suite exists to guard against was found
+;; that way and not headlessly, so the headless run is necessary and not
+;; sufficient.
+;;
+;; `M-x diogenes-tests-environment' prints what the surrounding
+;; configuration is doing, which is the first thing to paste into a bug
+;; report: three of the hardest faults in this package's history were a
+;; distribution's `find-file-hook', a distribution's evil state maps, and a
+;; distribution's workspace filter.
+;;
+;; Each test names the fault it guards against.  A test whose comment says
+;; "regression" is one that a real bug walked through.
+
+;;; Code:
+
+(require 'ert)
+(require 'diogenes-lisp-utils)
+(require 'diogenes-perseus)
+
+;;; Paths: what counts as a configured dictionary
+
+(ert-deftest diogenes-test-path-set-p ()
+  "Set-ness is about the option, not about the file system."
+  (should (diogenes--path-set-p "/nonexistent/but/named.pdf"))
+  (should-not (diogenes--path-set-p nil))
+  (should-not (diogenes--path-set-p ""))
+  (should-not (diogenes--path-set-p 42)))
+
+(ert-deftest diogenes-test-path-usable-p ()
+  "Usability is about the file system, and never signals."
+  (should (diogenes--path-usable-p (expand-file-name "diogenes.el") 'file))
+  (should-not (diogenes--path-usable-p "/nonexistent/x.pdf" 'file))
+  (should (diogenes--path-usable-p (expand-file-name ".") 'directory))
+  (should-not (diogenes--path-usable-p nil 'file)))
+
+(ert-deftest diogenes-test-source-set-p ()
+  "A source option may be a file, a directory, or a list of either."
+  (should (diogenes--source-set-p "/x/y.xml"))
+  (should (diogenes--source-set-p '("/x/a.xml" "/x/b.xml")))
+  (should (diogenes--source-set-p '(nil "/x/b.xml")))
+  (should-not (diogenes--source-set-p nil))
+  (should-not (diogenes--source-set-p '())))
+
+;;; Home buffers: the guard against opening a frame beside an empty one
+
+(ert-deftest diogenes-test-home-buffer-p ()
+  "Every distribution's startup buffer is recognised, and nothing else is."
+  (should (diogenes--home-buffer-p "*GNU Emacs*"))
+  (should (diogenes--home-buffer-p "*doom*"))
+  (should (diogenes--home-buffer-p "*spacemacs*"))
+  (should (diogenes--home-buffer-p "*dashboard*"))
+  (should-not (diogenes--home-buffer-p "*scratch*"))
+  (should-not (diogenes--home-buffer-p "some-text.txt"))
+  (should-not (diogenes--home-buffer-p nil)))
+
+(ert-deftest diogenes-test-home-buffer-p-follows-the-distribution ()
+  "A renamed home buffer is recognised through the distribution's variable."
+  (let ((spacemacs-buffer-name "*my home*"))
+    (should (diogenes--home-buffer-p "*my home*"))))
+
+;;; Latin normalisation
+
+(ert-deftest diogenes-test-ascii-alpha-only-folds ()
+  "An accented letter contributes its base rather than vanishing.
+Regression: `desîmus' folded to `desmus', which sorts past the whole of
+`desi-', and a lookup landed on `dēsīvare' four entries later."
+  (should (equal (diogenes--ascii-alpha-only "des\u00eemus") "desimus"))
+  (should (equal (diogenes--ascii-alpha-only "fu\u0306tu\u016brix") "fututurix"))
+  (should (equal (diogenes--ascii-alpha-only "1 abactus") "abactus"))
+  (should (equal (diogenes--ascii-alpha-only "amo") "amo")))
+
+(ert-deftest diogenes-test-expand-contractions ()
+  "A circumflex is the sign of a contracted syllable, not decoration."
+  (should (equal (diogenes--latin-expand-contractions "des\u00eemus") "desiimus"))
+  (should (equal (diogenes--latin-expand-contractions "d\u00ee") "dii"))
+  ;; Nil, not the word, so a caller can tell an expansion from a form.
+  (should-not (diogenes--latin-expand-contractions "desimus")))
+
+(ert-deftest diogenes-test-parse-candidates-order ()
+  "The contraction is tried before the bare spelling, and that order decides.
+Regression: both `desiimus' and `desimus' are keys in the analyses file --
+the syncopated perfect of `desino' and the present subjunctive of `dēsum' --
+so stripping the mark answered confidently about a word the text had not
+printed."
+  (let* ((candidates (diogenes--latin-parse-candidates "des\u00eemus"))
+         (expansion (cl-position "desiimus" candidates :test #'equal))
+         (stripped (cl-position "desimus" candidates :test #'equal)))
+    (should (equal (car candidates) "des\u00eemus"))
+    (should expansion)
+    (should stripped)
+    (should (< expansion stripped)))
+  ;; An unmarked form is one candidate and no more.
+  (should (equal (diogenes--latin-parse-candidates "amo") '("amo"))))
+
+(ert-deftest diogenes-test-form-variants-keep-the-word-first ()
+  "The form as given is always tried before any variant of it."
+  (should (equal (car (diogenes--latin-form-variants "amo")) "amo"))
+  (should (member "amo" (diogenes--latin-form-variants "amo")))
+  (let ((diogenes-latin-try-spelling-variants nil))
+    (should (equal (diogenes--latin-form-variants "amo") '("amo")))))
+
+;;; The analyses record
+
+(defconst diogenes-tests--record
+  "siderum\t{66640471 9 si_derum,sidus\t \tneut gen pl}"
+  "One real record, from the failure that prompted these tests.")
+
+(ert-deftest diogenes-test-parse-analyses-record ()
+  "Every field survives, including the two read after the lemma is munged.
+Regression: the plist was built inline, `:display' called
+`replace-regexp-in-string', match data is global, and groups 4 and 5 were
+therefore nil by the time `:trans' and `:info' read them -- so `C-c C-c' on
+any word died in `string-trim'."
+  (let* ((diogenes-latin-analysis-corrections nil)
+         (record (diogenes--parse-analyses-record
+                  (encode-coding-string diogenes-tests--record 'utf-8)
+                  "latin"))
+         (analyses (plist-get record :analyses))
+         (first (car analyses)))
+    (should (= (length analyses) 1))
+    (should (= (plist-get first :offset) 66640471))
+    (should (= (plist-get first :conf) 9))
+    (should (equal (plist-get first :lemma) "si_derum,sidus"))
+    (should (equal (plist-get first :info) "neut gen pl"))
+    ;; The trans field of this record is a single space.
+    (should (equal (plist-get first :trans) ""))
+    ;; And :display exists -- what it looks like is munge's business.
+    (should (stringp (plist-get first :display)))))
+
+(ert-deftest diogenes-test-analysis-corrections ()
+  "A correction replaces the morphology and says that it did."
+  (let* ((diogenes-latin-mark-corrections t)
+         (diogenes-latin-analysis-corrections
+          '(("siderum" :info "corrected morphology")))
+         (record (diogenes--parse-analyses-record
+                  (encode-coding-string diogenes-tests--record 'utf-8)
+                  "latin"))
+         (first (car (plist-get record :analyses))))
+    (should (equal (plist-get first :info) "corrected morphology [corr.]")))
+  ;; A form with no entry is untouched, which is the common case.
+  (let* ((diogenes-latin-analysis-corrections '(("experire" :info "x")))
+         (record (diogenes--parse-analyses-record
+                  (encode-coding-string diogenes-tests--record 'utf-8)
+                  "latin"))
+         (first (car (plist-get record :analyses))))
+    (should (equal (plist-get first :info) "neut gen pl"))))
+
+(ert-deftest diogenes-test-corrections-add-a-reading ()
+  "`:add' keeps the file's analysis and appends one of its own."
+  (let* ((diogenes-latin-mark-corrections nil)
+         (diogenes-latin-analysis-corrections
+          '(("siderum" :add ((nil . "another reading")))))
+         (record (diogenes--parse-analyses-record
+                  (encode-coding-string diogenes-tests--record 'utf-8)
+                  "latin"))
+         (analyses (plist-get record :analyses)))
+    (should (= (length analyses) 2))
+    (should (equal (plist-get (nth 0 analyses) :info) "neut gen pl"))
+    (should (equal (plist-get (nth 1 analyses) :info) "another reading"))))
+
+;;; The dictionary registry
+
+(ert-deftest diogenes-test-dict-available-p-never-signals ()
+  "Three ways of not having a dictionary are one answer, and none is an error.
+Regression: the banner is drawn during redisplay, where a signal from an
+availability predicate is not an error anyone can act on."
+  (should (diogenes--lookup-dict-available-p nil))
+  (should (diogenes--lookup-dict-available-p (lambda () t)))
+  (should-not (diogenes--lookup-dict-available-p (lambda () nil)))
+  ;; A predicate that is not defined: the module is not loaded.
+  (should-not (diogenes--lookup-dict-available-p
+               'diogenes-tests--no-such-predicate))
+  ;; A predicate that signals: `diogenes-path' itself may be unset.
+  (should-not (diogenes--lookup-dict-available-p
+               (lambda () (error "as `diogenes--path' would")))))
+
+(ert-deftest diogenes-test-dict-visible-when-declared ()
+  "A declared dictionary is offered whatever its paths say."
+  (let ((entry (list :id 'testdict :show 'always
+                     :available-p (lambda () nil))))
+    (let ((diogenes-declared-dictionaries nil))
+      (should-not (diogenes--lookup-dict-visible-p entry)))
+    (let ((diogenes-declared-dictionaries '(testdict)))
+      (should (diogenes--lookup-dict-visible-p entry)))
+    ;; Declared by its module, rather than by the list.
+    (let ((diogenes-declared-dictionaries nil)
+          (declared (append entry '(:declared t))))
+      (should (diogenes--lookup-dict-visible-p declared)))
+    ;; Both at once is harmless: this is an `or'.
+    (let ((diogenes-declared-dictionaries '(testdict))
+          (declared (append entry '(:declared t))))
+      (should (diogenes--lookup-dict-visible-p declared)))))
+
+(ert-deftest diogenes-test-dict-visible-when-configured ()
+  "An undeclared dictionary is offered when its paths are set."
+  (let ((diogenes-declared-dictionaries nil))
+    (should (diogenes--lookup-dict-visible-p
+             (list :id 'testdict :show 'always
+                   :available-p (lambda () t))))))
+
+;;; Commands: the shape a command has to have
+
+(ert-deftest diogenes-test-no-command-asks-for-arguments-it-cannot-take ()
+  "No `diogenes-' command has a zero-argument lambda list and an
+argument-supplying interactive spec.
+
+Regression: `diogenes-browser-forward' and `-backward' were
+`(defun … ())' with `(interactive \"p\")', so every interactive call raised
+`Wrong number of arguments'.  `C-c C-n' and `C-c C-p' in the browser could
+never have worked."
+  (let (offenders)
+    (mapatoms
+     (lambda (sym)
+       (when (and (string-prefix-p "diogenes-" (symbol-name sym))
+                  (commandp sym)
+                  (functionp sym))
+         (let* ((spec (cadr (interactive-form sym)))
+                (arity (ignore-errors (func-arity sym))))
+           (when (and (stringp spec)
+                      (not (string-empty-p (string-trim-left spec "[*@^]+")))
+                      arity
+                      (equal (cdr arity) 0))
+             (push sym offenders))))))
+    (should-not offenders)))
+
+;;; What the surrounding configuration is doing
+
+;;;###autoload
+(defun diogenes-tests-environment ()
+  "Report what this Emacs and this configuration are doing to Diogenes.
+The first thing to paste into a bug report.  Every hard fault in this
+package's history has turned out to be one of these lines: a
+distribution's `find-file-hook', its evil state maps, its workspace
+filter, its popup manager."
+  (interactive)
+  (let ((report
+         (list
+          (cons "emacs" emacs-version)
+          (cons "native-comp queue" (if (boundp 'comp-files-queue)
+                                        (length comp-files-queue) 'n/a))
+          (cons "diogenes-path" (bound-and-true-p diogenes-path))
+          (cons "loaded from" (locate-library "diogenes-perseus"))
+          (cons "evil" (and (featurep 'evil) t))
+          (cons "lookup evil state"
+                (and (boundp 'evil-initial-state-alist)
+                     (cdr (assq 'diogenes-lookup-mode
+                                evil-initial-state-alist))))
+          (cons "purpose" (and (featurep 'diogenes-purpose) t))
+          (cons "purpose-mode" (bound-and-true-p purpose-mode))
+          (cons "diogenes-doom" (and (featurep 'diogenes-doom) t))
+          (cons "gathering" (and (fboundp 'diogenes-doom-gathering-p)
+                                 (diogenes-doom-gathering-p)))
+          (cons "popup manager" (and (fboundp '+popup-buffer-p) t))
+          (cons "persp-mode" (bound-and-true-p persp-mode))
+          (cons "pop-up-frames" pop-up-frames)
+          (cons "frame-resize-pixelwise" frame-resize-pixelwise)
+          (cons "display-buffer-alist" (length display-buffer-alist))
+          (cons "find-file-hook" (length find-file-hook))
+          (cons "vc-handled-backends" vc-handled-backends)
+          (cons "pdf-view-use-scaling"
+                (bound-and-true-p pdf-view-use-scaling))
+          (cons "declared dictionaries"
+                (bound-and-true-p diogenes-declared-dictionaries)))))
+    (with-current-buffer (get-buffer-create "*Diogenes Environment*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (dolist (line report)
+          (insert (format "%-24s %s\n" (car line) (cdr line))))
+        (goto-char (point-min))
+        (special-mode))
+      (display-buffer (current-buffer)))))
+
+;;;###autoload
+(defun diogenes-tests-run ()
+  "Run the Diogenes tests inside this configuration.
+The headless run says whether the logic is right; this says whether it is
+right HERE, with evil, window-purpose, a popup manager and a workspace
+filter all still in place."
+  (interactive)
+  (ert "\\`diogenes-test-"))
+
+(provide 'diogenes-tests)
+;;; diogenes-tests.el ends here

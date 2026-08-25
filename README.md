@@ -1093,6 +1093,43 @@ read-only buffer.
 - `diogenes-purpose-focus-dictionary-window` — bound to `Q` in a dictionary buffer, the way back from the page to the entry it came from
 - `diogenes-purpose-install`, `diogenes-purpose-uninstall`
 
+## Tests
+
+Two runs, and both are wanted.
+
+**Headless** — the logic, identically on any machine:
+
+```fish
+make test          # or: emacs -Q -batch -L . -l test/diogenes-tests.el -f ert-run-tests-batch-and-exit
+make compile       # fails on a compilation error; warnings are inherited and many
+make check         # both
+```
+
+**Inside a live configuration** — Doom, Spacemacs, plain Emacs:
+
+```
+M-x diogenes-tests-run
+```
+
+The same tests, with everything the distribution has done still in place:
+evil owning the single-letter keys, window-purpose dedicating windows, a
+popup manager holding `display-buffer-alist`, persp-mode hiding buffers. The
+headless run is necessary and not sufficient — the hardest faults in this
+package's history were each a distribution's doing and invisible under
+`emacs -Q`:
+
+- Doom's `find-file-hook` and three VC backends, which made opening a 549 MB dictionary take 3.65 seconds instead of 0.09
+- evil's state maps, which swallowed `q` in a dictionary page and turned it into `kill-current-buffer`
+- persp-mode, which hid a lookup buffer from `C-x <left>` while `switch-to-buffer` still found it by name
+
+`M-x diogenes-tests-environment` reports what the surrounding configuration
+is doing — Emacs version, evil, purpose, the popup manager, persp-mode,
+`pop-up-frames`, the length of `find-file-hook`, `vc-handled-backends`,
+`pdf-view-use-scaling`. It is the first thing to paste into a bug report.
+
+Each test names the fault it guards against, and one that says *regression*
+is one a real bug walked through.
+
 # Appendix: how TGL lookups stay on target
 
 Not needed to use the dictionary — here for debugging a bad jump. The
