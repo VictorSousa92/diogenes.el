@@ -406,7 +406,7 @@ This function is the generic dispacher for all corpora."
 				  (error "No results for %s" lemma))))
 		 (if (> (length lemmata) 1)
 		     (assoc (completing-read "Please choose a lemma: "
-					     lemmata)
+					     lemmata nil t)
 			    lemmata)
 		   (car lemmata)))))
     (cl-remove-duplicates (mapcar #'car (cdddr entry)))))

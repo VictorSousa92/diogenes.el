@@ -23,20 +23,30 @@
 	     (concat "\t"
 		     (cdr (assoc s minibuffer-completion-table)))))))
     (completing-read "Please choose search corpus: "
-		     diogenes--corpora)))
+		     diogenes--corpora nil t)))
 
 (defun diogenes--select-author-num (options &optional author-regex)
-  "Select one author from a diogenes database using a prompt."
+  "Select one author from a diogenes database using a prompt.
+REQUIRE-MATCH is passed to `completing-read', and has to be: the answer is
+looked up in the list with `assoc', so anything not in the list resolves to
+nil and the nil travels on to be a type error further down.  Without it,
+plain Emacs completion returns whatever was typed -- a partial name and
+RET is an answer, and not one this can use.  Helm, Ivy and Vertico all
+select the highlighted candidate instead, which is why the fault showed
+only where none of them was installed."
   (let ((author-list (diogenes--get-author-list options author-regex)))
-    (cadr (assoc (completing-read "Author: " author-list)
+    (unless author-list
+      (user-error "No authors found in this database"))
+    (cadr (assoc (completing-read "Author: " author-list nil t)
 		 author-list))))
 
 (defun diogenes--select-work-num (options author)
-  "Select a single work from an author in a Diogenes database."
-  (let ((works-list (diogenes--get-works-list options
-					      author)))
-    (cadr (assoc (completing-read "Work: "
-				  works-list)
+  "Select a single work from an author in a Diogenes database.
+REQUIRE-MATCH, for the reason given in `diogenes--select-author-num'."
+  (let ((works-list (diogenes--get-works-list options author)))
+    (unless works-list
+      (user-error "No works found for this author"))
+    (cadr (assoc (completing-read "Work: " works-list nil t)
 		 works-list))))
 
 (defun diogenes--select-passage (options author work)
@@ -49,8 +59,9 @@
   (let* ((categories (diogenes--get-tlg-categories))
 	 (category (intern
 		    (completing-read "Select an category: "
-				     (diogenes--plist-keys categories)))))
-    (completing-read "Please select: " (plist-get categories category))))
+				     (diogenes--plist-keys categories) nil t))))
+    (completing-read "Please select: "
+		     (plist-get categories category) nil t)))
 
 
 ;;; TODO: Selection with multiple regexes
