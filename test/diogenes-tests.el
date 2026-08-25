@@ -316,8 +316,14 @@ dictionary page went past the entry to the startup screen."
     (delete-other-windows)
     (let ((first (get-buffer-create " *diogenes-test-first*"))
           (second (get-buffer-create " *diogenes-test-second*")))
-      (set-window-buffer (selected-window) first)
+      ;; `switch-to-buffer' for the setup, NOT `set-window-buffer'.  The
+      ;; latter records nothing -- which is the very fact under test, and an
+      ;; earlier version of this test used it, so the history held whatever
+      ;; had been in the window before and the assertion failed against
+      ;; correct code.
+      (switch-to-buffer first)
       (diogenes--display-buffer second :same-window t)
+      (should (eq (window-buffer (selected-window)) second))
       (should (member first
                      (mapcar #'car (window-prev-buffers (selected-window))))))))
 
