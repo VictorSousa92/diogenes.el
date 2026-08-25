@@ -885,8 +885,49 @@ a hundred.
 
 ## Optional: window management
 
-`diogenes-purpose.el` controls where Diogenes buffers are displayed. It
-matters for **Spacemacs**, which turns window-purpose on for everyone, and
+Two modules, doing the same job by different means. **Load one.**
+
+| | For | How |
+| --- | --- | --- |
+| `diogenes-purpose` | Spacemacs, and anyone running `purpose-mode` | teaches window-purpose what a Diogenes buffer is |
+| `diogenes-doom` | Doom, tiling window managers, `pop-up-frames` | gives each kind of buffer a frame of its own |
+
+### `diogenes-doom`: frames instead of windows
+
+```elisp
+(with-eval-after-load 'diogenes
+  (require 'diogenes-doom nil t))
+```
+
+- A lookup or an analysis goes to the frame that already holds one, or to a new frame — so the second entry replaces the first rather than covering your text.
+- The browser keeps a frame of its own.
+- Dictionary PDFs too, once you have named them: `(setq diogenes-doom-dictionary-regexps '("Oxford Latin Dictionary\\.pdf" "Montanari\\.pdf"))`.
+- `diogenes-doom-frame-parameters` sets the size and the frame name, which a tiling window manager can match on. `diogenes-doom-reuse-frames` nil gives a frame per buffer instead of one per kind.
+- `diogenes-doom-focus-lookup-frame`, `-browser-frame`, `-dictionary-frame` raise a frame that is already open; `diogenes-doom-delete-frames` closes them all.
+
+**It asks nothing of Doom.** Doom's popup manager keeps its rules in
+`display-buffer-alist` like everything else, and `display-buffer` takes the
+first entry that matches — so these rules are prepended and a Diogenes buffer
+never reaches the popup manager. No `set-popup-rule!`, no `after!`, nothing
+to order correctly, and the same file works on plain Emacs.
+
+Matching is by buffer name rather than major mode, deliberately: a name is
+settled when the buffer is created, where the mode is set *after* display
+unless `diogenes-purpose` is loaded.
+
+**Making Doom prefer frames generally** is a separate question, and Doom's own:
+remove `popup` from the `:ui` section of `init.el`, then
+
+```elisp
+(setq pop-up-frames 'graphic-only)
+```
+
+With the popup module left in, `diogenes-doom` still does its job for
+Diogenes buffers; everything else stays in popups.
+
+### `diogenes-purpose`: windows, under window-purpose
+
+Matters for **Spacemacs**, which turns window-purpose on for everyone, and
 for anyone running `(setq pop-up-frames t)` — common with tiling window
 managers.
 
