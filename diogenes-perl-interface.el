@@ -134,7 +134,16 @@ It is associated with a buffer with the same name, in asterisks."
 		  :noquery t
 		  :filter filter
 		  :sentinel sentinel)
-    (pop-to-buffer buffer)))
+    ;; A frame showing only a startup page is a frame with nothing in it, so
+    ;; the browser takes that window rather than splitting it or opening a
+    ;; frame beside it.  The lookup path has had this since
+    ;; `diogenes--search-dict' learned it; everything Perl-driven comes
+    ;; through here -- the browser, the searches, the dumps -- and did not,
+    ;; so `bl' and `bg' from the splash screen opened a second window for a
+    ;; text and left the splash occupying the first.
+    (if (diogenes--sole-home-window-p)
+	(pop-to-buffer-same-window buffer)
+      (pop-to-buffer buffer))))
 
 (defun diogenes--get-fresh-buffer (type)
   "Returns a fresh buffer for the mode to use."
