@@ -319,52 +319,65 @@ only displays -- and a reader left in the buffer they came from, looking at
 an entry in another window, finds that the keys they expect are undefined,
 because the buffer they are in is not the entry.  The distinction is easy to
 miss and was missed here."
-  (let ((chosen (or action (diogenes--display-action kind))))
-    (cond
-     ;; Intent, not layout: both of these are what the reader asked for by
-     ;; pressing the key they pressed, and both go through
-     ;; `display-buffer-overriding-action' so that they hold under
-     ;; `diogenes-purpose', which uses an overriding action of its own, and
-     ;; under `diogenes-doom', whose rules are in `display-buffer-alist'.
-     ((or (diogenes--sole-home-window-p) same-window)
-      (let ((display-buffer-overriding-action
-             '(display-buffer-same-window (inhibit-same-window . nil))))
-        (display-buffer buffer)))
-     ;; An action the reader has set gets FIRST REFUSAL -- ahead of
-     ;; `diogenes-purpose' and of `diogenes-doom', both of which would
-     ;; otherwise win by where they put themselves.  A setting that loses to
-     ;; the module it was meant to override is not a setting.  Should it
-     ;; decline -- every function in it returning nil -- `display-buffer'
-     ;; carries on to the alist and the modules have their say after all.
-     (chosen
-      (let ((display-buffer-overriding-action chosen))
-        (display-buffer buffer)))
-     ;; Frames are in play, and nothing more specific was asked for.  This
-     ;; is where Doom and Spacemacs come to the same behaviour: both put a
-     ;; mechanism between a buffer and its window -- a popup manager and
-     ;; `display-buffer-alist' there, `window-purpose' and window dedication
-     ;; here -- and with `pop-up-frames' set neither is answering the
-     ;; question the reader asked.  So it is answered here, for both, and
-     ;; the second entry replaces the first in its frame on either.
-     ;;
-     ;; Through the overriding action for that reason: an action passed the
-     ;; ordinary way would lose to purpose, which uses an overriding action
-     ;; of its own, and to Doom, whose rules are in the alist.
-     ((diogenes--gathering-p)
-      (let ((display-buffer-overriding-action (diogenes--gathering-action)))
-        (display-buffer buffer)))
-     ;; No frames, nothing set: whatever is installed decides, exactly as it
-     ;; did before any of this -- `window-purpose' under Spacemacs, the
-     ;; popup manager under Doom, plain `display-buffer' elsewhere.
-     (t
-      (display-buffer buffer))))
-  (let ((window (get-buffer-window buffer t)))
-    (when (and window (not no-select))
+  (let* ((chosen (or action (diogenes--display-action kind)))
+         ;; The window `display-buffer' RETURNS, not one found afterwards by
+         ;; searching.  An earlier version re-derived it with
+         ;; `(get-buffer-window buffer t)', which looks on every frame and
+         ;; can find a different, older window showing the same buffer: the
+         ;; selection then went there, the current buffer and the selected
+         ;; window fell out of step, and `diogenes--show-dict-entry' met
+         ;; "`recenter'ing a window that does not display current-buffer".
+         (window
+          (cond
+       ;; Intent, not layout: both of these are what the reader asked for by
+       ;; pressing the key they pressed, and both go through
+       ;; `display-buffer-overriding-action' so that they hold under
+       ;; `diogenes-purpose', which uses an overriding action of its own, and
+       ;; under `diogenes-doom', whose rules are in `display-buffer-alist'.
+       ((or (diogenes--sole-home-window-p) same-window)
+        (let ((display-buffer-overriding-action
+               '(display-buffer-same-window (inhibit-same-window . nil))))
+          (display-buffer buffer)))
+       ;; An action the reader has set gets FIRST REFUSAL -- ahead of
+       ;; `diogenes-purpose' and of `diogenes-doom', both of which would
+       ;; otherwise win by where they put themselves.  A setting that loses to
+       ;; the module it was meant to override is not a setting.  Should it
+       ;; decline -- every function in it returning nil -- `display-buffer'
+       ;; carries on to the alist and the modules have their say after all.
+       (chosen
+        (let ((display-buffer-overriding-action chosen))
+          (display-buffer buffer)))
+       ;; Frames are in play, and nothing more specific was asked for.  This
+       ;; is where Doom and Spacemacs come to the same behaviour: both put a
+       ;; mechanism between a buffer and its window -- a popup manager and
+       ;; `display-buffer-alist' there, `window-purpose' and window dedication
+       ;; here -- and with `pop-up-frames' set neither is answering the
+       ;; question the reader asked.  So it is answered here, for both, and
+       ;; the second entry replaces the first in its frame on either.
+       ;;
+       ;; Through the overriding action for that reason: an action passed the
+       ;; ordinary way would lose to purpose, which uses an overriding action
+       ;; of its own, and to Doom, whose rules are in the alist.
+       ((diogenes--gathering-p)
+        (let ((display-buffer-overriding-action (diogenes--gathering-action)))
+          (display-buffer buffer)))
+       ;; No frames, nothing set: whatever is installed decides, exactly as it
+       ;; did before any of this -- `window-purpose' under Spacemacs, the
+       ;; popup manager under Doom, plain `display-buffer' elsewhere.
+           (t
+            (display-buffer buffer)))))
+    (when (and (window-live-p window) (not no-select))
       ;; On another frame, the frame has to be raised as well, which is the
       ;; other half of what `pop-to-buffer' did for us.
       (unless (eq (window-frame window) (selected-frame))
         (select-frame-set-input-focus (window-frame window)))
-      (select-window window))
+      (select-window window)
+      ;; And the buffer made CURRENT.  `pop-to-buffer' did that too, and
+      ;; enough of this package depends on it -- `diogenes--browse-work'
+      ;; sets the major mode in whatever buffer is current after displaying,
+      ;; and `diogenes--show-dict-entry' recenters -- that leaving it to
+      ;; follow from `select-window' is not good enough.
+      (set-buffer (window-buffer window)))
     window))
 
 (defun diogenes--path-set-p (value)

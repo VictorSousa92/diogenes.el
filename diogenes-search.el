@@ -265,15 +265,16 @@ This function makes sure that the full citation remains accessible."
 
 (defun diogenes--do-search (options &optional authors)
   "Function that executes a search query in the Diogenes Databases."
-  (diogenes--start-perl "search"
+  (with-current-buffer (diogenes--start-perl
+			"search"
 			(diogenes--search-script options authors)
 			#'diogenes--search-filter
 			#'diogenes--search-sentinel)
-  (diogenes-search-mode)
-  (setq diogenes--search-active-block 'header)
-  (setq diogenes--search-corpus (plist-get options :type))
-  (setq diogenes--search-language
-	(diogenes--probable-corpus-language diogenes--search-corpus)))
+    (diogenes-search-mode)
+    (setq diogenes--search-active-block 'header)
+    (setq diogenes--search-corpus (plist-get options :type))
+    (setq diogenes--search-language
+	  (diogenes--probable-corpus-language diogenes--search-corpus))))
 
 (defun diogenes--search-select-authors (type &optional simple callback)
   "Select a custom sub-corpus of TYPE.
@@ -357,15 +358,16 @@ This function is the generic dispacher for all corpora."
 
 (defun diogenes--do-wordlist-search (options words &optional authors)
   "Function that executes an indexed search query in the Diogenes Databases."
-  (diogenes--start-perl "search"
+  (with-current-buffer (diogenes--start-perl
+			"search"
 			(diogenes--indexed-search-script options words authors)
 			#'diogenes--search-filter
 			#'diogenes--indexed-search-sentinel)
-  (diogenes-search-mode)
-  (setq diogenes--search-active-block 'header)
-  (setq diogenes--search-corpus (plist-get options :type))
-  (setq diogenes--search-language
-	(diogenes--probable-corpus-language diogenes--search-corpus)))
+    (diogenes-search-mode)
+    (setq diogenes--search-active-block 'header)
+    (setq diogenes--search-corpus (plist-get options :type))
+    (setq diogenes--search-language
+	  (diogenes--probable-corpus-language diogenes--search-corpus))))
 
 (defun diogenes--tlg-wordlist-search (&optional pattern-or-forms authors)
   (let ((pattern-or-forms

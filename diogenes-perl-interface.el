@@ -146,7 +146,15 @@ It is associated with a buffer with the same name, in asterisks."
     ;; `browser', which keeps them out of the lookup frame.  The startup-page
     ;; guard that used to be spelled out here is now the helper's, along with
     ;; every other rule about where a Diogenes buffer goes.
-    (diogenes--display-buffer buffer :kind 'browser)))
+    (diogenes--display-buffer buffer :kind 'browser)
+    ;; BUFFER, returned, so that a caller which has something to do to it --
+    ;; put it in its major mode, set its buffer-locals -- can say which
+    ;; buffer it means.  They used to rely on `pop-to-buffer' having left it
+    ;; current, which is true of `pop-to-buffer' and was not true of what
+    ;; replaced it: the browser came up in `fundamental-mode', with none of
+    ;; its keys, because `diogenes-browser-mode' had been called on whatever
+    ;; buffer the reader happened to be in.
+    buffer))
 
 (defun diogenes--get-fresh-buffer (type)
   "Returns a fresh buffer for the mode to use."

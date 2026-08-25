@@ -277,15 +277,16 @@ If it is incomplete, buffer it and prepend it when called again."
 
 Passage has to be a list of strings containing the four digit
 number of the author and the number of the work."
-  (diogenes--start-perl "browser"
+  (with-current-buffer (diogenes--start-perl
+			"browser"
 			(diogenes--browse-interactively-script options passage)
 			#'diogenes--browser-filter)
-  (diogenes-browser-mode)
-  (setq diogenes-browser-first-insertion t)
-  (setq diogenes--browser-language
-	(pcase (plist-get options :type)
-	  ("tlg" "greek")
-	  ("phi" "latin"))))
+    (diogenes-browser-mode)
+    (setq diogenes-browser-first-insertion t)
+    (setq diogenes--browser-language
+	  (pcase (plist-get options :type)
+	    ("tlg" "greek")
+	    ("phi" "latin")))))
 
 (defun diogenes--browse-database (type &optional author work)
   "Select a specific passage in a work from a diogenes database for browsing.

@@ -348,6 +348,33 @@ from -- and `C-c C-c' there was undefined, the buffer not being an entry."
       (diogenes--display-buffer buffer :kind 'lookup :no-select t)
       (should (eq (selected-window) here)))))
 
+(ert-deftest diogenes-test-display-buffer-makes-the-buffer-current ()
+  "The buffer is current afterwards, as it was with `pop-to-buffer'.
+Regression: the browser came up in `fundamental-mode' with none of its keys,
+because `diogenes--browse-work' calls `diogenes-browser-mode' after
+displaying and the mode landed on whatever buffer the reader was in.  The
+callers now name the buffer explicitly, and the helper leaves it current
+besides."
+  (diogenes-tests--with-two-windows
+    (let ((diogenes-lookup-display-action
+           '(display-buffer-use-some-window (inhibit-same-window . t)))
+          (buffer (get-buffer-create " *diogenes-test-target*")))
+      (diogenes--display-buffer buffer :kind 'lookup)
+      (should (eq (current-buffer) buffer))
+      (should (eq (window-buffer (selected-window)) buffer)))))
+
+(ert-deftest diogenes-test-display-buffer-returns-the-window-used ()
+  "The window returned is the one the buffer was put in, on this frame.
+Regression: the window was re-derived with `(get-buffer-window buffer t)',
+which searches every frame and can find an older window showing the same
+buffer -- so the selection went elsewhere, current-buffer and the selected
+window fell out of step, and `recenter' refused."
+  (diogenes-tests--with-two-windows
+    (let ((buffer (get-buffer-create " *diogenes-test-target*")))
+      (let ((window (diogenes--display-buffer buffer :same-window t)))
+        (should (eq window (selected-window)))
+        (should (eq (window-buffer window) buffer))))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is
