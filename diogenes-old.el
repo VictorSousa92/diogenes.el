@@ -921,15 +921,26 @@ it.  See `diogenes-old-reader-reuse-document-frame'."
       ;; opened a frame of its own, and the second one did not join the
       ;; first.  So the same reuse the Reader has always had, in the same
       ;; circumstances: only when purpose is not there to do it.
-      (let ((buffer (diogenes-old--open-buffer-in-viewer file viewer))
-            (action (unless (featurep 'diogenes-purpose)
-                      diogenes-old-pdf-display-action))
-            (pop-up-frames (if (and (not (featurep 'diogenes-purpose))
-                                    (diogenes-old--reader-reuse-window))
-                               nil
-                             pop-up-frames)))
-        (diogenes-old--display-page-buffer
-         buffer action (diogenes-old--display-other-window-p))
+      ;; ORDER MATTERS, and getting it wrong put the page where the entry
+      ;; was.  `diogenes-old--display-other-window-p' answers "did the user
+      ;; ask for this somewhere other than here", and it reads
+      ;; `pop-up-frames' to do it -- so it has to be asked BEFORE
+      ;; `pop-up-frames' is bound to nil for the reuse.  Asked after, with
+      ;; `diogenes-old-display-in-other-window' nil, it saw nil and nil and
+      ;; concluded the reader wanted the page in the selected window: the
+      ;; second dictionary replaced the entry it was looked up from.  The
+      ;; binding is about where a frame may go, not about what was asked
+      ;; for.  The Reader branch above says the same and gets it right; this
+      ;; one is a `let*' for the same reason.
+      (let* ((other-window (diogenes-old--display-other-window-p))
+             (purpose (featurep 'diogenes-purpose))
+             (buffer (diogenes-old--open-buffer-in-viewer file viewer))
+             (action (unless purpose diogenes-old-pdf-display-action))
+             (pop-up-frames (if (and (not purpose)
+                                     (diogenes-old--reader-reuse-window))
+                                nil
+                              pop-up-frames)))
+        (diogenes-old--display-page-buffer buffer action other-window)
         (diogenes-old--goto-page-when-ready buffer page)))
     page))
 

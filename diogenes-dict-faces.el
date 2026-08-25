@@ -50,6 +50,18 @@
 ;;;; FACES
 ;;;; --------------------------------------------------------------------
 
+(defface diogenes-browser-header
+  '((t :inherit (info-title-1 bold)))
+  "Face for the citation header above a passage in the browser.
+Inherits from `info-title-1', which is what the header used directly --
+and which is defined in `info.el', a library nothing here loads.  Until
+something else in the session had loaded Info the face did not exist, and
+every redisplay of a header reported `Invalid face reference: info-title-1',
+once per header line.  A missing face named in `:inherit' is passed over
+quietly, where one named directly is not, so this both fixes that and makes
+the header themable."
+  :group 'diogenes)
+
 (defface diogenes-dict-quote
   '((t :inherit font-lock-string-face))
   "The words being illustrated: a phrase quoted from an ancient author.

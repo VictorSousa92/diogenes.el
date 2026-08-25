@@ -13,6 +13,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'diogenes-lisp-utils)
+(require 'diogenes-dict-faces)          ; diogenes-browser-header
 (require 'diogenes-perl-interface)
 
 ;;;; --------------------------------------------------------------------
@@ -224,8 +225,8 @@
 				   "\n")
 		      "\n\n")
 	      'diogenes-header t
-	      'face 'info-title-1
-	      'font-lock-face 'info-title-1
+	      'face 'diogenes-browser-header
+	      'font-lock-face 'diogenes-browser-header
 	      ;; 'read-only t
 	      'front-sticky t
 	      'rear-nonsticky t))
