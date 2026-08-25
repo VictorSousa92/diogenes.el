@@ -82,6 +82,12 @@
   (require 'diogenes-tgl))
 
 (require 'diogenes-cheatsheet)
+;; Evil integration: does nothing unless evil is loaded, and nothing to a
+;; mode whose initial state the user has chosen, so it is required rather
+;; than left for an init file to remember.  Unlike `diogenes-purpose' and
+;; `diogenes-doom', which change where buffers appear and are therefore a
+;; choice, this only hands back keys that evil would otherwise swallow.
+(require 'diogenes-evil)
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)
 ;(require 'diogenes-window)

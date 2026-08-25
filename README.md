@@ -883,6 +883,26 @@ A long list here is an argument for reporting the analyses upstream rather
 than for maintaining it: a systematic error in a batch run is one error, not
 a hundred.
 
+## Under evil (Doom, Spacemacs with evil)
+
+Nothing to configure — this is handled, and the reason is worth knowing.
+
+The dictionary keys are single letters, and under evil those letters are
+evil's: in normal state `o` opens a line, `d` deletes, `p` pastes, `b` moves
+back a word, `q` records a macro. Evil's state maps come before the major
+mode's, so none of the dictionary keys would be reached — and the buffers
+being read-only, the letters do nothing useful in their place.
+
+So the read-only Diogenes buffers start in evil's **Emacs state**, where the
+keys are the ones the rest of this README describes. `C-z` gives you normal
+state for a moment if you want its motions.
+
+- `diogenes-evil-emacs-state-modes` is the list: lookup, analysis, search, forms, corpora.
+- **The browser is not in it.** Its only single-letter key is `q`, so normal state costs almost nothing and buys evil's motions in a text you are reading. Almost: the browser loads the next page when you move past the last line, by remapping `next-line`, and evil's `j` is `evil-next-line` — so the arrow keys page and `j` does not. Add `diogenes-browser-mode` to the list if you would rather have the paging.
+- `diogenes-corpus-edit-mode` is not in it either: it is the one buffer meant to be typed in.
+- A mode whose state you have set yourself is left alone — an explicit `evil-set-initial-state` in your config wins.
+- `diogenes-evil-manage-initial-states` nil disables the whole thing, for anyone who would rather bind the letters into normal state by hand. That costs `o d p b t g G` inside dictionary buffers and keeps `j` and `k`.
+
 ## Optional: window management
 
 Two modules, doing the same job by different means. **Load one.**
