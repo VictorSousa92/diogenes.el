@@ -828,22 +828,34 @@ already-loaded buffer is not equivalent)."
 
 (defun diogenes-old--display-in-this-window (buffer)
   "Put BUFFER in the selected window, and only there; return BUFFER.
-`pop-to-buffer-same-window' is deliberately not used.  It declines a
-window that something has dedicated -- window-purpose dedicates the
-lookup and browser windows to their purposes -- and silently displays the
-buffer in ANOTHER window instead, so the page appeared in the browser's
-window as well as the entry's.  With the Emacs Reader that is doubly
-confusing, since it keeps the current page per WINDOW: the copy Diogenes
-had jumped showed the entry, while the stray one sat on page 1.
+The entry the lookup was made from is left ON THE WINDOW'S HISTORY, so `q'
+in the page brings it back.  `quit-window' restores what a window held
+before, and it can only do that if something recorded it: an earlier
+version put the buffer in with `set-window-buffer', which records nothing,
+so the dictionary replaced the entry outright and `q' had nowhere to
+return to.  `display-buffer' records it, hence the roundabout way of asking
+for the window we are already in.
 
-So the selected window is undedicated if need be and set directly, and
-any other window on this frame that shows BUFFER is handed back its
-previous buffer."
+Two things have to be got out of the way first, and they are why this is
+not simply `pop-to-buffer-same-window'.  A window that something has
+dedicated -- window-purpose dedicates the lookup and browser windows to
+their purposes -- is declined, and the buffer appears in ANOTHER window
+instead, which is how the page came to be in the browser's window as well
+as the entry's.  With the Emacs Reader that is doubly confusing, since it
+keeps the current page per WINDOW: the copy Diogenes had jumped showed the
+entry, while the stray one sat on page 1.  And purpose's overriding action
+would send it elsewhere again.
+
+So: undedicate if need be, ask `display-buffer' for this very window with
+nothing overriding it, and hand any other window on the frame that ended up
+showing BUFFER back its previous buffer."
   (let ((window (selected-window)))
     (when (window-live-p window)
       (when (window-dedicated-p window)
         (set-window-dedicated-p window nil))
-      (set-window-buffer window buffer)
+      (let ((display-buffer-overriding-action nil))
+        (display-buffer buffer '(display-buffer-same-window
+                                 (inhibit-same-window . nil))))
       (select-window window)
       (dolist (other (get-buffer-window-list buffer nil (window-frame window)))
         (unless (eq other window)
