@@ -934,8 +934,10 @@ Two modules, doing the same job by different means. **Load one.**
   (require 'diogenes-doom nil t))
 ```
 
+- **It only acts where acting means something.** With `pop-up-frames` nil it stands aside altogether and Emacs displays a lookup as it displays anything else. Set `pop-up-frames` and the gathering begins — asked at display time, so setting or unsetting it in a running Emacs takes effect at once. `diogenes-doom-gather` overrides either way.
 - A lookup or an analysis goes to the frame that already holds one, or to a new frame — so the second entry replaces the first rather than covering your text.
 - The browser keeps a frame of its own.
+- **The startup-page guard is unconditional**, frames or no frames: a frame showing only `*doom*`, `*spacemacs*` or Emacs's own splash has a window going spare, and a lookup takes it.
 - Dictionary PDFs too, once you have named them: `(setq diogenes-doom-dictionary-regexps '("Oxford Latin Dictionary\\.pdf" "Montanari\\.pdf"))`.
 - `diogenes-doom-frame-parameters` sets the size and the frame name, which a tiling window manager can match on. `diogenes-doom-reuse-frames` nil gives a frame per buffer instead of one per kind.
 - `diogenes-doom-focus-lookup-frame`, `-browser-frame`, `-dictionary-frame` raise a frame that is already open; `diogenes-doom-delete-frames` closes them all.

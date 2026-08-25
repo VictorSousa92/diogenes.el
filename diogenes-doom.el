@@ -6,7 +6,16 @@
 ;;; Commentary:
 
 ;; Where `diogenes-purpose.el' teaches window-purpose what a Diogenes buffer
-;; is, this teaches `display-buffer' to give each kind a FRAME of its own.
+;; is, this teaches `display-buffer' to keep each kind together -- in a frame
+;; of its own where frames are what you use, in a window where they are not.
+;; It gathers, and only where gathering means anything: with `pop-up-frames'
+;; nil it stands aside altogether and Emacs displays a lookup as it displays
+;; anything else.  `diogenes-doom-gather' overrides that either way.
+;;
+;; One thing it does unconditionally, `pop-up-frames' or not: a frame showing
+;; only a startup page -- `*doom*', `*spacemacs*', Emacs's own splash -- has a
+;; window going spare, and a lookup uses it rather than opening another frame
+;; beside it.
 ;; It is the module to load when frames are how you work -- a tiling window
 ;; manager, or `pop-up-frames' in vanilla Emacs, or Doom Emacs with its popup
 ;; module out of the way.  The two modules do the same job by different means
@@ -90,6 +99,35 @@ to place these frames by rule."
   :type '(alist :key-type symbol :value-type sexp)
   :group 'diogenes-doom)
 
+(defcustom diogenes-doom-gather 'auto
+  "When the gathering of Diogenes buffers applies.
+  `auto\=' -- the default -- follows `pop-up-frames\='.  Gathering only means
+anything where a buffer would otherwise get a frame to itself, so with
+`pop-up-frames\=' nil this module keeps out of the way entirely and Emacs
+displays a lookup as it displays anything else.  Set `pop-up-frames\=' and the
+gathering begins, with no reloading: the question is asked each time a buffer
+is displayed.
+
+  t gathers regardless, for a setup that wants Diogenes buffers kept together
+in windows.  nil never gathers.
+
+The guard against a startup page is NOT covered by this and always applies:
+a frame showing only `*doom*\=', `*spacemacs*\=' or Emacs\='s own splash has a
+window going spare, and using it is right whether or not frames are in play.
+See `diogenes-doom-display-in-home-window\='."
+  :type '(choice (const :tag "Follow pop-up-frames" auto)
+                 (const :tag "Always" t)
+                 (const :tag "Never" nil))
+  :group 'diogenes-doom)
+
+(defun diogenes-doom-gathering-p ()
+  "Whether Diogenes buffers are being gathered at the moment.
+Asked at display time, so `pop-up-frames' can be set or unset in a running
+Emacs and the answer changes with it."
+  (pcase diogenes-doom-gather
+    ('auto (and pop-up-frames t))
+    (value (and value t))))
+
 (defcustom diogenes-doom-reuse-frames t
   "Whether a second buffer of a kind reuses the frame the first is in.
 Non-nil is the point of the module: one lookup frame, reused, however many
@@ -145,6 +183,7 @@ window-purpose does.
 Returns nil when there is no such frame, so the actions after this one in
 the list get their turn: normally `display-buffer-pop-up-frame'."
   (and diogenes-doom-reuse-frames
+       (diogenes-doom-gathering-p)
        (let* ((role (diogenes-doom--role buffer))
               (window (and role (diogenes-doom--window-of-role role))))
          (when window
@@ -154,11 +193,16 @@ the list get their turn: normally `display-buffer-pop-up-frame'."
 ;;; Installing and removing the rules
 
 (defun diogenes-doom--rule (regexp)
-  "The `display-buffer-alist' entry for buffers matching REGEXP."
+  "The `display-buffer-alist' entry for buffers matching REGEXP.
+Two actions and no third, both of them about reusing something already open.
+Where there is nothing to reuse the list is exhausted, `display-buffer' falls
+back to its own behaviour, and THAT is what reads `pop-up-frames' -- so a
+frame appears when frames are what the configuration asks for, and a window
+when they are not.  An earlier version named `display-buffer-pop-up-frame'
+here, which meant frames for everyone whatever they had set."
   `(,regexp
     (diogenes-doom-display-in-home-window
-     diogenes-doom-display-in-role-frame
-     display-buffer-pop-up-frame)
+     diogenes-doom-display-in-role-frame)
     (inhibit-same-window . t)
     (reusable-frames . visible)
     (pop-up-frame-parameters . ,diogenes-doom-frame-parameters)))
