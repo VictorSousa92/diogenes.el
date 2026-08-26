@@ -101,8 +101,19 @@ binds nothing."
     diogenes-analysis-mode-map
     diogenes-select-forms-mode-map
     diogenes-search-mode-map
-    diogenes-corpus-mode-map)
-  "The mode maps that Emacs state applies to.")
+    diogenes-corpus-mode-map
+    ;; The document viewers, which this module does NOT put into Emacs state
+    ;; -- `j', `k' and `C-d' are how one moves down a page of a scan, so
+    ;; normal state is right for them.  But something else may: evil-collection
+    ;; has its own opinion about `pdf-view-mode', and a reader who finds
+    ;; themselves in Emacs state there had no way back to normal state, which
+    ;; is where the motions are.  Binding the key costs nothing where the
+    ;; buffer is in normal state already, escape having its own meaning there
+    ;; and this being only a mode map.
+    pdf-view-mode-map
+    doc-view-mode-map
+    reader-mode-map)
+  "The mode maps to give the way out of Emacs state.")
 
 (defun diogenes-evil-bind-normal-state-key ()
   "Bind `diogenes-evil-normal-state-key\=' in the Diogenes maps.
@@ -137,7 +148,8 @@ elsewhere -- `evil-set-initial-state' in an init file wins."
     ;; wants evil's keyboard rather than the dictionaries.  After the maps
     ;; exist: they live in files this one does not require.
     (dolist (feature '(diogenes-perseus diogenes-forms diogenes-search
-                                        diogenes-corpora))
+                                        diogenes-corpora
+                                        pdf-view doc-view reader))
       (with-eval-after-load feature (diogenes-evil-bind-normal-state-key)))
     (when (called-interactively-p 'interactive)
       (message "Diogenes buffers start in Emacs state; %s for normal state"

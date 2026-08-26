@@ -589,7 +589,13 @@ evil's own."
   (when diogenes-evil-normal-state-key
     (should-not (member diogenes-evil-normal-state-key
                         '("o" "t" "m" "c" "b" "p" "B" "d" "G" "g" "l" "P"
-                          "q" "RET" "TAB")))))
+                          "q" "RET" "TAB"))))
+  ;; The document viewers are on the list as well.  This module leaves them in
+  ;; normal state -- the motions being what one wants in a scan -- but
+  ;; something else may not, and a reader in Emacs state there needs the way
+  ;; back as much as anywhere.
+  (dolist (map '(pdf-view-mode-map doc-view-mode-map reader-mode-map))
+    (should (memq map diogenes-evil--maps))))
 
 (ert-deftest diogenes-test-behaviour-alist-reaches-the-action ()
   "A per-kind alist survives the whole way to the action that is passed.
