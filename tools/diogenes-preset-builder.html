@@ -56,9 +56,12 @@
   .field span { display: block; font-size: .79rem; color: var(--quiet); margin-bottom: .12rem; }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
   .stage { background: #fff; border: 1px solid var(--rule); border-radius: 4px; padding: 1rem; }
-  .frames { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-start; }
+  /* One frame is one screen's worth, so frames stack rather than sharing a
+     row: side by side each would be drawn narrower than the screen it stands
+     for, and the shape is the point of drawing it. */
+  .frames { display: flex; flex-direction: column; gap: .75rem; }
   .frame {
-    flex: 1 1 0; min-width: 8.5rem; border: 2px solid var(--ink); border-radius: 3px;
+    flex: 0 0 auto; min-width: 0; border: 2px solid var(--ink); border-radius: 3px;
     background: #fdfcfa; overflow: hidden;
   }
   .frame.fresh { box-shadow: 0 0 0 3px rgba(122,59,46,.22); }
@@ -66,7 +69,14 @@
     font: 600 .66rem/1.8 ui-monospace, Menlo, monospace; text-align: center;
     background: var(--ink); color: var(--paper); letter-spacing: .04em;
   }
-  .windows { display: flex; min-height: 9.5rem; }
+  .windows { display: flex; aspect-ratio: var(--screen, 1.778); min-height: 5rem; }
+  .screenrow {
+    display: flex; align-items: baseline; gap: .5rem; margin: 0 0 .8rem;
+    font-size: .84rem; flex-wrap: wrap;
+  }
+  .screenrow label { color: var(--quiet); }
+  .screenrow select { width: auto; flex: 0 1 22rem; }
+  .screenrow .note { margin: 0; }
   .windows.col { flex-direction: column; }
   .windows.rowdir { flex-direction: row; }
   .win {
@@ -127,6 +137,36 @@
   .legend .dict { background: #f4f1e4; }
   code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; }
   .warn { color: var(--accent); }
+  .prop { margin: .6rem 0; }
+  .prop .top { display: flex; justify-content: space-between; align-items: baseline;
+               font-size: .84rem; gap: .5rem; }
+  .prop .top b { font-weight: 600; }
+  .prop .top span { color: var(--quiet); font-variant-numeric: tabular-nums; }
+  .prop input[type=range] { width: 100%; margin: .2rem 0 0; accent-color: var(--accent); }
+  .prop.inert { opacity: .45; }
+  .prop.inert input[type=range] { pointer-events: none; }
+  .windows { position: relative; }
+  .grip { position: absolute; z-index: 3; background: var(--accent); opacity: 0;
+          transition: opacity .12s; }
+  .grip:hover, .grip.dragging { opacity: .4; }
+  /* Dragging a window to a side sets the direction of the split. */
+  .win[draggable] { cursor: grab; }
+  .win.lifted { opacity: .4; }
+  .zones { position: absolute; inset: 0; z-index: 5; display: none; }
+  .zones.on { display: block; }
+  .zone {
+    position: absolute; border: 2px dashed var(--accent); background: rgba(122,59,46,.06);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600;
+  }
+  .zone.over { background: rgba(122,59,46,.2); }
+  .zone.above { top: 0; left: 0; right: 0; height: 34%; }
+  .zone.below { bottom: 0; left: 0; right: 0; height: 34%; }
+  .zone.left { top: 34%; bottom: 34%; left: 0; width: 42%; }
+  .zone.right { top: 34%; bottom: 34%; right: 0; width: 42%; }
+  .windows.col > .grip { left: 0; right: 0; height: 7px; margin-top: -3px; cursor: row-resize; }
+  .windows.rowdir > .grip { top: 0; bottom: 0; width: 7px; margin-left: -3px; cursor: col-resize; }
   select:disabled { background: #f4f2ee; color: #a9a49b; }
   .kinds label.dim { color: #a9a49b; }
 </style>
@@ -177,14 +217,19 @@
       </select>
     </div>
   </div>
-  <div class="field">
-    <span>Size of the new window &mdash; <code>diogenes-split-size</code>, blank for half</span>
-    <input type="text" id="size" placeholder="0.4  or  30">
-  </div>
+
   <p class="note">A direction asks Emacs nothing. <em>Let Emacs choose</em> goes
      through <code>split-window-sensibly</code>, which consults
      <code>split-height-threshold</code> &mdash; and a distribution may set that so
      that no frame you have can be split.</p>
+  <p class="note"><b>Or drag a window</b> in the diagram to a side of its frame.
+     One setting serves every kind, so dragging the entry to the right puts
+     scans there too &mdash; <code>diogenes-split-direction</code> is a single
+     direction and not one per kind.</p>
+
+  <h2>Proportions <i id="propshint"></i></h2>
+  <div id="proportions"></div>
+  <p class="note" id="propsnote"></p>
 
   <h2>Frames</h2>
   <div class="row">
@@ -258,6 +303,18 @@
 <section class="pane watch">
   <h2>What that does</h2>
   <div class="stage">
+    <div class="screenrow">
+      <label for="ratio">Screen</label>
+      <select id="ratio">
+        <option value="1.778">16:9 &mdash; most laptops and monitors</option>
+        <option value="1.6">16:10</option>
+        <option value="1.5">3:2 &mdash; Surface, some ThinkPads</option>
+        <option value="1.333">4:3</option>
+        <option value="2.333">21:9 &mdash; ultrawide</option>
+        <option value="0.75">3:4 &mdash; a monitor turned on its side</option>
+      </select>
+      <span class="note">Drawn to shape, so a split looks as it will look.</span>
+    </div>
     <div class="frames" id="frames"></div>
     <div class="steps">
       <button data-step="browse">Browse a text<kbd>b l</kbd></button>
@@ -304,8 +361,8 @@ const BEHAVIOURS = {
   frames: 'a frame of its own, later ones gathered',
 };
 const KINDS = [
-  ['lookup', 'Entries', 'dictionary entries and analyses'],
   ['browser', 'Texts', 'passages from the corpora'],
+  ['lookup', 'Entries', 'dictionary entries and analyses'],
   ['dictionary', 'Scans', 'pages of the printed dictionaries'],
 ];
 
@@ -339,6 +396,155 @@ const uniform = () => {
 };
 const framesFor = k => kind[k] === 'frames' || el('popupframes').checked;
 const horizontal = () => ['right', 'left'].includes(el('direction').value);
+
+// ---------- proportions ----------
+// What has a size is a WINDOW, not a kind.  Where a kind reuses another's
+// window there is one window and one size -- so the boundaries are computed
+// from the behaviours rather than listed, and a slider is a boundary between
+// two groups of kinds whose label names the groups.
+let sizes = { lookup: 0.5, browser: 0.5, dictionary: 0.5 };
+
+function groupsFor() {
+  const scanReplaces = el('scanplace').value === 'replace';
+  const groups = [{ kinds: ['browser'], label: 'text' }];
+  if (kind.lookup === 'split') groups.push({ kinds: ['lookup'], label: 'entry' });
+  else if (kind.lookup === 'reuse') {
+    groups[0].kinds.push('lookup');
+    groups[0].label += '+entry';
+  }
+  const dictKind = scanReplaces ? 'reuse' : kind.dictionary;
+  if (dictKind === 'split') groups.push({ kinds: ['dictionary'], label: 'dictionary' });
+  else if (dictKind === 'reuse') {
+    const host = groups[groups.length - 1];
+    host.kinds.push('dictionary');
+    host.label += '+dictionary';
+  }
+  // A kind with a frame of its own is no boundary in this frame.
+  return groups.filter(g => !g.kinds.every(k => kind[k] === 'frames'));
+}
+
+// A boundary lies between two adjacent groups, and the size belongs to the
+// kind whose window the split CREATES -- the second of the pair.
+function boundaries() {
+  const groups = groupsFor();
+  const out = [];
+  for (let i = 0; i + 1 < groups.length; i++) {
+    const owner = groups[i + 1].kinds[0];
+    out.push({ label: groups[i].label + ' | ' + groups[i + 1].label,
+               owner, value: sizes[owner] });
+  }
+  return out;
+}
+
+function renderProportions() {
+  const bs = boundaries();
+  const box = el('proportions');
+  if (!bs.length) {
+    box.innerHTML = '';
+    el('propshint').textContent = '';
+    el('propsnote').innerHTML =
+      'Nothing is divided with these settings \u2014 every kind either shares a ' +
+      'window or has a frame of its own, and an undivided window has no ' +
+      'proportion to set.';
+    return;
+  }
+  el('propshint').textContent = '\u2014 or drag the dividers';
+  box.innerHTML = bs.map((b, i) => `
+    <div class="prop">
+      <div class="top"><b>${b.label}</b><span>${Math.round(b.value * 100)}%</span></div>
+      <input type="range" min="15" max="85" step="1"
+             value="${Math.round(b.value * 100)}" data-owner="${b.owner}">
+    </div>`).join('');
+  el('propsnote').innerHTML =
+    'Each slider is one boundary, and the percentage is the share taken by the ' +
+    'window the split creates. Two kinds sharing a window share its size, so ' +
+    'they are named together with one slider between them.';
+}
+
+// The divider in the diagram, draggable: the same number the slider carries.
+function installGrips() {
+  const boxes = [...document.querySelectorAll('.frame .windows')];
+  const bs = boundaries();
+  boxes.forEach(box => {
+    const wins = [...box.querySelectorAll('.win')];
+    const sideways = horizontal();
+    for (let i = 0; i + 1 < wins.length && i < bs.length; i++) {
+      const grip = document.createElement('div');
+      grip.className = 'grip';
+      const before = wins[i];
+      const pos = sideways ? before.offsetLeft + before.offsetWidth
+                           : before.offsetTop + before.offsetHeight;
+      grip.style[sideways ? 'left' : 'top'] = pos + 'px';
+      grip.dataset.owner = bs[i].owner;
+      box.appendChild(grip);
+      grip.addEventListener('pointerdown', ev => {
+        ev.preventDefault();
+        grip.classList.add('dragging');
+        const rect = box.getBoundingClientRect();
+        const move = m => {
+          const frac = sideways ? (m.clientX - rect.left) / rect.width
+                                : (m.clientY - rect.top) / rect.height;
+          // The size is the window AFTER the boundary: what the pointer leaves.
+          const share = Math.min(0.85, Math.max(0.15, 1 - frac));
+          sizes[grip.dataset.owner] = Math.round(share * 100) / 100;
+          render();
+        };
+        const up = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      });
+    }
+  });
+}
+
+// Dragging a window to a side of the frame sets which way a split goes.
+// `diogenes-split-direction' is ONE setting for every kind -- the package has
+// no per-kind direction -- so dragging any window sets it for all of them, and
+// the note below the diagram says so rather than letting the gesture imply
+// otherwise.
+function installDrags() {
+  const boxes = [...document.querySelectorAll('.frame .windows')];
+  boxes.forEach(box => {
+    const zones = box.querySelector('.zones');
+    box.querySelectorAll('.win[draggable]').forEach(win => {
+      win.addEventListener('dragstart', ev => {
+        win.classList.add('lifted');
+        if (zones) zones.classList.add('on');
+        ev.dataTransfer.setData('text/plain', win.dataset.kind || '');
+        ev.dataTransfer.effectAllowed = 'move';
+      });
+      win.addEventListener('dragend', () => {
+        win.classList.remove('lifted');
+        if (zones) zones.classList.remove('on');
+      });
+    });
+    if (!zones) return;
+    zones.querySelectorAll('.zone').forEach(zone => {
+      zone.addEventListener('dragover', ev => {
+        ev.preventDefault();
+        zone.classList.add('over');
+      });
+      zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+      zone.addEventListener('drop', ev => {
+        ev.preventDefault();
+        zone.classList.remove('over');
+        zones.classList.remove('on');
+        el('direction').value = zone.dataset.dir;
+        render();
+      });
+    });
+  });
+}
+
+document.addEventListener('input', e => {
+  if (e.target.dataset.owner) {
+    sizes[e.target.dataset.owner] = Number(e.target.value) / 100;
+    render();
+  }
+});
 
 function newFrame(name) { const f = { name, wins: [] }; scene.push(f); return f; }
 function findWin(k) {
@@ -421,12 +627,13 @@ function place(k, label, opts = {}) {
   if (behaviour === 'split') {
     const dir = el('direction').value;
     const from = el('from').value;
-    const size = el('size').value.trim();
     return say(`<em>split</em> gives it a window of its own, ` +
       (dir ? `<code>${dir}</code>` : 'wherever Emacs sees room') +
       `, dividing ${from === 'selected' ? 'the window you are in'
                   : from === 'largest' ? 'the largest window' : 'the whole frame'}` +
-      (size ? ` and giving the new one <code>${size}</code>` : '') +
+      (boundaries().length
+        ? ` and giving it ${Math.round(boundaries()[0].value * 100)}%`
+        : '') +
       `. ${dir ? 'A direction asks Emacs nothing, so the thresholds cannot refuse it.'
                : 'If the thresholds refuse both ways, Diogenes splits anyway rather than ' +
                  'taking the window you are in.'}`);
@@ -496,13 +703,45 @@ function reset() {
       'Press the buttons in order.');
 }
 
+// The share of the frame each drawn window gets, in order.  Emacs's own
+// arithmetic: the first split gives the entry window its fraction OF THE
+// FRAME, and a second split divides THAT window -- so a dictionary at 0.5 of
+// an entry at 0.4 occupies a fifth of the frame, not a half of it.
+function shares(count) {
+  const bs = boundaries();
+  if (count < 2 || !bs.length) return new Array(count).fill(1 / count);
+  const out = [];
+  let left = 1;
+  for (let i = 0; i < bs.length && i < count - 1; i++) {
+    out.push(left * (1 - bs[i].value));
+    left = left * bs[i].value;
+  }
+  out.push(left);
+  // More windows than boundaries -- a startup window, say, or `*Messages*'
+  // sitting there -- share what is left of the last one evenly.
+  while (out.length < count) {
+    const tail = out.pop() / 2;
+    out.push(tail, tail);
+  }
+  return out;
+}
+
 function render() {
   el('frames').innerHTML = scene.map(frame => `
     <div class="frame${frame.isFresh ? ' fresh' : ''}">
       <div class="bar">${frame.name}</div>
       <div class="windows ${horizontal() ? 'rowdir' : 'col'}">
-        ${frame.wins.map(w => `
-          <div class="win ${w.kind}${w === fresh ? ' fresh' : ''}">
+        <div class="zones">
+          <div class="zone above" data-dir="above">above</div>
+          <div class="zone left" data-dir="left">left</div>
+          <div class="zone right" data-dir="right">right</div>
+          <div class="zone below" data-dir="below">below</div>
+        </div>
+        ${frame.wins.map((w, wi, all) => `
+          <div class="win ${w.kind}${w === fresh ? ' fresh' : ''}"
+               style="flex: ${shares(all.length)[wi].toFixed(4)} 1 0"
+               ${w.kind === 'home' ? '' : 'draggable="true"'}
+               data-kind="${w.kind}">
             ${w.kind === 'home' ? '' :
               `<b>${w.kind === 'entry' ? 'entry' : w.kind === 'browser' ? 'text' : 'dictionary'}</b>`}
             ${w.label || ''}
@@ -526,8 +765,15 @@ function render() {
       '<em>defer</em> is left to whatever you have installed rather than guessed at.';
   el('out').textContent = preset();
   el('initsnippet').textContent = initSnippet();
+  // The frames are drawn to the shape of a screen, so that a split of 40%
+  // looks like 40% of what the reader will actually see.  A property of the
+  // drawing and not of the preset: nothing about it is written to the file.
+  el('frames').style.setProperty('--screen', el('ratio').value);
   whereTo();
   updateSteps();
+  renderProportions();
+  installGrips();
+  installDrags();
 }
 
 // ---------- the files ----------
@@ -559,12 +805,17 @@ function preset() {
     out.push('(setq diogenes-passow-display-in-other-window t)');
     out.push('(setq diogenes-tgl-display-in-other-window t)');
   }
-  const dir = el('direction').value, from = el('from').value,
-        size = el('size').value.trim();
+  const dir = el('direction').value, from = el('from').value;
   const splitBits = [];
   if (dir) splitBits.push(`(setq diogenes-split-direction '${dir})`);
   if (from !== 'selected') splitBits.push(`(setq diogenes-split-from '${from})`);
-  if (size) splitBits.push(`(setq diogenes-split-size ${size})`);
+  const named = boundaries();
+  if (named.length) {
+    const lines = named.map(b =>
+      `        (${b.owner.padEnd(10)} . ${b.value.toFixed(2)})`);
+    splitBits.push('(setq diogenes-split-size\n      \'(' +
+                   lines.join('\n').trimStart() + '))');
+  }
   if (splitBits.length) { out.push(''); out.push(';; How a window is made.'); out.push(...splitBits); }
   const frameBits = [];
   if (el('popupframes').checked) frameBits.push("(setq pop-up-frames 'graphic-only)");
