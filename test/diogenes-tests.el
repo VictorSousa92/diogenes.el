@@ -474,6 +474,35 @@ asserts against real buffer names instead of a mechanism."
                             (string-match-p (car rule) "*scratch*"))
                           diogenes-purpose-regexp-purposes)))
 
+(ert-deftest diogenes-test-claim-does-not-display ()
+  "Claiming a buffer for a perspective must not put it in a window.
+Regression, and the one that cost the most: `persp-add-buffer' SWITCHES TO
+the buffer it is given.  `diogenes--claim-buffer' runs first in
+`diogenes--display-buffer', so an entry landed in the window the reader was
+in before the display path had decided anything -- and the display then found
+it there and correctly reused it.
+
+Nothing that was blamed for that reuse could have caused it: the window was
+taken before the action, the alist, the thresholds, window dedication and
+purpose were consulted.  Eight explanations were offered and each was wrong,
+which is what a fault upstream of every measurement looks like."
+  (save-window-excursion
+    (delete-other-windows)
+    (let* ((here (get-buffer-create " *diogenes-test-here*"))
+           (target (get-buffer-create " *diogenes-test-claimed*"))
+           (switched nil)
+           (diogenes-claim-buffers t)
+           ;; A claim function that misbehaves exactly as `persp-add-buffer'
+           ;; does, so the guard is what is under test.
+           (diogenes-claim-buffer-function
+            (lambda (b) (setq switched t) (switch-to-buffer b))))
+      (switch-to-buffer here)
+      (diogenes--claim-buffer target)
+      (should switched)
+      ;; ...and yet the window still holds what it held.
+      (should (eq (window-buffer (selected-window)) here))
+      (should (eq (current-buffer) here)))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

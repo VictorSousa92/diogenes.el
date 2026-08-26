@@ -322,17 +322,32 @@ set of buffers, so a buffer is reachable from any of them."
   "Add BUFFER to the current perspective, if there is one to add it to.
 Called for every Diogenes buffer as it is displayed -- which is one place,
 where the Doom module did it from six mode hooks and so missed any buffer
-whose mode was not among them."
+whose mode was not among them.
+
+WITHOUT DISPLAYING IT, which took a day to notice.  `persp-add-buffer\='
+SWITCHES TO the buffer it is given, so claiming an entry put it in the window
+the reader was in -- before the display path had decided anything, so the
+display then found it already there and correctly reused it.  Every
+explanation offered for that reuse was wrong, and had to be: the window was
+gone before any of the machinery blamed for it was consulted.
+
+`save-window-excursion\=' puts the configuration back, and
+`save-current-buffer\=' the buffer, so a claim is a claim and nothing else,
+whatever the perspective package does inside it."
   (when (and diogenes-claim-buffers buffer)
-    (pcase diogenes-claim-buffer-function
-      ('nil nil)
-      ('auto
-       ;; persp-mode and perspective.el: different packages, same minor-mode
-       ;; name and the same function, and either takes a buffer.
-       (when (and (bound-and-true-p persp-mode) (fboundp 'persp-add-buffer))
-         (ignore-errors (persp-add-buffer buffer))))
-      ((and (pred functionp) fn)
-       (ignore-errors (funcall fn buffer))))))
+    (save-window-excursion
+      (save-current-buffer
+        (pcase diogenes-claim-buffer-function
+          ('nil nil)
+          ('auto
+           ;; persp-mode and perspective.el: different packages, same
+           ;; minor-mode name and the same function, and either takes a
+           ;; buffer.
+           (when (and (bound-and-true-p persp-mode)
+                      (fboundp 'persp-add-buffer))
+             (ignore-errors (persp-add-buffer buffer))))
+          ((and (pred functionp) fn)
+           (ignore-errors (funcall fn buffer))))))))
 
 (defcustom diogenes-display-debug nil
   "When non-nil, record every decision `diogenes--display-buffer\=' makes.
