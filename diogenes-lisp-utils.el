@@ -387,9 +387,28 @@ miss and was missed here."
        ;; `diogenes-purpose', which uses an overriding action of its own, and
        ;; under `diogenes-doom', whose rules are in `display-buffer-alist'.
        ((or (diogenes--sole-home-window-p) same-window)
-        (let ((display-buffer-overriding-action
-               '(display-buffer-same-window (inhibit-same-window . nil))))
-          (display-buffer buffer)))
+        ;; A DEDICATED window declines, and `display-buffer' then puts the
+        ;; buffer somewhere else entirely -- which is not "somewhere else"
+        ;; but a refusal of what was asked.  window-purpose dedicates the
+        ;; lookup and browser windows to their purposes, so this is the
+        ;; ordinary case under it and not an edge one;
+        ;; `diogenes-old--display-in-this-window' has always undedicated for
+        ;; the same reason.  Put back afterwards, so purpose's arrangement
+        ;; survives our one exception to it.
+        (let* ((here (selected-window))
+               (dedicated (window-dedicated-p here))
+               (display-buffer-overriding-action
+                '(display-buffer-same-window (inhibit-same-window . nil))))
+          (when dedicated (set-window-dedicated-p here nil))
+          (unwind-protect
+              (display-buffer buffer)
+            (when (and dedicated
+                       (window-live-p here)
+                       (eq (window-buffer here) buffer))
+              ;; Only if what we asked for is what landed here: otherwise the
+              ;; window holds someone else's buffer, and dedicating it to
+              ;; that would be worse than leaving it undedicated.
+              (set-window-dedicated-p here dedicated)))))
        ;; An action the reader has set gets FIRST REFUSAL -- ahead of
        ;; `diogenes-purpose' and of `diogenes-doom', both of which would
        ;; otherwise win by where they put themselves.  A setting that loses to

@@ -56,11 +56,24 @@
   (should-not (diogenes--path-set-p ""))
   (should-not (diogenes--path-set-p 42)))
 
+(defconst diogenes-tests--a-real-file
+  (or (locate-library "diogenes-lisp-utils")
+      (and load-file-name
+           (expand-file-name "../diogenes-lisp-utils.el"
+                             (file-name-directory load-file-name))))
+  "A file that certainly exists, found without trusting `default-directory'.
+An earlier version of the test below used `(expand-file-name \"diogenes.el\")',
+which is the package directory under `make' and the home directory when the
+tests are run from `M-x' -- so it passed headless and failed in every live
+configuration, reporting a fault in the code that was a fault in the test.")
+
 (ert-deftest diogenes-test-path-usable-p ()
   "Usability is about the file system, and never signals."
-  (should (diogenes--path-usable-p (expand-file-name "diogenes.el") 'file))
+  (should (diogenes--path-usable-p diogenes-tests--a-real-file 'file))
   (should-not (diogenes--path-usable-p "/nonexistent/x.pdf" 'file))
-  (should (diogenes--path-usable-p (expand-file-name ".") 'directory))
+  (should (diogenes--path-usable-p (file-name-directory
+                                   diogenes-tests--a-real-file)
+                                  'directory))
   (should-not (diogenes--path-usable-p nil 'file)))
 
 (ert-deftest diogenes-test-source-set-p ()
@@ -242,10 +255,16 @@ availability predicate is not an error anyone can act on."
 ;; and leave the frames to `M-x diogenes-tests-run' in a live configuration.
 
 (defmacro diogenes-tests--with-two-windows (&rest body)
-  "Run BODY in a temporary buffer with the frame split, then restore."
+  "Run BODY with the frame split and the selected window undedicated.
+Undedicated because these tests are run inside a live configuration as well
+as headless, and under window-purpose the window they start in is dedicated
+to whatever it holds -- the `*ert*' buffer.  A dedicated window declines a
+same-window display, so the tests failed there while the code was right.
+The dedication is restored with the window configuration."
   (declare (indent 0) (debug t))
   `(save-window-excursion
      (delete-other-windows)
+     (set-window-dedicated-p (selected-window) nil)
      (split-window)
      ,@body))
 
@@ -299,6 +318,7 @@ Regression: `bl' from a bare splash screen opened a second window for the
 text and left the splash occupying the first."
   (save-window-excursion
     (delete-other-windows)
+    (set-window-dedicated-p (selected-window) nil)
     (let ((home (get-buffer-create "*GNU Emacs*"))
           (buffer (get-buffer-create " *diogenes-test-target*"))
           (diogenes-lookup-display-action
@@ -320,6 +340,7 @@ reason `q' returns to the entry is not the window history but
 `diogenes-old-return-to-entry' reads."
   (save-window-excursion
     (delete-other-windows)
+    (set-window-dedicated-p (selected-window) nil)
     (let ((first (get-buffer-create " *diogenes-test-first*"))
           (second (get-buffer-create " *diogenes-test-second*")))
       (switch-to-buffer first)
@@ -395,12 +416,16 @@ buffer being killed, which it was not."
          (diogenes-claim-buffer-function (lambda (b) (push b claimed))))
     (diogenes--claim-buffer buffer)
     (should-not claimed))
-  ;; And `auto' does nothing where no perspective package is installed,
-  ;; rather than signalling -- which is the state of this batch Emacs.
+  ;; And `auto' neither signals nor claims twice, whether or not a
+  ;; perspective package is installed.  Asserting that it returns nil was
+  ;; wrong: with persp-mode actually running it returns what
+  ;; `persp-add-buffer' returns, and the test failed in the one configuration
+  ;; where the code was doing its job.
   (let ((diogenes-claim-buffers t)
-        (diogenes-claim-buffer-function 'auto))
-    (should-not (diogenes--claim-buffer
-                 (get-buffer-create " *diogenes-test-target*")))))
+        (diogenes-claim-buffer-function 'auto)
+        (buffer (get-buffer-create " *diogenes-test-target*")))
+    (should (progn (diogenes--claim-buffer buffer) t))
+    (should (buffer-live-p buffer))))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
