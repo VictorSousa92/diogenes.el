@@ -1109,16 +1109,30 @@ particular about it and nothing else.
 
 ### Building one in a browser
 
-`tools/diogenes-preset-builder.html` needs no server and no dependencies.
-Choose how the windows should behave and it draws what that does, step by
-step: browse a text, look a word up, look up another, follow a word *inside*
-an entry, open the OLD, open the TLL, close the page. Then it hands you the
-file, and the two lines your init file needs.
+[**Open the preset builder**](https://htmlpreview.github.io/?https://github.com/VictorSousa92/diogenes.el/blob/modular-customizable/tools/diogenes-preset-builder.html)
+— or fetch [`tools/diogenes-preset-builder.html`](tools/diogenes-preset-builder.html)
+and open it locally, which is the same thing without the intermediary:
+
+```fish
+curl -O https://raw.githubusercontent.com/VictorSousa92/diogenes.el/modular-customizable/tools/diogenes-preset-builder.html
+xdg-open diogenes-preset-builder.html
+```
+
+It needs no server and no dependencies. Choose how the windows should behave
+and it draws what that does, step by step: browse a text, look a word up, look
+up another, follow a word *inside* an entry, open the OLD, open the TLL, close
+the page. Then it hands you the file, and the two lines your init file needs.
 
 The simulation applies the same rules in the same order the package does, and
 says which rule decided each step — a `C-c C-c` chain staying put, a lone
 startup window being taken, a second entry joining the first rather than
 splitting again, `q` returning to the entry.
+
+GitHub serves a `.html` in a repository as text rather than as a page, so the
+plain repository link shows the source; the first link goes through
+htmlpreview, which fetches the file and renders it. To be rid of the
+intermediary, enable GitHub Pages for the repository and the builder is at
+`https://victorsousa92.github.io/diogenes.el/tools/diogenes-preset-builder.html`.
 
 # Appendix: other commands
 
