@@ -737,8 +737,12 @@ Returns the lookup buffer."
       (let ((diogenes--lookup-same-window
              (or diogenes--lookup-same-window
                  (diogenes--sole-home-window-p))))
-        (if (featurep 'diogenes-purpose)
-            ;; --- diogenes-purpose active: mode before display ---
+        ;; `purpose-mode', not `(featurep 'diogenes-purpose)': our own module
+        ;; is required from `diogenes.el' and so always present, where the
+        ;; question is whether window-purpose is running and will classify
+        ;; this buffer as it is displayed.
+        (if (bound-and-true-p purpose-mode)
+            ;; --- window-purpose running: mode before display ---
             (progn
               (with-current-buffer lookup-buffer
                 (diogenes-lookup-mode))

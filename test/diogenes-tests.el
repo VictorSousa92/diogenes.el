@@ -783,6 +783,29 @@ every dictionary would open a frame of its own however they were set."
       ;; it here.
       (should-not (eq (window-buffer here) buffer)))))
 
+(ert-deftest diogenes-test-frames-wants-another-window ()
+  "Asking for `frames\=' asks for a window other than the entry\='s.
+`diogenes-old--display-other-window-p' decides whether a scan replaces the
+entry it was consulted from or goes elsewhere, and only `elsewhere\=' reaches
+the display helper -- so with this returning nil the gathering was never
+consulted and `frames\=' made no frame at all."
+  (let ((diogenes-old-display-in-other-window nil)
+        (pop-up-frames nil)
+        (diogenes-gather-frames 'auto))
+    ;; The behaviour alone is enough.
+    (let ((diogenes-window-behaviour 'frames))
+      (should (diogenes-old--display-other-window-p)))
+    (let ((diogenes-window-behaviour '((dictionary . frames))))
+      (should (diogenes-old--display-other-window-p)))
+    ;; And `frames' for a DIFFERENT kind is not: a reader who wants entries in
+    ;; frames and scans over the entry gets that.
+    (let ((diogenes-window-behaviour '((lookup . frames))))
+      (should-not (diogenes-old--display-other-window-p)))
+    ;; Nor is any other behaviour.
+    (dolist (behaviour '(defer reuse split))
+      (let ((diogenes-window-behaviour behaviour))
+        (should-not (diogenes-old--display-other-window-p))))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

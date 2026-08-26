@@ -985,8 +985,11 @@ purpose the page is in a window of its own and what is wanted is to move to
 that window, while here it shares the entry\='s window and what is wanted is
 to show it.  Each module answers for the arrangement it makes, and purpose\='s
 answer is the right one where purpose is in charge."
+  ;; `purpose-mode', not `(featurep \='diogenes-purpose)': the question is
+  ;; whether window-purpose is running and has bound this key itself, and our
+  ;; own module is required from `diogenes.el' and so always present.
   (unless (or (null diogenes-old-visit-dictionary-key)
-              (featurep 'diogenes-purpose))
+              (bound-and-true-p purpose-mode))
     (with-eval-after-load 'diogenes-perseus
       (dolist (map '(diogenes-lookup-mode-map diogenes-analysis-mode-map))
         (when (boundp map)
@@ -1065,12 +1068,22 @@ showing BUFFER back its previous buffer."
 
 (defun diogenes-old--display-other-window-p ()
   "Non-nil if a dictionary page belongs in a window other than the entry\'s.
-True when `diogenes-old-display-in-other-window' asks for it, and also
-when `pop-up-frames' is set -- wanting a frame of its own is wanting
-another window.  Must be consulted BEFORE `diogenes-old--show-page' binds
-`pop-up-frames' for the Reader, since that binding is about where the
-frame may go, not about what the user asked for."
-  (or diogenes-old-display-in-other-window pop-up-frames))
+True when `diogenes-old-display-in-other-window' asks for it; when
+`pop-up-frames' is set, wanting a frame of its own being wanting another
+window; and when the scans are being gathered into frames, which is the same
+wish said through `diogenes-window-behaviour'.
+
+That last is why `(setq diogenes-window-behaviour \\='frames)' alone was not
+enough: with `pop-up-frames' unset this returned nil, the page went into the
+entry's window, and the gathering was never reached to make a frame at all.
+
+Must be consulted BEFORE `diogenes-old--show-page' binds `pop-up-frames' for
+the Reader, since that binding is about where a frame may go, not about what
+the reader asked for."
+  (or diogenes-old-display-in-other-window
+      pop-up-frames
+      (and (eq (diogenes--behaviour-for 'dictionary) 'frames)
+           (diogenes--gathering-p))))
 
 (defun diogenes-old--display-page-buffer (buffer action other-window)
   "Display BUFFER and return it.
@@ -1157,7 +1170,10 @@ it.  See `diogenes-old-reader-reuse-document-frame'."
       ;; for.  The Reader branch above says the same and gets it right; this
       ;; one is a `let*' for the same reason.
       (let* ((other-window (diogenes-old--display-other-window-p))
-             (purpose (featurep 'diogenes-purpose))
+             ;; Whether WINDOW-PURPOSE is running, which is the question --
+             ;; `(featurep \='diogenes-purpose)' is not, our own module being
+             ;; required from `diogenes.el' and therefore always present.
+             (purpose (bound-and-true-p purpose-mode))
              (buffer (diogenes-old--open-buffer-in-viewer file viewer))
              (action (unless purpose diogenes-old-pdf-display-action))
              (pop-up-frames (if (and (not purpose)
