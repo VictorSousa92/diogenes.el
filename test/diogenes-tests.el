@@ -62,6 +62,9 @@
 ;; function under test cannot see -- so the test would fail while the code
 ;; was right.  These are the distributions' own variables, absent here.
 (defvar spacemacs-buffer-name)
+(defvar pdf-view-mode-map)
+(defvar doc-view-mode-map)
+(defvar reader-mode-map)
 (defvar +doom-dashboard-name)
 (defvar dashboard-buffer-name)
 
@@ -668,10 +671,19 @@ state maps before a major mode's, so a key bound only in
 Asserts the mode map here, evil not being loaded in a batch Emacs; the
 state binding is checked by `M-x diogenes-tests-run' in a live one."
   (let ((diogenes-pdf-search-key "L")
+        ;; DYNAMICALLY bound, which needs the `defvar' above: under
+        ;; `lexical-binding' a `let' on an undeclared symbol binds lexically,
+        ;; and the function under test would read the global while the
+        ;; assertion read the local -- a test failing against correct code.
         (pdf-view-mode-map (make-sparse-keymap)))
     (diogenes-pdf-search--bind 'pdf-view-mode)
     (should (eq (lookup-key pdf-view-mode-map (kbd "L"))
-                #'diogenes-pdf-lookup-entry))))
+                #'diogenes-pdf-lookup-entry))
+    ;; And nil for the key means no binding at all.
+    (let ((diogenes-pdf-search-key nil)
+          (doc-view-mode-map (make-sparse-keymap)))
+      (diogenes-pdf-search-setup-keys)
+      (should-not (lookup-key doc-view-mode-map (kbd "L"))))))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
