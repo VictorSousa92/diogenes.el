@@ -251,7 +251,7 @@ the path variables below.
 ```elisp
 (use-package diogenes
   :vc (:url "https://github.com/VictorSousa92/diogenes.el"
-       :branch "modular")
+       :branch "modular-customizable")
   :init
   ;; ... configuration, see below ...
   :bind ("C-c d" . diogenes))
@@ -264,7 +264,7 @@ with an ordinary `use-package` block:
 (unless (package-installed-p 'diogenes)
   (package-vc-install
    '(diogenes :url "https://github.com/VictorSousa92/diogenes.el"
-              :branch "modular")))
+              :branch "modular-customizable")))
 ```
 
 The `unless` guard matters: `package-vc-install` signals an error if the
@@ -279,7 +279,7 @@ package is already there, so without it every start-up fails. Update with
 (diogenes :location (recipe
                      :fetcher github
                      :repo "VictorSousa92/diogenes.el"
-                     :branch "modular"))
+                     :branch "modular-customizable"))
 ```
 
 ## Configuration
@@ -342,6 +342,12 @@ rather than broken.
   ;; PDF viewer: 'auto, 'pdf-tools or 'emacs-reader
   (setq diogenes-old-pdf-viewer 'auto)
 
+  ;; Presets, both optional.  The folder is where presets of your own live;
+  ;; without one, `M-x diogenes-load-preset' offers the four builtins.  The
+  ;; second names a preset to load at startup, by file name.
+  (setq diogenes-preset-directory "~/.emacs.d/diogenes-presets/")
+  (setq diogenes-preset "my-2024")
+
   :config
   ;; Optional, if you use flyspell: it has nothing useful to say about Greek
   ;; or Latin, and marks most of an entry as a misspelling.
@@ -362,6 +368,7 @@ rather than broken.
 - `diogenes-path` is the variable; there is no `diogenes-library-path`.
 - Passow and the TGL take the **parent** folder of the per-volume material; see [The dictionaries themselves](#the-dictionaries-themselves) for the layout and the OCR text files they need.
 - The XML dictionaries are built once from their TEI source: `-source-file` is what you downloaded, `-file` is where the built dictionary goes. Pressing the key offers to build it.
+- The two preset lines are optional, and both belong in `:init` so that the name is set before the package reads it. Leave `diogenes-preset-directory` out and `M-x diogenes-load-preset` offers `defer`, `reuse`, `split` and `frames`; leave `diogenes-preset` out and nothing is loaded until you ask. See [Presets](#presets).
 
 ## Looking a word up
 
@@ -643,7 +650,12 @@ has its own path variable, which must be set before use.
  
 Notes on the data:
  
-- OLD, TLL, Montanari, CGL, BDAG: page index comes from each PDF's own bookmarks and embedded OCR layer. No extra files needed.
+- OLD, TLL, Montanari, CGL, BDAG: the page index comes from the PDF's own bookmarks and embedded text layer. No extra files needed, but the bookmarks have to say what a page holds:
+  - **Each bookmark must name a headword** and point at the page it is on. `ἀγαθός`, `abacus`, or a running head like `ἀγαθός — ἀγών`: what matters is that the text of the bookmark begins with a word from the dictionary, since that word is the key the search compares against.
+  - **A bookmark per page, or per column, is what works best.** One bookmark per letter gives a letter's worth of pages and no way to choose among them, so the jump lands at the start of the letter.
+  - **The order must be alphabetical**, since the lookup is a binary search over the bookmark list. A PDF whose bookmarks run front-matter, plates, then the dictionary is fine — the non-alphabetical ones simply never match — but a shuffled dictionary is not.
+  - **The text layer is what confirms a hit.** Without OCR the jump still works from the bookmarks alone; with it, `diogenes-pdf-search` can look inside the open page.
+  - Montanari, CGL and BDAG as sold have bookmarks of this kind. A scan of your own may not: `M-x diogenes-old-show-bookmarks` (and the equivalents) prints what the package can see, which is the quickest way to find out whether a copy will work.
 - Bailly: its bookmarks name a word *somewhere* on the page rather than the page's bounds, so they give no page interval; the index comes from the **running heads** instead (`first lemma — page number — last lemma`), read from the PDF's text layer. No extra files needed, and nothing is built up front: a lookup reads only the dozen pages its binary search touches. Written for the typeset *Bailly 2020* named above; optionally run `M-x diogenes-bailly-build-index` once to read every head and write a portable `<pdf-name>-index.eld` beside the PDF.
 - Georges: bookmarked once per page, and each bookmark names **every entry on that page** (`Bd1_Sp0005-0006_a-3_abacinus_abactio_…`), which gives some 43 000 headword-to-page pairs. A word among them lands on its exact page; one that is not — an entry a crowded bookmark could not list (those end in `ua13`, *und andere*), a spelling filed differently, or a word Georges lacks — lands where it would stand alphabetically, and the echo area says so. Volumes are routed by the letters each covers, read from its own bookmarks. No extra files needed. Built after the zeno.org digitisation named above.
 - Passow and TGL: each volume folder needs **two files**, the volume PDF and a plain-text OCR `.txt` of the same volume. Lookups run against the `.txt`, so it is required.
@@ -899,8 +911,18 @@ mode's, so none of the dictionary keys would be reached — and the buffers
 being read-only, the letters do nothing useful in their place.
 
 So the read-only Diogenes buffers start in evil's **Emacs state**, where the
-keys are the ones the rest of this README describes. `C-z` gives you normal
-state for a moment if you want its motions.
+keys are the ones the rest of this README describes.
+
+Getting between the states:
+
+| From | Press | To |
+| --- | --- | --- |
+| Emacs state | `ESC` | normal state — evil's motions, its searches, `C-w` for windows, `SPC` for the leader |
+| normal state | `i` | insert state |
+| insert state | `C-z` | Emacs state, and the dictionary keys |
+
+`diogenes-evil-normal-state-key` is the first of those, `ESC` by default
+because in Emacs state it does nothing else.
 
 - `diogenes-evil-emacs-state-modes` is the list: lookup, analysis, search, forms, corpora.
 - **The browser is not in it.** Its only single-letter key is `q`, so normal state costs almost nothing and buys evil's motions in a text you are reading. Almost: the browser loads the next page when you move past the last line, by remapping `next-line`, and evil's `j` is `evil-next-line` — so the arrow keys page and `j` does not. Add `diogenes-browser-mode` to the list if you would rather have the paging.
@@ -908,15 +930,8 @@ state for a moment if you want its motions.
 - A mode whose state you have set yourself is left alone — an explicit `evil-set-initial-state` in your config wins.
 - `diogenes-evil-manage-initial-states` nil disables the whole thing, for anyone who would rather bind the letters into normal state by hand. That costs `o d p b t g G` inside dictionary buffers and keeps `j` and `k`.
 
-**All three states are available.** Press `ESC` in a lookup buffer and you are
-in normal state: evil's motions, its searches, `C-w` for windows, `SPC` for
-the leader — everything as elsewhere, with the dictionary letters standing
-down. Press `i` or `C-z` to go back to Emacs state and the dictionaries.
-
-So the dictionaries have the single letters when you want a dictionary, and
-evil has the keyboard when you want to move about, and neither is rebuilt
-inside the other. `diogenes-evil-normal-state-key` is the key, `ESC` by
-default because in Emacs state it does nothing.
+The dictionaries have the single letters when you want a dictionary, and evil
+has the keyboard when you want to move about.
 
 ## A frame with only a startup page in it
 
@@ -937,7 +952,7 @@ what they integrate with is present, and do nothing when it is not.
 | --- | --- | --- |
 | `diogenes-purpose` | `window-purpose` is loaded | what kind of buffer a lookup is, so purpose does not file it under `edit` and show it in the window you were reading |
 | `diogenes-evil` | `evil` is loaded | that the read-only buffers are Emacs-state, so the single-letter dictionary keys reach the dictionaries |
-| `diogenes-doom` | Doom (optional) | the focus commands; everything else it used to do is now core |
+| `diogenes-doom` | Doom (optional) | commands for moving between the frames |
 
 None of the three is Spacemacs- or Doom-specific in what it does.
 **window-purpose is an ordinary package** — Spacemacs enables it for everyone,
@@ -1009,11 +1024,11 @@ by name. Required from `diogenes.el` and installing itself when
 window-purpose appears, in either load order — there is nothing to add to an
 init file.
 
-The name matters more than the mode: a lookup buffer is created, displayed,
-and only *then* put into `diogenes-lookup-mode`, so at the moment purpose
-classifies it the mode is `fundamental-mode` and the mode table has nothing to
-say. `diogenes-purpose-regexp-purposes` says the same thing by name, which is
-settled when the buffer is made.
+Names do the work rather than modes. A lookup buffer is created, displayed,
+and only *then* put into `diogenes-lookup-mode` — so at the moment purpose
+classifies it the mode is still `fundamental-mode`, and a mode table has nothing
+to say about it. `diogenes-purpose-regexp-purposes` matches on the name, which
+is settled when the buffer is made.
 
 | | |
 | --- | --- |
@@ -1022,32 +1037,26 @@ settled when the buffer is made.
 | `diogenes-purpose-mode-purposes` | modes to purposes; kept, and true once the mode is set |
 | `diogenes-purpose-extra-name-purposes` | for grouping dictionary PDFs, which are named after their files |
 
-It no longer installs a `display-buffer-overriding-action`. It used to, and
-that was the cause of a fault worth recording: purpose *advises*
-`display-buffer`, so the wrapper ran from inside that advice and called
-`purpose--action-function` a second time — and twice through that function is a
-reuse where once is a split. Every attempt to make a lookup open in its own
-window on Spacemacs did nothing, and nothing reached it: not the display
-action, not `display-buffer-alist`, not the thresholds, not disabling
-`purpose-mode`.
-
 **`diogenes-evil`** tells evil that the read-only buffers are Emacs state, so
 the single-letter dictionary keys reach the dictionaries. Also automatic. See
 [Under evil](#under-evil-doom-spacemacs-with-evil).
 
-**`diogenes-doom`** is now only the focus commands —
+**`diogenes-doom`** gives you four commands for moving between the frames:
 `diogenes-doom-focus-lookup-frame`, `-browser-frame`, `-dictionary-frame`, and
-`diogenes-doom-delete-frames`. Everything else it once did is core, and better
-there:
+`diogenes-doom-delete-frames`, which closes them all.
 
-- the frame **gathering** is `diogenes-gather-frames` and `diogenes-frame-parameters`, so Spacemacs and plain Emacs get it too;
-- the **buffer roles** are `diogenes-role-regexps`, which is where a dictionary PDF goes to be given a frame of its own;
-- the **workspace claiming** is `diogenes-claim-buffers`, because persp-mode is a package rather than a Doom feature and perspective.el poses the same problem.
+Everything about where buffers go is core and applies whatever you run:
 
-Its old options still work, as aliases: `diogenes-doom-gather`,
-`diogenes-doom-frame-parameters`, `diogenes-doom-claim-buffers`, and
-`diogenes-doom-dictionary-regexps`, which is folded into
-`diogenes-role-regexps` at install.
+| | |
+| --- | --- |
+| `diogenes-gather-frames` | whether each kind shares a frame |
+| `diogenes-frame-parameters` | what a Diogenes frame asks for |
+| `diogenes-role-regexps` | which buffers count as which kind — add a dictionary PDF here to give the scans a frame of their own |
+| `diogenes-claim-buffers` | whether persp-mode or perspective.el is told about the buffer, so `C-x <left>` can reach it |
+
+`diogenes-doom-gather`, `diogenes-doom-frame-parameters`,
+`diogenes-doom-claim-buffers` and `diogenes-doom-dictionary-regexps` are
+aliases for the first four.
 
 ## Presets
 
@@ -1064,16 +1073,13 @@ A preset is an ordinary Lisp file that sets them:
 (setq diogenes-split-direction 'right)
 ```
 
-**The folder is optional.** With none, `M-x diogenes-load-preset` still offers
-`defer`, `reuse`, `split` and `frames` — the four behaviours are presets
-already, and asking anyone to write four files saying one thing each would be a
-poor beginning. Set `diogenes-preset-directory` when you have something of your
-own to keep, which is the arrangement the dictionaries have: an unset path
-means one fewer thing rather than a broken one.
+**The folder is optional.** `M-x diogenes-load-preset` offers `defer`, `reuse`,
+`split` and `frames` whether one is set or not — the four behaviours are
+presets in their own right. Set `diogenes-preset-directory` when you have a
+file of your own to keep.
 
-**A file replaces a builtin of the same name.** Write `split.el` and `split`
-means what your file says; the builtin drops out of the list rather than
-arguing with it.
+**A file replaces a builtin of the same name.** Write `split.el` and `split` is
+what your file says.
 
 | | |
 | --- | --- |
@@ -1088,11 +1094,11 @@ would be a display rule that does not exist. Set both
 `diogenes-preset-directory` and `diogenes-preset` in `:init`, so the name is
 there before the package reads it.
 
-A preset is loaded *after* your init file, deliberately: an init file holds
+A preset is loaded after your init file, so it wins over it: an init file holds
 what is true of the machine — the dictionary paths — and a preset what is true
-of what you are doing now, which is the more particular.
-`diogenes-preset-write-current` writes only options differing from their
-standard value, so a preset says what is particular about it and nothing else.
+of what you are doing now. `diogenes-preset-write-current` writes only the
+options that differ from their standard value, so a preset says what is
+particular about it and nothing else.
 
 ### Building one in a browser
 
@@ -1102,50 +1108,10 @@ step: browse a text, look a word up, look up another, follow a word *inside*
 an entry, open the OLD, open the TLL, close the page. Then it hands you the
 file, and the two lines your init file needs.
 
-The simulation applies the same rules in the same order the package does, so
-the four that are hard to guess are visible rather than described — a `C-c C-c`
-chain staying put, a lone startup window being taken, a second entry joining
-the first rather than splitting again, and `q` returning to the entry rather
-than to whatever the window held before it.
-
-**It has no dictionary paths, deliberately.** Those are facts about the
-machine, not about what you are doing: they belong in the init file, where they
-stay put whichever preset you load. Nor corrections or extra lemmata, which are
-corrections to the *data* and equally true whatever you are reading.
-
-## Tests
-
-Two runs, and both are wanted.
-
-**Headless** — the logic, identically on any machine:
-
-```fish
-make test          # or: emacs -Q -batch -L . -L test -l test/diogenes-tests.el -f ert-run-tests-batch-and-exit
-make compile       # fails on a compilation error
-make check         # both
-```
-
-**Inside a live configuration** — Doom, Spacemacs, plain Emacs:
-
-```
-M-x diogenes-tests-run
-```
-
-The same tests, with everything the distribution has done still in place. The
-headless run is necessary and not sufficient — the hardest faults in this
-package's history were each a distribution's doing and invisible under
-`emacs -Q`:
-
-- Doom's `find-file-hook` and three VC backends, which made opening a 549 MB dictionary take 3.65 seconds instead of 0.09
-- evil's state maps, which turned `q` in a dictionary page into `kill-current-buffer`
-- persp-mode, which hid a lookup buffer from `C-x <left>` while `switch-to-buffer` still found it by name
-- window-purpose's advice on `display-buffer`, which made every display setting unreachable
-
-`M-x diogenes-tests-environment` reports what the surrounding configuration is
-doing, and is the first thing to paste into a bug report.
-
-Each test names the fault it guards against, and one that says *regression* is
-one a real bug walked through.
+The simulation applies the same rules in the same order the package does, and
+says which rule decided each step — a `C-c C-c` chain staying put, a lone
+startup window being taken, a second entry joining the first rather than
+splitting again, `q` returning to the entry.
 
 # Appendix: other commands
 
