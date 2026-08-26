@@ -758,7 +758,7 @@ What to do about it, as a user, when a jump lands you off:
  
 1. **Look nearby first.** The target is usually only a page or two away, so scroll a little before anything else. This alone resolves most misses.
 2. **Search inside the open PDF with `L`.** From the PDF, `L` re-looks-up an entry and jumps to it (see [Searching inside an open PDF](#searching-inside-an-open-pdf)); it is the best remedy for a link or `o t m c b B p g G` key that landed wrong.
-3. **For the TGL specifically**, reach a badly-OCR'd word by its **root** with `C-u L` (`SPC u L` under Doom and Spacemacs) (compounds and derivatives are often printed under the root, not as separate entries), or open volume V's index near the word with `i` (`diogenes-tgl-open-index-here`) and find it by eye. Once the index shows a reference like `t.3 c.746`, follow it with `C-u L` [`SPC u L`] (choose the index-reference / other-tome option, give that tomus and column) and it jumps straight there.
+3. **For the TGL specifically**, reach a badly-OCR'd word by its **root** with `C-u L` [`SPC u L` under Doom and Spacemacs] (compounds and derivatives are often printed under the root, not as separate entries), or open volume V's index near the word with `i` (`diogenes-tgl-open-index-here`) and find it by eye. Once the index shows a reference like `t.3 c.746`, follow it with `C-u L` [`SPC u L`] (choose the index-reference / other-tome option, give that tomus and column) and it jumps straight there.
 | Command / key | Does |
 | --- | --- |
 | `L` (in the open PDF) | Re-look-up an entry and jump to it; works for every dictionary |
