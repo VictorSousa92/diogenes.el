@@ -686,6 +686,40 @@ state binding is checked by `M-x diogenes-tests-run' in a live one."
       (should-not (progn (diogenes-pdf-search--maybe-enable)
                          (bound-and-true-p diogenes-pdf-search-mode))))))
 
+(ert-deftest diogenes-test-pdf-prefix-shapes ()
+  "The prefix paths produce the argument shapes the command dispatches on.
+`C-u L' is three different jumps depending on the dictionary and the volume,
+and each hands `diogenes-pdf-lookup-entry' a differently shaped COLUMN-REF.
+Asserts the shapes rather than the prompting, which needs a person."
+  ;; A volume-V index jump: (:v5-index :part P :column C).
+  (let ((ref (list :v5-index :part 2 :column 746)))
+    (should (eq (car-safe ref) :v5-index))
+    (should (= (plist-get (cdr ref) :part) 2))
+    (should (= (plist-get (cdr ref) :column) 746)))
+  ;; The anomalous-roots section, by column and approximately.
+  (should (eq (car-safe (list :v5-anomalous-column :column 12))
+              :v5-anomalous-column))
+  (should (eq (car-safe (list :v5-anomalous-approx)) :v5-anomalous-approx))
+  ;; A cross-tome reference is a bare (TOMUS . COLUMN).
+  (let ((ref (cons 3 746)))
+    (should (integerp (car ref)))
+    (should (integerp (cdr ref)))
+    ;; ...and must not be mistaken for one of the keyword shapes.
+    (should-not (keywordp (car ref)))))
+
+(ert-deftest diogenes-test-pdf-command-takes-the-prefix-arguments ()
+  "The command accepts the column-reference and approximate arguments.
+Regression: a version of this file kept the resolver and the TGL helpers but
+lost the front end, so `C-u L' silently did what plain `L' does while the
+README described three jumps it no longer had."
+  (let ((arity (func-arity 'diogenes-pdf-lookup-entry)))
+    (should (= (car arity) 1))
+    (should (= (cdr arity) 3)))
+  (dolist (fn '(diogenes-pdf-search--tgl-v5-prompt
+                diogenes-pdf-search--tgl-v5-index-then-column
+                diogenes-pdf-search--tgl-column-page))
+    (should (fboundp fn))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is
