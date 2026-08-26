@@ -61,6 +61,7 @@
 (require 'cl-lib)
 (require 'diogenes-lisp-utils)          ; diogenes--display-buffer
 (require 'seq)
+(declare-function evil-define-key* "evil-core" (state keymap key def &rest bindings))
 
 ;; Each print-dictionary module is optional at load time: we only need
 ;; the one matching the PDF actually open.  Declare what we call so the
@@ -423,18 +424,32 @@ the prompt and the reader jumps to its page -- but, unlike pdf-tools,
 the Reader exposes no text layer, so the word under point cannot be
 offered as the prompt's default; the prompt simply starts empty."
   (when diogenes-pdf-search-key
-    (with-eval-after-load 'pdf-view
-      (when (boundp 'pdf-view-mode-map)
-        (keymap-set pdf-view-mode-map diogenes-pdf-search-key
-                    #'diogenes-pdf-lookup-entry)))
-    (with-eval-after-load 'doc-view
-      (when (boundp 'doc-view-mode-map)
-        (keymap-set doc-view-mode-map diogenes-pdf-search-key
-                    #'diogenes-pdf-lookup-entry)))
-    (with-eval-after-load 'reader
-      (when (boundp 'reader-mode-map)
-        (keymap-set reader-mode-map diogenes-pdf-search-key
-                    #'diogenes-pdf-lookup-entry)))))
+    (dolist (cell '((pdf-view . pdf-view-mode)
+                    (doc-view . doc-view-mode)
+                    (reader . reader-mode)))
+      (let ((feature (car cell))
+            (mode (cdr cell)))
+        (with-eval-after-load feature
+          (diogenes-pdf-search--bind mode))))))
+
+(defun diogenes-pdf-search--bind (mode)
+  "Bind `diogenes-pdf-search-key\=' to the lookup command in MODE.
+In the mode's own map, and -- where evil is loaded -- in its normal, motion
+and visual states as well.  A document buffer is one evil leaves in normal
+state, sensibly: `j\=', `k\=' and `C-d\=' are how one moves down a page of a
+scan.  But evil's state maps are searched before a major mode's, so a key
+bound only in the latter is not reached, and `L\=' would be
+`evil-window-bottom\=' rather than a lookup."
+  (let ((map (intern (format "%s-map" mode))))
+    (when (boundp map)
+      (keymap-set (symbol-value map) diogenes-pdf-search-key
+                  #'diogenes-pdf-lookup-entry))
+    (when (fboundp 'evil-define-key*)
+      (dolist (state '(normal motion visual))
+        (ignore-errors
+          (evil-define-key* state (symbol-value map)
+                            (kbd diogenes-pdf-search-key)
+                            #'diogenes-pdf-lookup-entry))))))
 
 (provide 'diogenes-pdf-search)
 ;;; diogenes-pdf-search.el ends here

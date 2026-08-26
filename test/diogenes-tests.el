@@ -658,6 +658,21 @@ arguing with it, and no way to say which they meant."
               (should (assoc name presets)))))
       (delete-directory dir t))))
 
+(ert-deftest diogenes-test-pdf-key-is-bound-where-evil-looks ()
+  "The PDF lookup key reaches the command in a document buffer under evil.
+A document buffer is one evil leaves in normal state, and rightly: `j', `k'
+and `C-d' are how one moves down a page of a scan.  But evil searches its
+state maps before a major mode's, so a key bound only in
+`pdf-view-mode-map' is not reached -- `L' would be `evil-window-bottom'.
+
+Asserts the mode map here, evil not being loaded in a batch Emacs; the
+state binding is checked by `M-x diogenes-tests-run' in a live one."
+  (let ((diogenes-pdf-search-key "L")
+        (pdf-view-mode-map (make-sparse-keymap)))
+    (diogenes-pdf-search--bind 'pdf-view-mode)
+    (should (eq (lookup-key pdf-view-mode-map (kbd "L"))
+                #'diogenes-pdf-lookup-entry))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is
