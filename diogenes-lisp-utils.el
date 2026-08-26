@@ -334,6 +334,35 @@ whose mode was not among them."
       ((and (pred functionp) fn)
        (ignore-errors (funcall fn buffer))))))
 
+(defvar purpose-action-function)
+
+(defmacro diogenes--with-our-answer (&rest body)
+  "Run BODY with window-purpose standing aside.
+window-purpose does not merely install a display action -- it ADVISES
+`display-buffer\=' itself, with `purpose-display-buffer-advice\='.  Advice on
+the function runs before the function, and therefore before
+`display-buffer-overriding-action\=', before `display-buffer-alist\=', and
+before any action a caller passes.  So a reader who sets
+`diogenes-lookup-display-action\=' has, on any Emacs with purpose loaded, set
+something that cannot be reached.
+
+An earlier commit claimed the overriding action was enough to come first.
+That was tested against Doom, whose popup manager keeps its rules in
+`display-buffer-alist\=' where an overriding action does win, and then assumed
+of purpose without testing -- and purpose is the one that advises.
+
+`purpose-action-function\=' is what the advice consults, so binding it to
+`ignore\=' makes the advice pass the call through untouched.  Nothing is
+removed and nothing is left changed: purpose is in charge again the moment
+BODY returns.  `diogenes-old--display-in-this-window\=' has always bound
+`display-buffer-overriding-action\=' to nil for the same purpose, which was
+half of this; the other half is that its advice needs neutralising too."
+  (declare (indent 0) (debug t))
+  `(let ((purpose-action-function
+          (if (boundp 'purpose-action-function) #'ignore
+            (bound-and-true-p purpose-action-function))))
+     ,@body))
+
 (cl-defun diogenes--display-buffer (buffer &key kind same-window action
                                           no-select)
   "Show BUFFER and return the window it is in.
@@ -401,7 +430,7 @@ miss and was missed here."
                 '(display-buffer-same-window (inhibit-same-window . nil))))
           (when dedicated (set-window-dedicated-p here nil))
           (unwind-protect
-              (display-buffer buffer)
+              (diogenes--with-our-answer (display-buffer buffer))
             (when (and dedicated
                        (window-live-p here)
                        (eq (window-buffer here) buffer))
@@ -417,7 +446,7 @@ miss and was missed here."
        ;; carries on to the alist and the modules have their say after all.
        (chosen
         (let ((display-buffer-overriding-action chosen))
-          (display-buffer buffer)))
+          (diogenes--with-our-answer (display-buffer buffer))))
        ;; Frames are in play, and nothing more specific was asked for.  This
        ;; is where Doom and Spacemacs come to the same behaviour: both put a
        ;; mechanism between a buffer and its window -- a popup manager and
@@ -431,7 +460,7 @@ miss and was missed here."
        ;; of its own, and to Doom, whose rules are in the alist.
        ((diogenes--gathering-p)
         (let ((display-buffer-overriding-action (diogenes--gathering-action)))
-          (display-buffer buffer)))
+          (diogenes--with-our-answer (display-buffer buffer))))
        ;; No frames, nothing set: whatever is installed decides, exactly as it
        ;; did before any of this -- `window-purpose' under Spacemacs, the
        ;; popup manager under Doom, plain `display-buffer' elsewhere.
@@ -619,7 +648,7 @@ When supplied, the keyword arguments add additional strings with a special meani
 - :all-string adds all values and toggles the other input mode (add <-> remove)
 - :regexp-string causes the next input to be read in as a regexp
 - :remove-string switches input mode to `remove'"
-  (setq list (copy-list list))
+  (setq list (cl-copy-list list))
   (setq remove-prompt (or remove-prompt prompt))
   (let ((max-mini-window-height 0.8))
     (cl-loop
@@ -661,11 +690,11 @@ When supplied, the keyword arguments add additional strings with a special meani
 	    (setq remove t))
 	   ((and remove (string= inp all-string))
 	    (setq remove nil
-		  current-list (copy-list list)
+		  current-list (cl-copy-list list)
 		  results nil))
 	   ((string= inp all-string)
 	    (setq current-list nil
-		  results (copy-list list)))
+		  results (cl-copy-list list)))
 	   (remove
 	    (let ((matches (cl-remove-if-not matcher results)))
 	      (setq remove nil

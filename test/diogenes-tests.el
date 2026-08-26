@@ -444,6 +444,28 @@ buffer being killed, which it was not."
     (should (progn (diogenes--claim-buffer buffer) t))
     (should (buffer-live-p buffer))))
 
+(ert-deftest diogenes-test-purpose-stands-aside ()
+  "An action of ours is not defeated by window-purpose's advice.
+Regression, and the most expensive of them: window-purpose ADVISES
+`display-buffer' rather than merely installing an action, so its advice runs
+before `display-buffer-overriding-action', before `display-buffer-alist' and
+before any action a caller passes.  Every attempt to make a lookup open in
+its own window therefore did nothing on Spacemacs, while behaving correctly
+under `emacs -Q' -- and the earlier claim that an overriding action came
+first had been tested against Doom, where the rules live in the alist, and
+assumed of purpose.
+
+Asserts the binding rather than the outcome: purpose is not installed in a
+batch Emacs, so what can be checked here is that the macro binds what the
+advice consults."
+  (let ((purpose-action-function 'something-else))
+    (diogenes--with-our-answer
+      (should (eq purpose-action-function #'ignore))))
+  ;; And leaves it as it was afterwards.
+  (let ((purpose-action-function 'something-else))
+    (diogenes--with-our-answer nil)
+    (should (eq purpose-action-function 'something-else))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is
