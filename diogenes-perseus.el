@@ -2878,6 +2878,12 @@ been resolved to by the time this is consulted.  PLIST takes:
   :info ALIST      -- ((OLD . NEW) ...), replacing only the analyses whose
                       morphology is OLD.  For a form with several analyses
                       of which one is wrong.
+  :lemma STRING    -- the headword to print instead, for every analysis of
+                      FORM.  Where Morpheus has the morphology of one word
+                      and the lemma of another: `superstite' is the ablative
+                      of `superstes', analysed from `super-sto'.  The entry
+                      the dictionary keys open follows the corrected lemma,
+                      the file's byte offset being dropped with it.
   :add ENTRIES     -- ((LEMMA . INFO) ...), further analyses to show after
                       those the file gives.  LEMMA nil means the lemma the
                       file already names, so a missing reading of the same
@@ -2890,6 +2896,11 @@ deponent's imperative an active infinitive:
 
     (setq diogenes-latin-analysis-corrections
           \\='((\"experire\" :info \"pres imperat pass 2nd sg\")))
+
+or, where both the lemma and the morphology are wrong:
+
+    (setq diogenes-latin-analysis-corrections
+          \\='((\"superstite\" :lemma \"superstes\" :info \"abl sg\")))
 
 or, to keep the file's reading and add the missing one:
 
@@ -2963,15 +2974,30 @@ analyses have no such table, there being no reported need for one."
     (if (null spec)
         analyses
       (let ((info-spec (plist-get spec :info))
+            (lemma-spec (plist-get spec :lemma))
             (model (car analyses)))
         (append
          (mapcar (lambda (analysis)
                    (let* ((old (plist-get analysis :info))
-                          (new (diogenes--corrected-info old info-spec)))
-                     (if (equal old new)
+                          (new (diogenes--corrected-info old info-spec))
+                          (analysis (if (equal old new)
+                                        analysis
+                                      (plist-put (copy-sequence analysis) :info
+                                                 (diogenes--mark-correction new)))))
+                     ;; A corrected LEMMA replaces the offset as well as the
+                     ;; name.  The offset in the file points at the entry for
+                     ;; the lemma the file names, so keeping it would print
+                     ;; the new headword and open the old entry -- which is
+                     ;; the fault being corrected, wearing a different label.
+                     ;; Nil sends the dictionary keys through the by-name path
+                     ;; instead, as a Morpheus lemma goes.
+                     (if (not lemma-spec)
                          analysis
-                       (plist-put (copy-sequence analysis) :info
-                                  (diogenes--mark-correction new)))))
+                       (let ((copy (copy-sequence analysis)))
+                         (setq copy (plist-put copy :lemma
+                                               (diogenes--mark-correction
+                                                lemma-spec)))
+                         (plist-put copy :offset nil)))))
                  analyses)
          (cl-loop for (lemma . info) in (plist-get spec :add)
                   collect (diogenes--added-analysis lemma info model lang)))))))

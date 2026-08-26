@@ -216,6 +216,36 @@ any word died in `string-trim'."
          (first (car (plist-get record :analyses))))
     (should (equal (plist-get first :info) "neut gen pl"))))
 
+(ert-deftest diogenes-test-corrections-replace-the-lemma ()
+  "`:lemma' replaces the headword, and drops the offset with it.
+Where Morpheus has the morphology of one word and the lemma of another --
+`superstite' is the ablative of `superstes', analysed from `super-sto' -- the
+entry the dictionary keys open has to follow the correction.  The file's byte
+offset points at the entry for the lemma the FILE names, so keeping it would
+print one headword and open another."
+  (let* ((diogenes-latin-mark-corrections t)
+         (diogenes-latin-analysis-corrections
+          '(("siderum" :lemma "corrected-lemma")))
+         (record (diogenes--parse-analyses-record
+                  (encode-coding-string diogenes-tests--record 'utf-8)
+                  "latin"))
+         (first (car (plist-get record :analyses))))
+    (should (equal (plist-get first :lemma) "corrected-lemma [corr.]"))
+    (should-not (plist-get first :offset))
+    ;; The morphology is untouched where only the lemma is corrected.
+    (should (equal (plist-get first :info) "neut gen pl")))
+  ;; And both at once, which is the case that prompted this.
+  (let* ((diogenes-latin-mark-corrections nil)
+         (diogenes-latin-analysis-corrections
+          '(("siderum" :lemma "superstes" :info "abl sg")))
+         (record (diogenes--parse-analyses-record
+                  (encode-coding-string diogenes-tests--record 'utf-8)
+                  "latin"))
+         (first (car (plist-get record :analyses))))
+    (should (equal (plist-get first :lemma) "superstes"))
+    (should (equal (plist-get first :info) "abl sg"))
+    (should-not (plist-get first :offset))))
+
 (ert-deftest diogenes-test-corrections-add-a-reading ()
   "`:add' keeps the file's analysis and appends one of its own."
   (let* ((diogenes-latin-mark-corrections nil)
