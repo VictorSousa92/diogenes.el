@@ -32,8 +32,10 @@
   (diogenes--send-cmd-to-browser (number-to-string height)))
 
 (defun diogenes-browser-forward ()
-  "Load the next page from the Diogenes browser."
-  (interactive "p")
+  "Load the next page from the Diogenes browser.
+Takes no prefix argument: how much to advance is the window's own height
+less `next-screen-context-lines', not something to count."
+  (interactive)
   (setq diogenes--browser-backwards nil)
   (goto-char (point-max))
   (diogenes--send-cmd-to-browser
@@ -42,8 +44,9 @@
 	   "n")))
 
 (defun diogenes-browser-backward ()
-  "Load the previous page from the Diogenes browser."
-  (interactive "p")
+  "Load the previous page from the Diogenes browser.
+Takes no prefix argument, as `diogenes-browser-forward' takes none."
+  (interactive)
   (setq diogenes--browser-backwards t)
   (goto-char (point-min))
   (diogenes--send-cmd-to-browser
