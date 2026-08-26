@@ -39,6 +39,7 @@
 (require 'diogenes-lisp-utils)
 (require 'diogenes-perseus)
 (require 'diogenes-purpose)
+(require 'diogenes-evil)
 
 ;; Every file, not just the two the assertions name.  The command-shape test
 ;; below scans whatever commands are DEFINED, and headless only these two
@@ -534,6 +535,28 @@ gathering is what makes frames usable rather than one per entry."
       (should (diogenes--gathering-p)))
     (let ((diogenes-window-behaviour 'split))
       (should-not (diogenes--gathering-p)))))
+
+(ert-deftest diogenes-test-restored-keys-take-nothing ()
+  "No key put back in Emacs state may be a key a dictionary wants.
+Emacs state exists so that `o\=', `g\=', `B\=' and the rest reach the dictionaries.
+Handing evil\='s motions back is only safe if the two sets do not meet -- so
+this asserts they do not, rather than trusting me to have noticed.  `d\=', `c\=',
+`p\=', `P\=', `b\=' and `l\=' are the six that had to be left out."
+  (let ((restored (mapcar #'car diogenes-evil-restored-keys))
+        (dictionary '("o" "t" "m" "c" "b" "p" "B" "d" "G" "g" "l" "P")))
+    (dolist (key restored)
+      (should-not (member key dictionary)))
+    ;; And the leader is not one of them either.
+    (when diogenes-evil-leader-key
+      (should-not (member diogenes-evil-leader-key dictionary))
+      (should-not (member diogenes-evil-leader-key restored)))))
+
+(ert-deftest diogenes-test-restored-keys-cover-navigation ()
+  "The keys one actually moves with are among those put back.
+An entry is a long text to read and search, so these are not a nicety."
+  (let ((restored (mapcar #'car diogenes-evil-restored-keys)))
+    (dolist (key '("j" "k" "C-d" "C-u" "/" "n" "N" "C-o" "C-w"))
+      (should (member key restored)))))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
