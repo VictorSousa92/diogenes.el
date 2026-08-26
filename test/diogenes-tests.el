@@ -217,26 +217,35 @@ any word died in `string-trim'."
     (should (equal (plist-get first :info) "neut gen pl"))))
 
 (ert-deftest diogenes-test-corrections-replace-the-lemma ()
-  "`:lemma' replaces the headword, and drops the offset with it.
-Where Morpheus has the morphology of one word and the lemma of another --
-`superstite' is the ablative of `superstes', analysed from `super-sto' -- the
-entry the dictionary keys open has to follow the correction.  The file's byte
-offset points at the entry for the lemma the FILE names, so keeping it would
-print one headword and open another."
+  "`:lemma' replaces the headword that is PRINTED, and the entry it opens.
+Three fields, which is the point: `:display' is what appears on the screen,
+`:lemma' is what the assimilation machinery reads, and `:offset' is where the
+entry begins.  Setting only `:lemma' leaves the old headword displayed;
+setting `:offset' to 0 opens byte 0 of the dictionary, which is the entry for
+the letter A.
+
+The entry for a corrected lemma is found by name, as a Morpheus lemma's is --
+so in a batch Emacs, with no dictionary to search, that search fails
+harmlessly, the offset falls back to the file's own, and the confidence says
+the headword is a guess.  Which is also what happens to a reader whose
+`diogenes-path' is unset: a correction must not signal.  What can be checked
+here is that all three fields move together."
   (let* ((diogenes-latin-mark-corrections t)
          (diogenes-latin-analysis-corrections
-          '(("siderum" :lemma "corrected-lemma")))
+          '(("siderum" :lemma "superstes")))
          (record (diogenes--parse-analyses-record
                   (encode-coding-string diogenes-tests--record 'utf-8)
                   "latin"))
          (first (car (plist-get record :analyses))))
-    (should (equal (plist-get first :lemma) "corrected-lemma [corr.]"))
-    ;; ZERO, not nil: this file's way of saying `find the entry by name', and
-    ;; the offsets are compared with `=' elsewhere, where a nil is an error.
-    (should (equal (plist-get first :offset) 0))
+    ;; What is printed.
+    (should (equal (plist-get first :display) "superstes [corr.]"))
+    ;; What the machinery reads: the bare lemma, unmarked.
+    (should (equal (plist-get first :lemma) "superstes"))
+    ;; A number, always: these are compared with `='.
+    (should (numberp (plist-get first :offset)))
     ;; The morphology is untouched where only the lemma is corrected.
     (should (equal (plist-get first :info) "neut gen pl")))
-  ;; And both at once, which is the case that prompted this.
+  ;; Both at once, which is the case that prompted this.
   (let* ((diogenes-latin-mark-corrections nil)
          (diogenes-latin-analysis-corrections
           '(("siderum" :lemma "superstes" :info "abl sg")))
@@ -244,10 +253,8 @@ print one headword and open another."
                   (encode-coding-string diogenes-tests--record 'utf-8)
                   "latin"))
          (first (car (plist-get record :analyses))))
-    (should (equal (plist-get first :lemma) "superstes"))
+    (should (equal (plist-get first :display) "superstes"))
     (should (equal (plist-get first :info) "abl sg"))
-    (should (equal (plist-get first :offset) 0))
-    ;; And a number, so that comparing it cannot signal.
     (should (numberp (plist-get first :offset)))))
 
 (ert-deftest diogenes-test-corrections-add-a-reading ()

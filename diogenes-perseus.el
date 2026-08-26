@@ -2984,26 +2984,43 @@ analyses have no such table, there being no reported need for one."
                                         analysis
                                       (plist-put (copy-sequence analysis) :info
                                                  (diogenes--mark-correction new)))))
-                     ;; A corrected LEMMA replaces the offset as well as the
-                     ;; name.  The offset in the file points at the entry for
-                     ;; the lemma the FILE names, so keeping it would print
-                     ;; the new headword and open the old entry -- the fault
-                     ;; being corrected, wearing a better label.
+                     ;; A corrected LEMMA is the headword the reader has
+                     ;; supplied, so its ENTRY is found the way a Morpheus
+                     ;; lemma's is -- by name among the dictionary's keys, and
+                     ;; under the assimilated spellings if it is a compound.
+                     ;; See `diogenes--morpheus-analyses'.
                      ;;
-                     ;; ZERO, which is how this file says `no offset, find the
-                     ;; entry by name' -- see `diogenes--added-analysis' and
-                     ;; the Morpheus analyses, which are built the same way.
-                     ;; Nil is not: `diogenes--lookup-same-entry-p' compares
-                     ;; offsets with `=', so a nil there is a
-                     ;; `number-or-marker-p' error on the next lookup of the
-                     ;; same word.
+                     ;; Three fields and not one.  `:display' is what is
+                     ;; printed, `:lemma' what the assimilation machinery
+                     ;; reads, and `:offset' where the entry begins.  Setting
+                     ;; only `:lemma' left the wrong headword on the screen;
+                     ;; setting the offset to 0 opened byte 0 of the file,
+                     ;; which is the entry for the letter A.
                      (if (not lemma-spec)
                          analysis
-                       (let ((copy (copy-sequence analysis)))
-                         (setq copy (plist-put copy :lemma
-                                               (diogenes--mark-correction
-                                                lemma-spec)))
-                         (plist-put copy :offset 0)))))
+                       (let* ((plain (diogenes--ascii-alpha-only lemma-spec))
+                              ;; A correction must not signal: the dictionary
+                              ;; may not be searchable at all -- `diogenes-path'
+                              ;; unset, the file absent -- and a reader who has
+                              ;; named a better headword should still see it,
+                              ;; with the caveat that its entry is a guess.
+                              (offset
+                               (ignore-errors
+                                 (or (diogenes--dict-exact-offset plain lang)
+                                     (diogenes--assimilated-offset lemma-spec
+                                                                   lang))))
+                              (shown (diogenes--mark-correction lemma-spec))
+                              (copy (copy-sequence analysis)))
+                         (setq copy (plist-put copy :lemma lemma-spec))
+                         (setq copy (plist-put copy :display shown))
+                         ;; A confidence of 5 where the entry was found, and 0
+                         ;; where it was not -- which prints the caveat about
+                         ;; the headword being a guess rather than pretending
+                         ;; to an entry it has not got.
+                         (setq copy (plist-put copy :conf (if offset 5 0)))
+                         (plist-put copy :offset
+                                    (or offset
+                                        (plist-get analysis :offset)))))))
                  analyses)
          (cl-loop for (lemma . info) in (plist-get spec :add)
                   collect (diogenes--added-analysis lemma info model lang)))))))
