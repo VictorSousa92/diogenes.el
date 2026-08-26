@@ -901,6 +901,50 @@ form actually written, which differs by more than the prefix."
     (should (member "immitto" (diogenes--latin-assimilations "in-mitto")))
     (should (member "coeo" (diogenes--latin-assimilations "con-eo")))))
 
+(ert-deftest diogenes-test-split-size-per-kind ()
+  "`diogenes-split-size' answers per kind as well as globally.
+A number applies to every split; an alist gives each kind its own share, and
+a kind the alist does not mention gets half.
+
+What has a size is a WINDOW and not a kind, so a size only means anything for
+the kind whose window a split creates.  Where a scan reuses the entry's window
+there is one window and one size, and the size named for `dictionary' has
+nothing to act on -- which is why the builder disables that slider rather than
+writing a number nobody reads."
+  ;; One number for all.
+  (let ((diogenes-split-size 0.4))
+    (dolist (kind '(lookup browser dictionary))
+      (should (equal (diogenes--split-size-for kind) 0.4))))
+  ;; Per kind, and half for the rest.
+  (let ((diogenes-split-size '((lookup . 0.35) (dictionary . 0.6))))
+    (should (equal (diogenes--split-size-for 'lookup) 0.35))
+    (should (equal (diogenes--split-size-for 'dictionary) 0.6))
+    (should-not (diogenes--split-size-for 'browser)))
+  (let ((diogenes-split-size nil))
+    (should-not (diogenes--split-size-for 'lookup))))
+
+(ert-deftest diogenes-test-split-size-reaches-the-action ()
+  "The size for a kind is in the action built for that kind.
+A width when the split goes sideways and a height when it goes down, which is
+the same number either way -- `diogenes-split-direction' decides which."
+  (let ((diogenes-split-size '((lookup . 0.35) (dictionary . 0.6)))
+        (diogenes-split-direction 'right)
+        (diogenes-split-from 'selected))
+    (let ((for-lookup (diogenes--behaviour-action 'split 'lookup))
+          (for-dict (diogenes--behaviour-action 'split 'dictionary))
+          (for-browser (diogenes--behaviour-action 'split 'browser)))
+      (should (equal (cdr (assq 'window-width for-lookup)) 0.35))
+      (should (equal (cdr (assq 'window-width for-dict)) 0.6))
+      ;; Unmentioned: no entry at all, so Emacs halves it.
+      (should-not (assq 'window-width for-browser))
+      (should-not (assq 'window-height for-lookup))))
+  ;; Downwards, the same numbers are heights.
+  (let ((diogenes-split-size '((lookup . 0.35)))
+        (diogenes-split-direction 'below))
+    (let ((action (diogenes--behaviour-action 'split 'lookup)))
+      (should (equal (cdr (assq 'window-height action)) 0.35))
+      (should-not (assq 'window-width action)))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

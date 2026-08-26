@@ -353,15 +353,32 @@ something Emacs can infer."
   :group 'diogenes)
 
 (defcustom diogenes-split-size nil
-  "How much of the window a split gives the new one.
-A float between 0 and 1 is a fraction of the old window; an integer is lines
-\(for `below\=' and `above\=') or columns (for `right\=' and `left\='); nil divides
-it evenly.
+  "How much of the divided window the new one takes, or nil for half.
+A number of lines or columns, or a float between 0 and 1 for a fraction of
+what is being divided.  Applied in whichever direction the split went.
 
-Worth setting for an entry beside a text: half a wide screen is more than a
-column of definitions needs, and 0.35 leaves the text the room it wants."
-  :type '(choice (const :tag "Evenly" nil) number)
+An ALIST answers per kind, as `diogenes-window-behaviour\=' does:
+
+    (setq diogenes-split-size \='((lookup . 0.4) (dictionary . 0.55)))
+
+A kind the alist does not mention gets half, which is what Emacs does unasked.
+
+It governs the split that MAKES a window and nothing after.  Where a kind
+REUSES another\='s window -- a scanned page taking the entry\='s, a second entry
+taking the first\='s -- there is no split and no size of its own: one window has
+one size, and the buffer that arrives second inherits it.  So a size for a
+kind that never gets a window of its own has nothing to act on."
+  :type '(choice (const :tag "Half" nil)
+                 (number :tag "Lines, columns, or a fraction")
+                 (alist :key-type symbol :value-type number))
   :group 'diogenes)
+
+(defun diogenes--split-size-for (kind)
+  "What `diogenes-split-size\=' says about KIND, or nil for half."
+  (if (and (consp diogenes-split-size)
+           (consp (car diogenes-split-size)))
+      (cdr (assq kind diogenes-split-size))
+    diogenes-split-size))
 
 (defcustom diogenes-split-from 'selected
   "Which window is divided when a new one is wanted.
@@ -378,16 +395,18 @@ column of definitions needs, and 0.35 leaves the text the room it wants."
                  (const :tag "Whichever is largest" largest))
   :group 'diogenes)
 
-(defun diogenes--split-alist ()
-  "The `display-buffer\=' alist entries describing how to divide a window."
+(defun diogenes--split-alist (&optional kind)
+  "The `display-buffer\=' alist entries describing how to divide a window.
+KIND selects the size, `diogenes-split-size\=' being answerable per kind."
   (append
    (when diogenes-split-direction
      (list (cons 'direction diogenes-split-direction)))
-   (when diogenes-split-size
-     (list (cons (if (memq diogenes-split-direction '(right left))
-                     'window-width
-                   'window-height)
-                 diogenes-split-size)))
+   (let ((size (diogenes--split-size-for kind)))
+     (when size
+       (list (cons (if (memq diogenes-split-direction '(right left))
+                       'window-width
+                     'window-height)
+                   size))))
    (pcase diogenes-split-from
      ('main '((window . main)))
      ('root '((window . root)))
@@ -405,8 +424,8 @@ pop-up; then `diogenes--display-split-anyway\=', which does not ask."
    '(display-buffer-pop-up-window
      diogenes--display-split-anyway)))
 
-(defun diogenes--behaviour-action (behaviour)
-  "The `display-buffer\=' action BEHAVIOUR stands for.
+(defun diogenes--behaviour-action (behaviour &optional kind)
+  "The `display-buffer\=' action BEHAVIOUR stands for, for a buffer of KIND.
 Built rather than looked up, because `diogenes-split-direction\=',
 `diogenes-split-size\=' and `diogenes-split-from\=' have a say in three of the
 four and a table could not hold them.
@@ -419,14 +438,14 @@ entry needs somewhere new."
               (inhibit-same-window . nil)))
     ('split `(,(cons 'diogenes-display-in-role-frame
                      (diogenes--split-functions))
-              ,@(diogenes--split-alist)))
+              ,@(diogenes--split-alist kind)))
     ('frames `((diogenes-display-in-role-frame
                 display-buffer-pop-up-frame
                 ,@(diogenes--split-functions))
                (inhibit-same-window . t)
                (reusable-frames . visible)
                (pop-up-frame-parameters . ,diogenes-frame-parameters)
-               ,@(diogenes--split-alist)))
+               ,@(diogenes--split-alist kind)))
     (_ nil)))
 
 (defun diogenes--behaviour-for (kind)
@@ -454,15 +473,27 @@ these behaviours exists to prevent."
          (side (pcase diogenes-split-direction
                  ('above 'above) ('left 'left)
                  (_ nil)))
+         ;; The size the ACTION carries, which is the one for this kind:
+         ;; `diogenes--split-alist' put it there.  Reading
+         ;; `diogenes-split-size' here instead would ignore a per-kind
+         ;; setting, this function being the last resort of every behaviour.
+         (size (let ((n (or (cdr (assq 'window-width alist))
+                            (cdr (assq 'window-height alist)))))
+                 (and (numberp n)
+                      (if (floatp n)
+                          (round (* n (if horizontal
+                                          (window-total-width)
+                                        (window-total-height))))
+                        n))))
          (window
           (or (ignore-errors
-                (split-window (selected-window) nil
+                (split-window (selected-window) size
                               (or side (if horizontal 'right 'below))))
               ;; Whichever way was asked for may be impossible; the other way
               ;; is better than not splitting, which would mean taking the
               ;; window the reader is in.
               (ignore-errors
-                (split-window (selected-window) nil
+                (split-window (selected-window) size
                               (if horizontal 'below 'right))))))
     (when (window-live-p window)
       (window--display-buffer buffer window 'window alist))))
@@ -483,7 +514,7 @@ the other two."
         (_ nil))
       ;; `defer' yields nil, there being nothing for it to be: it means that
       ;; no action of ours is passed at all.
-      (diogenes--behaviour-action (diogenes--behaviour-for kind))))
+      (diogenes--behaviour-action (diogenes--behaviour-for kind) kind)))
 
 (defcustom diogenes-claim-buffers t
   "Whether a Diogenes buffer is claimed by the perspective it appears in.
