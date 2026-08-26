@@ -95,6 +95,9 @@
 ;; purpose has no entry for a lookup buffer and shows one in the window you
 ;; were reading in.
 (require 'diogenes-purpose)
+;; Presets: a directory of files, each a set of settings, switched between with
+;; `M-x diogenes-load-preset'.  Does nothing until there is a preset to load.
+(require 'diogenes-presets)
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)
 ;(require 'diogenes-window)

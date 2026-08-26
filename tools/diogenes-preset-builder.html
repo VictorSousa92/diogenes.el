@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diogenes preset builder</title>
+<style>
+  :root {
+    --ink: #1c1a17;
+    --paper: #f7f4ee;
+    --rule: #d8d2c6;
+    --quiet: #6f6a61;
+    --entry: #b8543f;
+    --browser: #3f6b8a;
+    --dict: #6d6136;
+    --accent: #7a3b2e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 15px/1.5 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  header {
+    padding: 1.6rem 2rem 1.1rem; border-bottom: 1px solid var(--rule);
+  }
+  h1 { margin: 0; font-size: 1.45rem; font-weight: 600; letter-spacing: -0.01em; }
+  header p { margin: .35rem 0 0; color: var(--quiet); max-width: 60ch; }
+  main { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .pane { padding: 1.5rem 2rem 2.5rem; }
+  .pane + .pane { border-left: 1px solid var(--rule); }
+  @media (max-width: 900px) { .pane + .pane { border-left: 0; border-top: 1px solid var(--rule); } }
+  h2 {
+    font-size: .78rem; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--quiet); font-weight: 600; margin: 2rem 0 .7rem;
+  }
+  h2:first-child { margin-top: 0; }
+  label.block { display: block; margin: .55rem 0; }
+  .choice {
+    display: block; border: 1px solid var(--rule); border-radius: 3px;
+    padding: .6rem .75rem; margin: .4rem 0; cursor: pointer; background: #fff;
+  }
+  .choice:hover { border-color: var(--quiet); }
+  .choice.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+  .choice input { margin-right: .5rem; }
+  .choice b { font-weight: 600; }
+  .choice span { display: block; color: var(--quiet); font-size: .87rem; margin-left: 1.4rem; }
+  input[type=text] {
+    width: 100%; padding: .4rem .5rem; border: 1px solid var(--rule);
+    border-radius: 3px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .82rem; background: #fff; color: var(--ink);
+  }
+  .field { margin: .5rem 0; }
+  .field span { display: block; font-size: .8rem; color: var(--quiet); margin-bottom: .15rem; }
+  .row { display: flex; gap: .6rem; align-items: center; margin: .45rem 0; }
+  .row input[type=checkbox] { margin: 0; }
+  /* --- the diagram --- */
+  .stage { background: #fff; border: 1px solid var(--rule); border-radius: 4px; padding: 1rem; }
+  .frames { display: flex; gap: .8rem; flex-wrap: wrap; }
+  .frame {
+    flex: 1 1 190px; min-width: 170px; border: 2px solid var(--ink); border-radius: 3px;
+    background: #fdfcfa; overflow: hidden;
+  }
+  .frame .bar {
+    font: 600 .68rem/1.7 ui-monospace, Menlo, monospace; text-align: center;
+    background: var(--ink); color: var(--paper); letter-spacing: .04em;
+  }
+  .windows { display: flex; flex-direction: column; min-height: 150px; }
+  .windows.horiz { flex-direction: row; }
+  .win {
+    flex: 1; padding: .55rem .6rem; font-size: .82rem; border-top: 1px solid var(--rule);
+    display: flex; flex-direction: column; justify-content: center; min-height: 42px;
+  }
+  .win:first-child { border-top: 0; }
+  .windows.horiz .win { border-top: 0; border-left: 1px solid var(--rule); }
+  .windows.horiz .win:first-child { border-left: 0; }
+  .win b { display: block; font-size: .73rem; letter-spacing: .04em; text-transform: uppercase; }
+  .win.entry { background: #fbeeea; } .win.entry b { color: var(--entry); }
+  .win.browser { background: #eaf1f6; } .win.browser b { color: var(--browser); }
+  .win.dict { background: #f4f1e4; } .win.dict b { color: var(--dict); }
+  .win.empty { background: #fafafa; color: #b3aea4; font-style: italic; }
+  .win em { font-style: normal; color: var(--quiet); font-size: .78rem; }
+  .steps { display: flex; gap: .4rem; flex-wrap: wrap; margin: .9rem 0 .3rem; }
+  .steps button {
+    font: inherit; font-size: .82rem; padding: .35rem .7rem; cursor: pointer;
+    border: 1px solid var(--rule); background: #fff; border-radius: 3px; color: var(--ink);
+  }
+  .steps button:hover { border-color: var(--accent); color: var(--accent); }
+  .steps button.reset { margin-left: auto; color: var(--quiet); }
+  .said { margin: .6rem 0 0; font-size: .87rem; color: var(--quiet); min-height: 2.6em; }
+  pre {
+    background: #fff; border: 1px solid var(--rule); border-radius: 4px;
+    padding: .9rem 1rem; overflow-x: auto; font-size: .8rem; line-height: 1.45;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; white-space: pre;
+  }
+  .actions { display: flex; gap: .6rem; margin-top: .8rem; align-items: center; }
+  .actions button {
+    font: inherit; padding: .45rem .9rem; cursor: pointer; border-radius: 3px;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  }
+  .actions button.ghost { background: #fff; color: var(--accent); }
+  .note { font-size: .85rem; color: var(--quiet); margin: .5rem 0 0; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; }
+  details { margin: .5rem 0; }
+  summary { cursor: pointer; color: var(--accent); font-size: .88rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Diogenes preset builder</h1>
+  <p>Choose how the windows should behave, watch what that does, and take away
+     a preset file. Drop it in <code>~/.emacs.d/diogenes-presets/</code> and
+     <code>M-x diogenes-load-preset</code> will offer it by name.</p>
+</header>
+
+<main>
+<section class="pane">
+  <h2>Where things go</h2>
+  <div id="behaviours"></div>
+
+  <div class="row">
+    <input type="checkbox" id="popupframes">
+    <label for="popupframes">Set <code>pop-up-frames</code> as well &mdash; new buffers get frames generally, not just Diogenes ones</label>
+  </div>
+  <div class="row">
+    <input type="checkbox" id="pixelwise">
+    <label for="pixelwise"><code>frame-resize-pixelwise</code> &mdash; needed under a tiling window manager, or frames leave a gap in their tile</label>
+  </div>
+
+  <h2>Reading</h2>
+  <div class="row">
+    <input type="checkbox" id="allentries" checked>
+    <label for="allentries">Show every matching entry, not only the first</label>
+  </div>
+  <div class="row">
+    <input type="checkbox" id="fitwidth" checked>
+    <label for="fitwidth">Fit a scanned page to the window width</label>
+  </div>
+  <div class="row">
+    <input type="checkbox" id="scaling">
+    <label for="scaling">HiDPI scaling for scans &mdash; leave off unless the display needs it</label>
+  </div>
+
+  <h2>Paths</h2>
+  <p class="note">Only what you have. An unset dictionary is invisible rather than broken.</p>
+  <div id="paths"></div>
+
+  <details>
+    <summary>Corrections and forms the wordlists never saw</summary>
+    <div class="field">
+      <span><code>diogenes-latin-extra-lemmata</code> &mdash; one <code>form headword</code> per line</span>
+      <input type="text" id="lemmata" placeholder="valdius validus">
+    </div>
+    <div class="field">
+      <span><code>diogenes-latin-analysis-corrections</code> &mdash; <code>form morphology</code> per line</span>
+      <input type="text" id="corrections" placeholder="experire pres imperat pass 2nd sg">
+    </div>
+  </details>
+</section>
+
+<section class="pane">
+  <h2>What that does</h2>
+  <div class="stage">
+    <div class="frames" id="frames"></div>
+    <div class="steps">
+      <button data-step="browse">Browse a text</button>
+      <button data-step="lookup">Look a word up</button>
+      <button data-step="again">Look up another</button>
+      <button data-step="dict">Open a dictionary</button>
+      <button class="reset" data-step="reset">Start again</button>
+    </div>
+    <p class="said" id="said">Press the buttons in order to see where each thing lands.</p>
+  </div>
+
+  <h2>The preset</h2>
+  <pre id="out"></pre>
+  <div class="actions">
+    <button id="download">Download .el</button>
+    <button class="ghost" id="copy">Copy</button>
+    <span class="note" id="copied"></span>
+  </div>
+  <p class="note">A preset is ordinary Lisp: anything you could write in an init
+     file works in it, and the <code>Description</code> line is what
+     <code>M-x diogenes-load-preset</code> shows beside the name.</p>
+</section>
+</main>
+
+<script>
+const BEHAVIOURS = [
+  { id: 'defer', name: 'defer',
+    blurb: 'Whatever you have installed decides — window-purpose, a popup manager, plain Emacs. Changes nothing.' },
+  { id: 'reuse', name: 'reuse',
+    blurb: 'One window for entries, each replacing the last. Nothing is split.' },
+  { id: 'split', name: 'split',
+    blurb: 'An entry gets a window of its own beside the text; later entries share it.' },
+  { id: 'frames', name: 'frames',
+    blurb: 'Each kind in a frame of its own, entries gathered into the lookup frame.' },
+];
+
+const PATHS = [
+  ['diogenes-path', '/usr/local/diogenes', 'Diogenes itself'],
+  ['diogenes-morpheus-directory', '', 'Morpheus, for forms the wordlists never saw'],
+  ['diogenes-old-pdf-file', '', 'Oxford Latin Dictionary (scan)'],
+  ['diogenes-tll-pdf-directory', '', 'Thesaurus Linguae Latinae (scans)'],
+  ['diogenes-gaffiot-file', '', 'Gaffiot, built XML'],
+  ['diogenes-gaffiot-pdf-file', '', 'Gaffiot (scan)'],
+  ['diogenes-georges-file', '', 'Georges, built XML'],
+  ['diogenes-montanari-pdf-file', '', 'Montanari (scan)'],
+  ['diogenes-cambridge-pdf-file', '', 'Cambridge Greek Lexicon (scan)'],
+  ['diogenes-bdag-pdf-file', '', 'BDAG (scan)'],
+  ['diogenes-passow-directory', '', 'Passow (scans)'],
+  ['diogenes-tgl-directory', '', 'Thesaurus Graecae Linguae (scans)'],
+  ['diogenes-bailly-file', '', 'Bailly, built XML'],
+  ['diogenes-pape-file', '', 'Pape, built XML'],
+  ['diogenes-dge-file', '', 'DGE, built XML'],
+];
+
+let behaviour = 'defer';
+let scene = [];   // frames, each a list of windows
+
+const el = id => document.getElementById(id);
+
+// ---------- the controls ----------
+el('behaviours').innerHTML = BEHAVIOURS.map(b => `
+  <label class="choice${b.id === behaviour ? ' on' : ''}" data-b="${b.id}">
+    <input type="radio" name="behaviour" value="${b.id}"${b.id === behaviour ? ' checked' : ''}>
+    <b>${b.name}</b><span>${b.blurb}</span>
+  </label>`).join('');
+
+el('paths').innerHTML = PATHS.map(([v, d, label]) => `
+  <div class="field">
+    <span>${label} &mdash; <code>${v}</code></span>
+    <input type="text" data-var="${v}" value="${d}" placeholder="/path/to/...">
+  </div>`).join('');
+
+document.addEventListener('change', e => {
+  if (e.target.name === 'behaviour') {
+    behaviour = e.target.value;
+    document.querySelectorAll('.choice').forEach(c =>
+      c.classList.toggle('on', c.dataset.b === behaviour));
+    if (behaviour === 'frames') el('popupframes').checked = true;
+    reset();
+  }
+  render();
+});
+document.addEventListener('input', render);
+
+// ---------- the simulation ----------
+// Each behaviour is a rule about where a new buffer of a kind goes, and the
+// rules are the ones the package actually applies, in the same order.
+function place(kind, label) {
+  const framesMode = behaviour === 'frames' || el('popupframes').checked;
+  const existing = findWindow(kind);
+
+  // A second buffer of a kind joins the first, whatever the mode: that is
+  // `diogenes-display-in-role-frame', and it is why `split' does not split
+  // twice for the same word.
+  if (existing) { existing.win.label = label; return said(
+    `A ${kind} window was already open, so the new one replaces what was in it. ` +
+    `That is why repeated lookups do not fill the frame with the same word.`); }
+
+  if (framesMode) {
+    scene.push({ name: kind === 'browser' ? 'Diogenes (text)' :
+                       kind === 'entry' ? 'Diogenes (entries)' : 'Diogenes (dictionary)',
+                 wins: [{ kind, label }] });
+    return said(`No ${kind} frame yet, so one is made. Later ${kind}s will join it.`);
+  }
+
+  if (behaviour === 'reuse') {
+    const frame = scene[0] || newFrame();
+    frame.wins = [{ kind, label }];
+    return said(`\u2018reuse\u2019 keeps one window: whatever was there is replaced, ` +
+                `and the buffer it held is still alive behind it.`);
+  }
+
+  if (behaviour === 'split') {
+    const frame = scene[0] || newFrame();
+    frame.wins.push({ kind, label });
+    return said(`\u2018split\u2019 gives it a window of its own beside what you were reading. ` +
+                `If the frame is too small to split, Diogenes splits anyway rather than ` +
+                `taking the window you were in.`);
+  }
+
+  // defer
+  const frame = scene[0] || newFrame();
+  if (frame.wins.length === 1 && frame.wins[0].kind === 'empty') {
+    frame.wins = [{ kind, label }];
+    return said(`\u2018defer\u2019 leaves it to what you have installed. With one window and ` +
+                `nothing configured, Emacs uses it.`);
+  }
+  frame.wins.push({ kind, label });
+  return said(`\u2018defer\u2019 leaves it to what you have installed: window-purpose, a popup ` +
+              `manager, or plain Emacs. What you see here is the plain-Emacs answer.`);
+}
+
+function newFrame() { const f = { name: 'Emacs', wins: [] }; scene.push(f); return f; }
+function findWindow(kind) {
+  for (const frame of scene)
+    for (const win of frame.wins)
+      if (win.kind === kind) return { frame, win };
+  return null;
+}
+function said(text) { el('said').textContent = text; }
+
+const STEPS = {
+  browse:  () => place('browser', 'Cicero, In Catilinam I'),
+  lookup:  () => place('entry', 'arte \u2014 ars, artis, f.'),
+  again:   () => place('entry', 'siderum \u2014 sidus, eris, n.'),
+  dict:    () => place('dict', 'Oxford Latin Dictionary, p. 196'),
+  reset:   () => reset(),
+};
+document.querySelectorAll('.steps button').forEach(b =>
+  b.addEventListener('click', () => { STEPS[b.dataset.step](); render(); }));
+
+function reset() {
+  scene = [{ name: 'Emacs', wins: [{ kind: 'empty', label: 'nothing yet' }] }];
+  said('Press the buttons in order to see where each thing lands.');
+}
+
+// ---------- drawing ----------
+function render() {
+  el('frames').innerHTML = scene.map(frame => `
+    <div class="frame">
+      <div class="bar">${frame.name}</div>
+      <div class="windows">
+        ${frame.wins.map(w => `
+          <div class="win ${w.kind === 'entry' ? 'entry' : w.kind === 'browser' ? 'browser'
+                            : w.kind === 'dict' ? 'dict' : 'empty'}">
+            ${w.kind === 'empty' ? '' :
+              `<b>${w.kind === 'entry' ? 'entry' : w.kind === 'browser' ? 'text' : 'dictionary'}</b>`}
+            ${w.label}
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+  el('out').textContent = preset();
+}
+
+// ---------- the file ----------
+function lines(id, fn) {
+  const raw = el(id).value.trim();
+  if (!raw) return null;
+  return raw.split(/\s*[;\n]\s*/).filter(Boolean).map(fn);
+}
+
+function preset() {
+  const name = 'my-diogenes';
+  const out = [];
+  out.push(`;;; ${name}.el --- Diogenes preset  -*- lexical-binding: t -*-`);
+  out.push(`;; Description: ${describe()}`);
+  out.push('');
+  out.push(`(setq diogenes-window-behaviour '${behaviour})`);
+  if (el('popupframes').checked) out.push(`(setq pop-up-frames 'graphic-only)`);
+  if (el('pixelwise').checked)
+    out.push('(setq frame-resize-pixelwise t\n      window-resize-pixelwise t)');
+  out.push('');
+  out.push(`(setq diogenes-lookup-show-all-entries ${el('allentries').checked ? 't' : 'nil'})`);
+  out.push(`(setq diogenes-old-pdf-fit ${el('fitwidth').checked ? "'width" : 'nil'})`);
+  if (!el('scaling').checked)
+    out.push("(with-eval-after-load 'pdf-view\n  (setq pdf-view-use-scaling nil))");
+
+  const paths = [];
+  document.querySelectorAll('#paths input').forEach(i => {
+    const v = i.value.trim();
+    if (v) paths.push(`(setq ${i.dataset.var} ${JSON.stringify(v)})`);
+  });
+  if (paths.length) { out.push(''); out.push(...paths); }
+
+  const lem = lines('lemmata', s => {
+    const [form, ...rest] = s.split(/\s+/);
+    return `        (${JSON.stringify(form)} . ${JSON.stringify(rest.join(' '))})`;
+  });
+  if (lem) {
+    out.push('');
+    out.push('(setq diogenes-latin-extra-lemmata\n      \'(' + lem.join('\n').trimStart() + '))');
+  }
+  const corr = lines('corrections', s => {
+    const [form, ...rest] = s.split(/\s+/);
+    return `        (${JSON.stringify(form)} :info ${JSON.stringify(rest.join(' '))})`;
+  });
+  if (corr) {
+    out.push('');
+    out.push('(setq diogenes-latin-analysis-corrections\n      \'(' + corr.join('\n').trimStart() + '))');
+  }
+  out.push('');
+  out.push(`;;; ${name}.el ends here`);
+  return out.join('\n');
+}
+
+function describe() {
+  const b = BEHAVIOURS.find(x => x.id === behaviour);
+  const bits = [b.name];
+  if (el('popupframes').checked) bits.push('frames');
+  if (el('allentries').checked) bits.push('all entries');
+  return bits.join(', ');
+}
+
+el('download').addEventListener('click', () => {
+  const blob = new Blob([preset()], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'my-diogenes.el';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+el('copy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(preset());
+    el('copied').textContent = 'copied';
+    setTimeout(() => el('copied').textContent = '', 1600);
+  } catch { el('copied').textContent = 'select the text and copy it'; }
+});
+
+reset();
+render();
+</script>
+</body>
+</html>

@@ -1151,6 +1151,51 @@ read-only buffer.
 - `diogenes-purpose-focus-dictionary-window` — bound to `Q` in a dictionary buffer, the way back from the page to the entry it came from
 - `diogenes-purpose-install`, `diogenes-purpose-uninstall`
 
+## Presets
+
+The settings you want are not one set but several, and which you want depends
+on what you are doing: reading at length, glancing at one word while writing,
+the machine with the small screen. Those differ in a dozen variables at once.
+
+A preset is an ordinary Lisp file that sets them:
+
+```elisp
+;;; reading.el --- Diogenes preset  -*- lexical-binding: t -*-
+;; Description: entries beside the text, dictionaries in their own frame
+(setq diogenes-window-behaviour 'split)
+(setq diogenes-lookup-show-all-entries t)
+```
+
+Put it in `diogenes-preset-directory` — `~/.emacs.d/diogenes-presets/` by
+default — and:
+
+| | |
+| --- | --- |
+| `M-x diogenes-load-preset` | offers what is there, annotated with each `Description` line |
+| `M-x diogenes-list-presets` | what exists, and which was loaded last |
+| `M-x diogenes-preset-write-current` | writes this session's settings out as a preset — what you arrived at by experiment, kept |
+| `diogenes-preset` | a preset to load at startup |
+
+Nothing validates what a preset may set. It is Lisp, it is yours, and a preset
+that also sets `line-spacing` or turns off a minor mode is doing something
+reasonable. A preset is loaded *after* your init file, deliberately: an init
+file holds what is true of the machine, a preset what is true of what you are
+doing now, and the second is the more particular.
+
+`diogenes-preset-write-current` writes only the options that differ from their
+standard value, so a preset says what is particular about it and nothing else.
+
+### Building one by hand is optional
+
+`tools/diogenes-preset-builder.html` opens in any browser, with no server and
+no dependencies. Choose how the windows should behave and it draws what that
+does — frames, windows, where an entry lands, what a second lookup replaces —
+then gives you the file to download.
+
+The diagram runs the same rules the package does, in the same order, so
+`split` reusing the second time and `frames` gathering are visible rather than
+described.
+
 ## Tests
 
 Two runs, and both are wanted.
