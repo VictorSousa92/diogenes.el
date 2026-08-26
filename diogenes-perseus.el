@@ -2372,7 +2372,52 @@ whichever the dictionary actually has."
 	    ;; Total assimilation, which is what doubles the letter: in+lido,
 	    ;; ad+sum, ob+fero, ex+fero.
 	    (push (concat stub (string initial) stem) candidates)))
+	;; `ex' loses its consonant before s: ex+surio is esurio, and likewise
+	;; educo, evado, emitto.  Not the vowel rule above -- the stem begins
+	;; with a consonant -- and without this `ex-surio' reaches no key and
+	;; the reader is shown `exsurrectio', which is the next entry along.
+	(when (and final (eq final ?x) initial)
+	  (push (concat stub stem) candidates))
+	;; And the stem's own first vowel weakens in composition: sedeo becomes
+	;; -sideo, teneo -tineo, facio -ficio, capio -cipio, cado -cido.  So
+	;; `ob-sedeo' is keyed `obsideo', and until this was offered the reader
+	;; got `ob-septus'.  Offered LAST, being the least common of these, and
+	;; harmless where it is wrong: a spelling the dictionary has not got
+	;; costs one binary search.
+	(when (and prefix stem (> (length stem) 0))
+	  (let ((weakened (diogenes--latin-weaken-stem stem)))
+	    (when weakened
+	      (push (concat prefix weakened) candidates)
+	      ;; ...and with the prefix assimilated as well: ad+teneo is
+	      ;; `attineo', both changes at once.
+	      (when (and final initial (memq final '(?n ?m ?d ?b ?s ?x)))
+		(push (concat stub (string (aref weakened 0)) weakened)
+		      candidates)))))
 	(nreverse (delete-dups candidates))))))
+
+(defun diogenes--latin-weaken-stem (stem)
+  "STEM with its first vowel weakened to `i\=', or nil if nothing changes.
+The vowel of a simple verb weakens when it becomes the second element of a
+compound: sedeo/-sideo, teneo/-tineo, facio/-ficio, capio/-cipio,
+cado/-cido, salio/-silio, statuo/-stituo.  So a lemma Morpheus writes
+`ob-sedeo\=' is keyed in the dictionary as `obsideo\='.
+
+Only a first-syllable `a\=' or `e\=' is touched, and only where a consonant
+follows it, which is where the change occurs.  Returns nil when there is
+nothing to do, so the caller can tell a real candidate from a repetition."
+  (when (and stem (> (length stem) 1))
+    (let ((i 0) (len (length stem)))
+      ;; Past any initial consonants to the first vowel.
+      (while (and (< i len)
+		  (not (memq (aref stem i) '(?a ?e ?i ?o ?u ?y))))
+	(setq i (1+ i)))
+      (when (and (< i len)
+		 (memq (aref stem i) '(?a ?e))
+		 ;; A consonant must follow: this is a closed syllable's vowel,
+		 ;; not a hiatus.
+		 (< (1+ i) len)
+		 (not (memq (aref stem (1+ i)) '(?a ?e ?i ?o ?u ?y))))
+	(concat (substring stem 0 i) "i" (substring stem (1+ i)))))))
 
 (defun diogenes--dict-exact-offset (word lang &optional file)
   "The offset of the entry whose key is WORD, or nil if there is none.

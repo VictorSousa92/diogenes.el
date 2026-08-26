@@ -806,6 +806,43 @@ consulted and `frames\=' made no frame at all."
       (let ((diogenes-window-behaviour behaviour))
         (should-not (diogenes-old--display-other-window-p))))))
 
+(ert-deftest diogenes-test-latin-weaken-stem ()
+  "A simple verb's first vowel weakens when it becomes a compound's second half."
+  (should (equal (diogenes--latin-weaken-stem "sedeo") "sideo"))
+  (should (equal (diogenes--latin-weaken-stem "teneo") "tineo"))
+  (should (equal (diogenes--latin-weaken-stem "facio") "ficio"))
+  (should (equal (diogenes--latin-weaken-stem "capio") "cipio"))
+  (should (equal (diogenes--latin-weaken-stem "cado") "cido"))
+  (should (equal (diogenes--latin-weaken-stem "statuo") "stituo"))
+  ;; Nothing to weaken: the vowel is already `i', or `o', or in hiatus.
+  (should-not (diogenes--latin-weaken-stem "mitto"))
+  (should-not (diogenes--latin-weaken-stem "pono"))
+  (should-not (diogenes--latin-weaken-stem "eo"))
+  (should-not (diogenes--latin-weaken-stem "")))
+
+(ert-deftest diogenes-test-assimilations-reach-the-real-headword ()
+  "Every reported lemma yields the spelling the dictionary is keyed under.
+Regression, from three words looked up and answered wrongly: `esuriens' was
+sent to `exsurrectio' and `obsessis' to `ob-septus', both being the next
+entry along from a spelling that does not exist.  Morpheus writes the
+etymological compound -- `ex-surio', `ob-sedeo' -- and the dictionary keys the
+form actually written, which differs by more than the prefix."
+  (let ((diogenes-latin-assimilate-prefixes t))
+    ;; `ex' loses its consonant before s.
+    (should (member "esurio" (diogenes--latin-assimilations "ex-surio")))
+    ;; The stem's own vowel weakens.
+    (should (member "obsideo" (diogenes--latin-assimilations "ob-sedeo")))
+    ;; Both changes at once.
+    (should (member "attineo" (diogenes--latin-assimilations "ad-teneo")))
+    ;; And what worked before still does, in the same order: the plain
+    ;; compound comes first, so `ad-sum' is `adsum' and not `assum', roast
+    ;; meat.
+    (let ((for-adsum (diogenes--latin-assimilations "ad-sum")))
+      (should (equal (car for-adsum) "adsum"))
+      (should (member "assum" for-adsum)))
+    (should (member "immitto" (diogenes--latin-assimilations "in-mitto")))
+    (should (member "coeo" (diogenes--latin-assimilations "con-eo")))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is
