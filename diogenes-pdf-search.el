@@ -61,7 +61,8 @@
 (require 'cl-lib)
 (require 'diogenes-lisp-utils)          ; diogenes--display-buffer
 (require 'seq)
-(declare-function evil-define-key* "evil-core" (state keymap key def &rest bindings))
+(declare-function evil-make-overriding-map "evil-core" (keymap &optional state copy))
+(declare-function evil-normalize-keymaps "evil-core" (&optional state))
 
 ;; Each print-dictionary module is optional at load time: we only need
 ;; the one matching the PDF actually open.  Declare what we call so the
@@ -410,46 +411,61 @@ to bind nothing and do it yourself."
   :type '(choice (const :tag "Do not bind" nil) key-sequence)
   :group 'diogenes)
 
+(defvar diogenes-pdf-search-mode-map
+  (make-sparse-keymap)
+  "Keymap active in a PDF buffer visiting one of the print dictionaries.
+Populated from `diogenes-pdf-search-key\=' when the mode is set up.")
+
+;;;###autoload
+(define-minor-mode diogenes-pdf-search-mode
+  "Minor mode for a PDF buffer that is one of Diogenes\=' print dictionaries.
+Carries `diogenes-pdf-search-key\=' (default \"L\"), which looks a headword up
+in the dictionary you are reading.
+
+Enabled per buffer, and only where the file is a configured dictionary --
+`diogenes-pdf-search--identify\=' decides, from the path variables you have
+set.  So the key exists in the OLD and the TLL and Montanari, and not in
+every PDF you happen to open."
+  :lighter " Dict"
+  :keymap diogenes-pdf-search-mode-map)
+
+(defun diogenes-pdf-search--maybe-enable ()
+  "Turn on `diogenes-pdf-search-mode\=' if this buffer is a dictionary."
+  (when (and diogenes-pdf-search-key
+             buffer-file-name
+             (ignore-errors (diogenes-pdf-search--identify buffer-file-name)))
+    (diogenes-pdf-search-mode 1)))
+
 ;;;###autoload
 (defun diogenes-pdf-search-setup-keys ()
-  "Bind `diogenes-pdf-lookup-entry' in the supported PDF viewers.
-Binds `diogenes-pdf-search-key' (default \"L\") in `pdf-view-mode',
-`doc-view-mode', and the Emacs Reader's `reader-mode'.  Safe to call at
-startup: the bindings are installed via `with-eval-after-load', so they
-attach whenever the viewers load, in either order.  Does nothing if
-`diogenes-pdf-search-key' is nil.
+  "Arrange for `diogenes-pdf-search-key\=' to work in the dictionary PDFs.
+Binds the key in `diogenes-pdf-search-mode-map\=' and turns that mode on, from
+the viewers\=' mode hooks, in a buffer whose file is a configured dictionary.
+Safe to call at startup: the hooks attach whether or not the viewers are
+loaded yet, and in either order.  Does nothing if `diogenes-pdf-search-key\='
+is nil.
 
-In the Emacs Reader the command still works -- you type the headword at
-the prompt and the reader jumps to its page -- but, unlike pdf-tools,
-the Reader exposes no text layer, so the word under point cannot be
-offered as the prompt's default; the prompt simply starts empty."
+A MINOR mode rather than the viewers\=' own maps, and enabled per buffer
+rather than per mode, because the key should exist where a dictionary is open
+and nowhere else: `L\=' in an unrelated PDF is evil\='s `evil-window-bottom\=',
+and there is no reason to take it away.
+
+`evil-make-overriding-map\=' is what makes the key reachable under evil.  A
+document buffer is one evil leaves in normal state -- rightly, `j\=' and `k\='
+being how one moves down a page -- and evil searches its state maps before
+any minor mode\='s, so a key bound here would otherwise not be seen.  Marking
+the map as overriding applies only while the mode is on, which is to say only
+in a dictionary."
   (when diogenes-pdf-search-key
-    (dolist (cell '((pdf-view . pdf-view-mode)
-                    (doc-view . doc-view-mode)
-                    (reader . reader-mode)))
-      (let ((feature (car cell))
-            (mode (cdr cell)))
-        (with-eval-after-load feature
-          (diogenes-pdf-search--bind mode))))))
-
-(defun diogenes-pdf-search--bind (mode)
-  "Bind `diogenes-pdf-search-key\=' to the lookup command in MODE.
-In the mode's own map, and -- where evil is loaded -- in its normal, motion
-and visual states as well.  A document buffer is one evil leaves in normal
-state, sensibly: `j\=', `k\=' and `C-d\=' are how one moves down a page of a
-scan.  But evil's state maps are searched before a major mode's, so a key
-bound only in the latter is not reached, and `L\=' would be
-`evil-window-bottom\=' rather than a lookup."
-  (let ((map (intern (format "%s-map" mode))))
-    (when (boundp map)
-      (keymap-set (symbol-value map) diogenes-pdf-search-key
-                  #'diogenes-pdf-lookup-entry))
-    (when (fboundp 'evil-define-key*)
-      (dolist (state '(normal motion visual))
-        (ignore-errors
-          (evil-define-key* state (symbol-value map)
-                            (kbd diogenes-pdf-search-key)
-                            #'diogenes-pdf-lookup-entry))))))
+    (keymap-set diogenes-pdf-search-mode-map diogenes-pdf-search-key
+                #'diogenes-pdf-lookup-entry)
+    (dolist (hook '(pdf-view-mode-hook doc-view-mode-hook reader-mode-hook))
+      (add-hook hook #'diogenes-pdf-search--maybe-enable))
+    (with-eval-after-load 'evil
+      (when (fboundp 'evil-make-overriding-map)
+        (evil-make-overriding-map diogenes-pdf-search-mode-map)
+        (when (fboundp 'evil-normalize-keymaps)
+          (evil-normalize-keymaps))))))
 
 (provide 'diogenes-pdf-search)
 ;;; diogenes-pdf-search.el ends here

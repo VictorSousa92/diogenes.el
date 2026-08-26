@@ -662,7 +662,7 @@ arguing with it, and no way to say which they meant."
       (delete-directory dir t))))
 
 (ert-deftest diogenes-test-pdf-key-is-bound-where-evil-looks ()
-  "The PDF lookup key reaches the command in a document buffer under evil.
+  "The PDF lookup key lives in a map scoped to the dictionaries.
 A document buffer is one evil leaves in normal state, and rightly: `j', `k'
 and `C-d' are how one moves down a page of a scan.  But evil searches its
 state maps before a major mode's, so a key bound only in
@@ -671,19 +671,20 @@ state maps before a major mode's, so a key bound only in
 Asserts the mode map here, evil not being loaded in a batch Emacs; the
 state binding is checked by `M-x diogenes-tests-run' in a live one."
   (let ((diogenes-pdf-search-key "L")
-        ;; DYNAMICALLY bound, which needs the `defvar' above: under
-        ;; `lexical-binding' a `let' on an undeclared symbol binds lexically,
-        ;; and the function under test would read the global while the
-        ;; assertion read the local -- a test failing against correct code.
-        (pdf-view-mode-map (make-sparse-keymap)))
-    (diogenes-pdf-search--bind 'pdf-view-mode)
-    (should (eq (lookup-key pdf-view-mode-map (kbd "L"))
+        (diogenes-pdf-search-mode-map (make-sparse-keymap)))
+    (diogenes-pdf-search-setup-keys)
+    (should (eq (lookup-key diogenes-pdf-search-mode-map (kbd "L"))
                 #'diogenes-pdf-lookup-entry))
-    ;; And nil for the key means no binding at all.
-    (let ((diogenes-pdf-search-key nil)
-          (doc-view-mode-map (make-sparse-keymap)))
-      (diogenes-pdf-search-setup-keys)
-      (should-not (lookup-key doc-view-mode-map (kbd "L"))))))
+    ;; The viewers' own maps are untouched: `L' in a PDF that is not a
+    ;; dictionary stays whatever it was.
+    (should-not (and (boundp 'pdf-view-mode-map)
+                     (eq (lookup-key pdf-view-mode-map (kbd "L"))
+                         #'diogenes-pdf-lookup-entry))))
+  ;; And the mode turns itself on only where the file is a dictionary.
+  (let ((diogenes-pdf-search-key "L"))
+    (with-temp-buffer
+      (should-not (progn (diogenes-pdf-search--maybe-enable)
+                         (bound-and-true-p diogenes-pdf-search-mode))))))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.

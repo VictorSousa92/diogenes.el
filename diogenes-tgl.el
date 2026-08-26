@@ -181,6 +181,8 @@
 (require 'diogenes-old)                 ; reuse the PDF display driver
 (require 'diogenes-montanari)           ; reuse the Greek collation key
 
+(declare-function evil-make-overriding-map "evil-core" (keymap &optional state copy))
+(declare-function evil-normalize-keymaps "evil-core" (&optional state))
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus"
                   (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
@@ -3673,6 +3675,17 @@ cross-check for when the main lookup lands on the wrong page.  Enabled
 only on TGL volume PDFs, so it never affects other dictionaries."
   :lighter " TGL"
   :keymap diogenes-tgl-pdf-mode-map)
+
+;; `i' is `evil-insert-state' in normal state, and evil searches its state
+;; maps before any minor mode's -- so without this the key would put the
+;; reader into insert state instead of opening the index.  The map is marked
+;; as overriding rather than the key bound globally, because that applies only
+;; while this mode is on, which is to say only in a TGL volume.
+(with-eval-after-load 'evil
+  (when (fboundp 'evil-make-overriding-map)
+    (evil-make-overriding-map diogenes-tgl-pdf-mode-map)
+    (when (fboundp 'evil-normalize-keymaps)
+      (evil-normalize-keymaps))))
 
 (defun diogenes-tgl--show (tomus page &optional word)
   "Show volume TOMUS's PDF at PAGE.
