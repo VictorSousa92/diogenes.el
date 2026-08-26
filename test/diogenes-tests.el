@@ -39,6 +39,23 @@
 (require 'diogenes-lisp-utils)
 (require 'diogenes-perseus)
 
+;; Every file, not just the two the assertions name.  The command-shape test
+;; below scans whatever commands are DEFINED, and headless only these two
+;; were: it reported no offenders while two of them sat in
+;; `diogenes-browser.el', and passed for weeks by checking nothing.  It found
+;; them the moment the suite was run inside a live configuration, where the
+;; whole package is loaded -- so the headless run has to load the whole
+;; package too, or the two runs are not asking the same question.
+;;
+;; Best effort: a module whose own dependencies are absent is skipped rather
+;; than failing the run, since the point here is coverage and not loading.
+(let ((dir (or (and load-file-name
+                    (expand-file-name ".." (file-name-directory load-file-name)))
+               default-directory)))
+  (dolist (file (directory-files dir t "\\`diogenes-[^/]*\\.el\\'"))
+    (unless (string-match-p "diogenes-archive" file)
+      (ignore-errors (load file nil t)))))
+
 ;; Declared so that `let' on them is DYNAMIC.  Under `lexical-binding' a
 ;; `let' on an undeclared symbol binds lexically, which `boundp' inside the
 ;; function under test cannot see -- so the test would fail while the code
@@ -476,6 +493,11 @@ mechanism."
 (ert-deftest diogenes-test-no-command-asks-for-arguments-it-cannot-take ()
   "No `diogenes-' command has a zero-argument lambda list and an
 argument-supplying interactive spec.
+
+Scans whatever is defined, so the whole package is loaded above: with only
+two files loaded this reported no offenders for weeks while two commands had
+the fault, and found them only when the suite was first run inside a live
+configuration.
 
 Regression: `diogenes-browser-forward' and `-backward' were
 `(defun … ())' with `(interactive \"p\")', so every interactive call raised
