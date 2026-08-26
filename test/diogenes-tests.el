@@ -535,6 +535,18 @@ gathering is what makes frames usable rather than one per entry."
     (let ((diogenes-window-behaviour 'split))
       (should-not (diogenes--gathering-p)))))
 
+(ert-deftest diogenes-test-normal-state-key-is-not-a-dictionary ()
+  "The way out of Emacs state must not be a key a dictionary wants.
+All three states are meant to be available: Emacs state for the dictionary
+keys, normal state for evil's keyboard, insert where it applies.  The key
+that moves between the first two therefore has to be one neither of them
+uses -- escape, which in Emacs state does nothing and in normal state is
+evil's own."
+  (when diogenes-evil-normal-state-key
+    (should-not (member diogenes-evil-normal-state-key
+                        '("o" "t" "m" "c" "b" "p" "B" "d" "G" "g" "l" "P"
+                          "q" "RET" "TAB")))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

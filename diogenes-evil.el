@@ -78,6 +78,50 @@ So that `diogenes-evil-uninstall' can undo exactly those, and no more.")
        (assq mode evil-initial-state-alist)
        (not (memq mode diogenes-evil--set))))
 
+(defcustom diogenes-evil-normal-state-key "<escape>"
+  "Key that leaves Emacs state for normal state in a Diogenes buffer.
+`<escape>\=' by default, which is the key one already presses to get to normal
+state from anywhere else -- and which in Emacs state does nothing.
+
+The point is to have all three states available in a buffer that starts in
+the third.  Emacs state is where the dictionaries live: `o\=' is the OLD, `g\='
+is Gaffiot, `B\=' is Bailly, and evil\='s own meanings for those letters are out
+of reach while it lasts.  Normal state is where evil\='s keyboard lives -- the
+motions, the searches, `C-w\=' for windows, the leader on `SPC\='.  Both are
+wanted, at different moments, and neither wants rebuilding inside the other.
+
+`C-z\=' already returns from Emacs state, but to whatever state came before it,
+which is usually insert; this goes to normal state whatever came before.  Nil
+binds nothing."
+  :type '(choice key-sequence (const :tag "Do not bind" nil))
+  :group 'diogenes-evil)
+
+(defconst diogenes-evil--maps
+  '(diogenes-lookup-mode-map
+    diogenes-analysis-mode-map
+    diogenes-select-forms-mode-map
+    diogenes-search-mode-map
+    diogenes-corpus-mode-map)
+  "The mode maps that Emacs state applies to.")
+
+(defun diogenes-evil-bind-normal-state-key ()
+  "Bind `diogenes-evil-normal-state-key\=' in the Diogenes maps.
+Bound in the MODE maps, which is what Emacs state consults -- so it works
+there and is invisible in normal state, where escape has its own meaning and
+should keep it.
+
+Nothing already bound on that key is disturbed."
+  (when (and diogenes-evil-normal-state-key
+             (featurep 'evil)
+             (fboundp 'evil-normal-state))
+    (dolist (map-symbol diogenes-evil--maps)
+      (when (and (boundp map-symbol) (keymapp (symbol-value map-symbol)))
+        (let ((map (symbol-value map-symbol))
+              (key (kbd diogenes-evil-normal-state-key)))
+          (unless (lookup-key map key)
+            (keymap-set map diogenes-evil-normal-state-key
+                        #'evil-normal-state)))))))
+
 ;;;###autoload
 (defun diogenes-evil-install ()
   "Start the read-only Diogenes buffers in evil's Emacs state.  Idempotent.
@@ -89,8 +133,15 @@ elsewhere -- `evil-set-initial-state' in an init file wins."
       (unless (diogenes-evil--spoken-for-p mode)
         (evil-set-initial-state mode 'emacs)
         (cl-pushnew mode diogenes-evil--set)))
+    ;; And a way out of Emacs state into normal state, for the moment one
+    ;; wants evil's keyboard rather than the dictionaries.  After the maps
+    ;; exist: they live in files this one does not require.
+    (dolist (feature '(diogenes-perseus diogenes-forms diogenes-search
+                                        diogenes-corpora))
+      (with-eval-after-load feature (diogenes-evil-bind-normal-state-key)))
     (when (called-interactively-p 'interactive)
-      (message "Diogenes buffers will start in Emacs state (C-z for normal)"))))
+      (message "Diogenes buffers start in Emacs state; %s for normal state"
+               (or diogenes-evil-normal-state-key "C-z")))))
 
 ;;;###autoload
 (defun diogenes-evil-uninstall ()

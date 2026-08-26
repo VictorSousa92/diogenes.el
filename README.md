@@ -908,6 +908,16 @@ state for a moment if you want its motions.
 - A mode whose state you have set yourself is left alone — an explicit `evil-set-initial-state` in your config wins.
 - `diogenes-evil-manage-initial-states` nil disables the whole thing, for anyone who would rather bind the letters into normal state by hand. That costs `o d p b t g G` inside dictionary buffers and keeps `j` and `k`.
 
+**All three states are available.** Press `ESC` in a lookup buffer and you are
+in normal state: evil's motions, its searches, `C-w` for windows, `SPC` for
+the leader — everything as elsewhere, with the dictionary letters standing
+down. Press `i` or `C-z` to go back to Emacs state and the dictionaries.
+
+So the dictionaries have the single letters when you want a dictionary, and
+evil has the keyboard when you want to move about, and neither is rebuilt
+inside the other. `diogenes-evil-normal-state-key` is the key, `ESC` by
+default because in Emacs state it does nothing.
+
 ## A frame with only a startup page in it
 
 Whatever module you load, and with none, a lookup made from a frame showing
