@@ -514,7 +514,7 @@ which is what a fault upstream of every measurement looks like."
     (let ((diogenes-window-behaviour behaviour)
           (diogenes-lookup-display-action nil))
       (should (equal (diogenes--display-action 'lookup)
-                     (cdr (assq behaviour diogenes--behaviour-actions))))))
+                     (diogenes--behaviour-action behaviour)))))
   ;; An action named for one kind leaves the others on the shorthand.
   (let ((diogenes-window-behaviour 'split)
         (diogenes-lookup-display-action '((display-buffer-same-window)))
@@ -522,7 +522,7 @@ which is what a fault upstream of every measurement looks like."
     (should (equal (diogenes--display-action 'lookup)
                    '((display-buffer-same-window))))
     (should (equal (diogenes--display-action 'browser)
-                   (cdr (assq 'split diogenes--behaviour-actions))))))
+                   (diogenes--behaviour-action 'split)))))
 
 (ert-deftest diogenes-test-frames-preset-gathers ()
   "`frames' turns the gathering on without `pop-up-frames' being set.
@@ -546,6 +546,109 @@ evil's own."
     (should-not (member diogenes-evil-normal-state-key
                         '("o" "t" "m" "c" "b" "p" "B" "d" "G" "g" "l" "P"
                           "q" "RET" "TAB")))))
+
+(ert-deftest diogenes-test-behaviour-may-differ-by-kind ()
+  "A word applies to every kind; an alist answers per kind.
+The three kinds are different things and there is no reason they should
+agree: the text staying where it is while entries share a window beside it
+and a scan gets a frame is a perfectly ordinary arrangement."
+  (let ((diogenes-window-behaviour
+         '((browser . defer) (lookup . split) (dictionary . frames)))
+        (diogenes-lookup-display-action nil)
+        (diogenes-browser-display-action nil)
+        (diogenes-dictionary-display-action nil))
+    (should-not (diogenes--display-action 'browser))
+    (should (equal (diogenes--display-action 'lookup)
+                   (diogenes--behaviour-action 'split)))
+    (should (equal (diogenes--display-action 'dictionary)
+                   (diogenes--behaviour-action 'frames)))
+    ;; A kind the alist does not mention gets `defer'.
+    (should (eq (diogenes--behaviour-for 'search) 'defer))
+    ;; And `frames' for any one kind gathers for all of them.
+    (let ((diogenes-gather-frames 'auto) (pop-up-frames nil))
+      (should (diogenes--gathering-p)))))
+
+(ert-deftest diogenes-test-split-geometry ()
+  "Direction, size and which window to divide reach the action."
+  (let ((diogenes-split-direction 'right)
+        (diogenes-split-size 0.35)
+        (diogenes-split-from 'root))
+    (let ((action (diogenes--behaviour-action 'split)))
+      (should (memq 'display-buffer-in-direction (car action)))
+      (should (equal (cdr (assq 'direction action)) 'right))
+      ;; A width for a sideways split, not a height.
+      (should (equal (cdr (assq 'window-width action)) 0.35))
+      (should-not (assq 'window-height action))
+      (should (equal (cdr (assq 'window action)) 'root))))
+  ;; Downwards, the same number is a height.
+  (let ((diogenes-split-direction 'below)
+        (diogenes-split-size 0.35)
+        (diogenes-split-from 'selected))
+    (let ((action (diogenes--behaviour-action 'split)))
+      (should (equal (cdr (assq 'window-height action)) 0.35))
+      (should-not (assq 'window-width action))
+      (should-not (assq 'window action))))
+  ;; And with nothing set, Emacs is left to choose.
+  (let ((diogenes-split-direction nil)
+        (diogenes-split-size nil)
+        (diogenes-split-from 'selected))
+    (let ((action (diogenes--behaviour-action 'split)))
+      (should-not (assq 'direction action))
+      (should-not (memq 'display-buffer-in-direction (car action)))
+      ;; The last resort is always there: it is what stops `split' becoming
+      ;; `reuse' where the thresholds forbid a split.
+      (should (memq 'diogenes--display-split-anyway (car action))))))
+
+(ert-deftest diogenes-test-behaviour-may-differ-per-kind ()
+  "A word applies to everything; an alist answers per kind.
+So the entries may share a window while the browser keeps a frame, which is
+the arrangement most readers of a text actually want."
+  (let ((diogenes-window-behaviour '((lookup . split)
+                                     (browser . frames))))
+    (should (eq (diogenes--behaviour-for 'lookup) 'split))
+    (should (eq (diogenes--behaviour-for 'browser) 'frames))
+    ;; A kind the alist does not mention is deferred, not guessed at.
+    (should (eq (diogenes--behaviour-for 'dictionary) 'defer)))
+  ;; And a bare word still applies to all three.
+  (let ((diogenes-window-behaviour 'reuse))
+    (dolist (kind '(lookup browser dictionary))
+      (should (eq (diogenes--behaviour-for kind) 'reuse)))))
+
+(ert-deftest diogenes-test-presets-work-without-a-directory ()
+  "The four behaviours are presets, whether a directory is set or not."
+  (let ((diogenes-preset-directory nil))
+    (let ((names (mapcar #'car (diogenes-preset--alist))))
+      (dolist (builtin '("defer" "reuse" "split" "frames"))
+        (should (member builtin names)))))
+  ;; Loading one sets the behaviour and nothing else.
+  (let ((diogenes-window-behaviour 'defer))
+    (diogenes-preset--load-builtin "frames")
+    (should (eq diogenes-window-behaviour 'frames))))
+
+(ert-deftest diogenes-test-a-file-preset-replaces-a-builtin ()
+  "A file named after a builtin is what that name means.
+Otherwise a reader who has written `split.el' would find the builtin
+arguing with it, and no way to say which they meant."
+  (let* ((dir (make-temp-file "diogenes-presets" t))
+         (diogenes-preset-directory dir))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "split.el" dir)
+            (insert ";; Description: mine, not the builtin one
+"))
+          (let* ((presets (diogenes-preset--alist))
+                 (split (assoc "split" presets)))
+            (should split)
+            ;; It is the file, not the builtin: a builtin has no file.
+            (should (nth 1 split))
+            (should (equal (nth 2 split) "mine, not the builtin one"))
+            ;; And it appears once, not twice.
+            (should (= 1 (cl-count "split" presets
+                                   :key #'car :test #'equal)))
+            ;; The other three builtins are untouched.
+            (dolist (name '("defer" "reuse" "frames"))
+              (should (assoc name presets)))))
+      (delete-directory dir t))))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
