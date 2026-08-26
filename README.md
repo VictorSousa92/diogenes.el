@@ -918,14 +918,35 @@ a window there and nothing in it worth keeping.
 `diogenes-home-buffer-names` is the list, and the distributions' own
 variables are consulted too, so a renamed home buffer is still recognised.
 
-## Optional: window management
+## Window management
 
-Two modules, doing the same job by different means. **Load one.**
+Nothing to load and nothing to choose: three modules install themselves when
+what they integrate with is present, and do nothing when it is not.
 
-| | For | How |
+| Module | Active when | What it tells the environment |
 | --- | --- | --- |
-| `diogenes-purpose` | Spacemacs, and anyone running `purpose-mode` | teaches window-purpose what a Diogenes buffer is |
-| `diogenes-doom` | Doom, tiling window managers, `pop-up-frames` | gives each kind of buffer a frame of its own |
+| `diogenes-purpose` | `window-purpose` is loaded | what kind of buffer a lookup is, so purpose does not file it under `edit` and show it in the window you were reading |
+| `diogenes-evil` | `evil` is loaded | that the read-only buffers are Emacs-state, so the single-letter dictionary keys reach the dictionaries |
+| `diogenes-doom` | Doom (optional) | the focus commands; everything else it used to do is now core |
+
+None of the three is Spacemacs- or Doom-specific in what it does.
+**window-purpose is an ordinary package** — Spacemacs enables it for everyone,
+which is how most people meet it, but anyone may load it — and so is
+persp-mode, whose buffer claiming is in the core for the same reason.
+
+Where the buffers actually go is decided in one place, and by you:
+
+| Set | To say |
+| --- | --- |
+| `diogenes-lookup-display-action` | where an entry or an analysis appears |
+| `diogenes-browser-display-action` | where a passage appears |
+| `diogenes-dictionary-display-action` | where a scanned page appears |
+| `diogenes-gather-frames` | whether each kind shares a frame (follows `pop-up-frames`) |
+| `diogenes-claim-buffers` | whether a perspective is told about the buffer |
+
+An action you set takes precedence over all three modules. Two things it
+cannot override, because neither is about layout: a `C-c C-c` chain stays in
+one window, and a frame holding only a startup page yields it.
 
 ### `diogenes-doom`: frames instead of windows
 

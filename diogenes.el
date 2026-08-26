@@ -88,6 +88,13 @@
 ;; `diogenes-doom', which change where buffers appear and are therefore a
 ;; choice, this only hands back keys that evil would otherwise swallow.
 (require 'diogenes-evil)
+;; window-purpose integration: does nothing unless window-purpose is loaded.
+;; An ordinary package that anyone may use -- Spacemacs enables it for
+;; everyone, which is how most people meet it -- so this is required here
+;; rather than left to an init file, as `diogenes-evil' is.  Without it
+;; purpose has no entry for a lookup buffer and shows one in the window you
+;; were reading in.
+(require 'diogenes-purpose)
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)
 ;(require 'diogenes-window)

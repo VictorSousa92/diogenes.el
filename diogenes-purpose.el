@@ -2,7 +2,9 @@
 
 ;;; Commentary:
 
-;; Spacemacs enables window-purpose (purpose.el), whose action runs before
+;; window-purpose (purpose.el) is an ordinary package: Spacemacs enables it
+;; for everyone, which is how most people meet it, but anyone may load it and
+;; the two cases are the same.  Its action runs before
 ;; Emacs's normal `display-buffer' machinery -- so it, not `pop-up-frames'
 ;; or `display-buffer-alist', decides where a buffer is shown.  Out of the
 ;; box every Diogenes buffer (the browser AND every lookup) has the purpose
@@ -33,7 +35,9 @@
 ;; `diogenes-purpose-extra-name-purposes' (single-file dictionaries have a
 ;; predictable base name, e.g. "Montanari.pdf").
 ;;
-;; Load it after purpose is up (in Spacemacs, from `dotspacemacs/user-config'):
+;; Nothing to load: `diogenes.el' requires this, and it installs itself when
+;; window-purpose appears, in either order.  `diogenes-purpose-manage-purposes'
+;; turns that off.  The older way still works, if a configuration does it:
 ;;
 ;;   (with-eval-after-load 'window-purpose
 ;;     (require 'diogenes-purpose))
@@ -420,9 +424,32 @@ stay."
     (purpose-compile-user-configuration))
   t)
 
-;; Apply on load, if purpose is present.
-(when (featurep 'window-purpose)
-  (diogenes-purpose-install))
+(defcustom diogenes-purpose-manage-purposes t
+  "Whether Diogenes teaches window-purpose what its buffers are.
+Non-nil installs the purposes as soon as `window-purpose' is loaded, in
+either order -- this file first or that one.
+
+On by default, and required from `diogenes.el' rather than left to an init
+file, for the same reason as `diogenes-evil.el': without it purpose has no
+entry for a lookup buffer, files it under the generic `edit' purpose, and
+shows an entry in whatever window already holds that purpose -- which is the
+window you were reading in.  That is not a layout preference anyone would
+choose; it is purpose lacking a fact about buffers only this package knows.
+
+Nil leaves purpose's own configuration alone, for a reader who has written
+their own entries and wants them untouched."
+  :type 'boolean
+  :group 'diogenes)
+
+;; Either order: purpose already loaded, or loaded later.  window-purpose is
+;; an ordinary package -- Spacemacs enables it, but anyone may -- so nothing
+;; here waits for a distribution.
+(when diogenes-purpose-manage-purposes
+  (if (featurep 'window-purpose)
+      (diogenes-purpose-install)
+    (with-eval-after-load 'window-purpose
+      (when diogenes-purpose-manage-purposes
+        (diogenes-purpose-install)))))
 
 (provide 'diogenes-purpose)
 ;;; diogenes-purpose.el ends here
