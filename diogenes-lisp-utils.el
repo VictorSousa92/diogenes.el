@@ -334,6 +334,48 @@ whose mode was not among them."
       ((and (pred functionp) fn)
        (ignore-errors (funcall fn buffer))))))
 
+(defcustom diogenes-display-debug nil
+  "When non-nil, record every decision `diogenes--display-buffer\=' makes.
+Each call appends a paragraph to `*diogenes-display-log*\=': which of the four
+branches was taken, what was in force when it was taken, the windows before
+and after, and the window returned.
+
+Here because one symptom -- a lookup taking the window of the text it was
+looked up from, on one configuration and not the others -- took a day of
+probing and was not explained.  Every component measured correctly in
+isolation while the whole measured wrong, which is the signature of a
+decision being made where nobody is looking.  A log of the decision itself
+answers in one keypress what the probing did not.
+
+    (setq diogenes-display-debug t)
+
+then do the thing that misbehaves, and read the buffer."
+  :type 'boolean
+  :group 'diogenes)
+
+(defvar diogenes--display-log-before nil)
+(defvar diogenes--display-log-branch nil)
+(defvar diogenes--display-log-detail nil)
+
+(defun diogenes--display-log (buffer window)
+  "Append what `diogenes--display-buffer\=' just decided about BUFFER."
+  (when diogenes-display-debug
+    (with-current-buffer (get-buffer-create "*diogenes-display-log*")
+      (goto-char (point-max))
+      (insert (format "%s  %s\n  branch  %s\n  detail  %S\n\
+  before  %S\n  after   %S\n  window  %s (%s)\n\n"
+                      (format-time-string "%H:%M:%S")
+                      (buffer-name (get-buffer buffer))
+                      (or diogenes--display-log-branch "?")
+                      diogenes--display-log-detail
+                      diogenes--display-log-before
+                      (mapcar (lambda (w) (buffer-name (window-buffer w)))
+                              (window-list))
+                      window
+                      (if (window-live-p window)
+                          (buffer-name (window-buffer window))
+                        "dead"))))))
+
 (defmacro diogenes--with-our-answer (&rest body)
   "Run BODY.  Kept as a no-op, and here is what it was for.
 An earlier commit had this bind `purpose-action-function\=' to `ignore\=', on
@@ -391,7 +433,13 @@ miss and was missed here."
   ;; Claimed BEFORE it is displayed, so that whatever watches the display --
   ;; a perspective, a workspace -- sees a buffer that already belongs.
   (diogenes--claim-buffer buffer)
-  (let* ((chosen (or action (diogenes--display-action kind)))
+  (let* ((diogenes--display-log-before
+          (and diogenes-display-debug
+               (mapcar (lambda (w) (buffer-name (window-buffer w)))
+                       (window-list))))
+         (diogenes--display-log-branch nil)
+         (diogenes--display-log-detail nil)
+         (chosen (or action (diogenes--display-action kind)))
          ;; The window `display-buffer' RETURNS, not one found afterwards by
          ;; searching.  An earlier version re-derived it with
          ;; `(get-buffer-window buffer t)', which looks on every frame and
@@ -407,6 +455,10 @@ miss and was missed here."
        ;; `diogenes-purpose', which uses an overriding action of its own, and
        ;; under `diogenes-doom', whose rules are in `display-buffer-alist'.
        ((or (diogenes--sole-home-window-p) same-window)
+        (setq diogenes--display-log-branch "intent: same-window or lone home"
+              diogenes--display-log-detail
+              (list :same-window same-window
+                    :sole-home (diogenes--sole-home-window-p)))
         ;; A DEDICATED window declines, and `display-buffer' then puts the
         ;; buffer somewhere else entirely -- which is not "somewhere else"
         ;; but a refusal of what was asked.  window-purpose dedicates the
@@ -436,6 +488,8 @@ miss and was missed here."
        ;; decline -- every function in it returning nil -- `display-buffer'
        ;; carries on to the alist and the modules have their say after all.
        (chosen
+        (setq diogenes--display-log-branch "action set by the reader"
+              diogenes--display-log-detail (list :action chosen))
         (let ((display-buffer-overriding-action chosen))
           (diogenes--with-our-answer (display-buffer buffer))))
        ;; Frames are in play, and nothing more specific was asked for.  This
@@ -450,12 +504,23 @@ miss and was missed here."
        ;; ordinary way would lose to purpose, which uses an overriding action
        ;; of its own, and to Doom, whose rules are in the alist.
        ((diogenes--gathering-p)
+        (setq diogenes--display-log-branch "gathering into frames"
+              diogenes--display-log-detail
+              (list :pop-up-frames pop-up-frames))
         (let ((display-buffer-overriding-action (diogenes--gathering-action)))
           (diogenes--with-our-answer (display-buffer buffer))))
        ;; No frames, nothing set: whatever is installed decides, exactly as it
        ;; did before any of this -- `window-purpose' under Spacemacs, the
        ;; popup manager under Doom, plain `display-buffer' elsewhere.
            (t
+            (setq diogenes--display-log-branch "deferred to what is installed"
+                  diogenes--display-log-detail
+                  (list :overriding display-buffer-overriding-action
+                        :alist (mapcar #'car display-buffer-alist)
+                        :advice (let (fs)
+                                  (advice-mapc (lambda (f _) (push f fs))
+                                               'display-buffer)
+                                  fs)))
             (display-buffer buffer)))))
     (when (and (window-live-p window) (not no-select))
       ;; On another frame, the frame has to be raised as well, which is the
@@ -469,6 +534,7 @@ miss and was missed here."
       ;; and `diogenes--show-dict-entry' recenters -- that leaving it to
       ;; follow from `select-window' is not good enough.
       (set-buffer (window-buffer window)))
+    (diogenes--display-log buffer window)
     window))
 
 (defun diogenes--path-set-p (value)
