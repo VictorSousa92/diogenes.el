@@ -869,6 +869,17 @@ entry along from a spelling that does not exist.  Morpheus writes the
 etymological compound -- `ex-surio', `ob-sedeo' -- and the dictionary keys the
 form actually written, which differs by more than the prefix."
   (let ((diogenes-latin-assimilate-prefixes t))
+    ;; The file writes some lemmata as FORM,LEMMA -- the accented form and
+    ;; then the lemma proper.  Only the second is the compound: with the form
+    ;; attached every candidate was `obsessi_s,obsideo', which is nobody's
+    ;; key, and the reader saw the entry after where `obsideo' should be.
+    (should (member "obsideo"
+                    (diogenes--latin-assimilations "obsessi_s,ob-sedeo")))
+    (should (member "esurio"
+                    (diogenes--latin-assimilations "e_surie_ns,ex-surio")))
+    ;; A lemma with no comma is untouched, which is the common case.
+    (should (equal (diogenes--latin-assimilations "obsessi_s,ob-sedeo")
+                   (diogenes--latin-assimilations "ob-sedeo")))
     ;; `ex' loses its consonant before s.
     (should (member "esurio" (diogenes--latin-assimilations "ex-surio")))
     ;; The stem's own vowel weakens.

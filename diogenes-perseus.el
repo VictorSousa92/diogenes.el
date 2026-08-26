@@ -2340,6 +2340,15 @@ whichever the dictionary actually has."
   (let* ((clean (replace-regexp-in-string
 		 "[_^+]" ""
 		 (replace-regexp-in-string "#?[0-9]+\\'" "" lemma)))
+	 ;; The analyses file writes some lemmata as FORM,LEMMA -- the accented
+	 ;; form and then the lemma proper, `obsessi_s,ob-sedeo'.  Only the part
+	 ;; after the comma is the compound to be assimilated: with the form
+	 ;; still attached every candidate came out as `obsessi_s,obsideo', which
+	 ;; is nobody's key, and the reader was shown `ob-septus' -- the entry
+	 ;; that follows where `obsideo' would have been.
+	 (clean (if (string-match ",\\([^,]*\\)\\'" clean)
+		    (match-string 1 clean)
+		  clean))
 	 (parts (split-string clean "-" t)))
     (when (= 2 (length parts))
       (let* ((prefix (downcase (car parts)))
