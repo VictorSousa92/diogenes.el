@@ -720,6 +720,39 @@ README described three jumps it no longer had."
                 diogenes-pdf-search--tgl-column-page))
     (should (fboundp fn))))
 
+(ert-deftest diogenes-test-where-in-index-binds-no-siblings ()
+  "`diogenes-tgl--where-in-index' reads no sibling of its own `let'.
+Regression: `candidate-any' was defined as (or LOOKUP candidate-exact), and
+its sibling `candidate-exact' is not in scope in a plain `let' -- so under
+lexical binding the form signalled `void-variable', and did so exactly when
+the index lookup missed, which is when one presses `i' to check a word the
+main lookup got wrong.
+
+Asserts the source rather than the behaviour: reaching the failing branch
+needs the TGL's volumes, which a batch Emacs has not got."
+  (let* ((file (or (locate-library "diogenes-tgl")
+                   (error "diogenes-tgl not on the load path")))
+         (source (replace-regexp-in-string "\\.elc\\'" ".el" file)))
+    (with-temp-buffer
+      (insert-file-contents source)
+      (goto-char (point-min))
+      (should (re-search-forward "defun diogenes-tgl--where-in-index" nil t))
+      (let ((start (point))
+            (end (or (save-excursion
+                       (and (re-search-forward "^(defun " nil t) (point)))
+                     (point-max))))
+        (goto-char start)
+        ;; `candidate-exact' appears in the bindings once, where it is
+        ;; defined, and thereafter only below the `cond'.
+        (let ((bindings-end (or (save-excursion
+                                  (and (re-search-forward "^        (cond" end t)
+                                       (point)))
+                                end))
+              (count 0))
+          (while (re-search-forward "candidate-exact" bindings-end t)
+            (setq count (1+ count)))
+          (should (= count 1)))))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

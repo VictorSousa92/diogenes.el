@@ -3334,12 +3334,23 @@ resolver."
                          (+ (diogenes-tgl--column-to-page (nth 1 five) model)
                             diogenes-tgl-page-offset)))))))
             (candidate-any
-             ;; Any harvested page (exact OR fuzzy entry, or a t.5 ref),
-             ;; used ONLY as a last resort when there is no alphabetical
-             ;; estimate at all -- then even a fuzzy mention beats nothing.
-             (or (let ((e (diogenes-tgl--index-entry-locate key index)))
-                   (and e (cdr e)))
-                 candidate-exact)))
+             ;; A harvested supplementary entry, exact or a 1-edit neighbour,
+             ;; used ONLY when there is no alphabetical estimate at all.
+             ;;
+             ;; A t.5 REFERENCE is deliberately not a fallback here.  The
+             ;; clause below admits one only when the estimate agrees with
+             ;; it, for the reason this function's docstring gives: the index
+             ;; apparatus mentions a word in a gloss or a `vide' on pages far
+             ;; from where the word itself falls, so an uncorroborated
+             ;; reference lands in the wrong letter.  With no estimate there
+             ;; is nothing to corroborate it, and no page is a better answer
+             ;; than a page in the wrong letter -- the caller says "could not
+             ;; place" and the reader looks for themselves.
+             ;;
+             ;; And an exact entry needs no mention here: it is what
+             ;; `--index-entry-locate' returns first.
+             (let ((e (diogenes-tgl--index-entry-locate key index)))
+               (and e (cdr e)))))
         (cond
          ;; Trust the harvested page only when it is an EXACT entry/ref AND
          ;; sits in the estimate's neighbourhood (same letter region);
