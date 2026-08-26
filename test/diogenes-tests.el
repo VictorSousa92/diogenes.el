@@ -547,8 +547,13 @@ evil's own."
                         '("o" "t" "m" "c" "b" "p" "B" "d" "G" "g" "l" "P"
                           "q" "RET" "TAB")))))
 
-(ert-deftest diogenes-test-behaviour-may-differ-by-kind ()
-  "A word applies to every kind; an alist answers per kind.
+(ert-deftest diogenes-test-behaviour-alist-reaches-the-action ()
+  "A per-kind alist survives the whole way to the action that is passed.
+Not the same question as `diogenes-test-behaviour-for-word-or-alist' below,
+which asks what `diogenes--behaviour-for' returns: this asks whether that
+answer reaches `display-buffer', which is where an earlier version of the
+per-kind setting was read correctly and then dropped.
+
 The three kinds are different things and there is no reason they should
 agree: the text staying where it is while entries share a window beside it
 and a scan gets a frame is a perfectly ordinary arrangement."
@@ -599,10 +604,13 @@ and a scan gets a frame is a perfectly ordinary arrangement."
       ;; `reuse' where the thresholds forbid a split.
       (should (memq 'diogenes--display-split-anyway (car action))))))
 
-(ert-deftest diogenes-test-behaviour-may-differ-per-kind ()
-  "A word applies to everything; an alist answers per kind.
-So the entries may share a window while the browser keeps a frame, which is
-the arrangement most readers of a text actually want."
+(ert-deftest diogenes-test-behaviour-for-word-or-alist ()
+  "`diogenes--behaviour-for' reads either form: a word, or an alist.
+The narrower of the two questions -- what the function returns, rather than
+whether the answer reaches `display-buffer', which is
+`diogenes-test-behaviour-alist-reaches-the-action' above.  Both are worth
+asking, and were written in separate patches without either noticing the
+other; the names have been made to say which is which."
   (let ((diogenes-window-behaviour '((lookup . split)
                                      (browser . frames))))
     (should (eq (diogenes--behaviour-for 'lookup) 'split))
