@@ -334,34 +334,25 @@ whose mode was not among them."
       ((and (pred functionp) fn)
        (ignore-errors (funcall fn buffer))))))
 
-(defvar purpose-action-function)
-
 (defmacro diogenes--with-our-answer (&rest body)
-  "Run BODY with window-purpose standing aside.
-window-purpose does not merely install a display action -- it ADVISES
-`display-buffer\=' itself, with `purpose-display-buffer-advice\='.  Advice on
-the function runs before the function, and therefore before
-`display-buffer-overriding-action\=', before `display-buffer-alist\=', and
-before any action a caller passes.  So a reader who sets
-`diogenes-lookup-display-action\=' has, on any Emacs with purpose loaded, set
-something that cannot be reached.
+  "Run BODY.  Kept as a no-op, and here is what it was for.
+An earlier commit had this bind `purpose-action-function\=' to `ignore\=', on
+the belief that window-purpose\='s advice on `display-buffer\=' consulted it and
+would therefore stand aside.  No such variable exists: `(boundp
+\='purpose-action-function)\=' is nil with purpose loaded, so the binding did
+nothing, and a test asserting it passed while asserting a fiction.
 
-An earlier commit claimed the overriding action was enough to come first.
-That was tested against Doom, whose popup manager keeps its rules in
-`display-buffer-alist\=' where an overriding action does win, and then assumed
-of purpose without testing -- and purpose is the one that advises.
+The reuse it was meant to fix had another cause entirely, and one closer to
+home -- `diogenes-purpose.el\=' installing itself as
+`display-buffer-overriding-action\=' and calling `purpose--action-function\='
+from inside purpose\='s own advice.  Twice through that function is a reuse
+where once is a split.  See the commentary in that file.
 
-`purpose-action-function\=' is what the advice consults, so binding it to
-`ignore\=' makes the advice pass the call through untouched.  Nothing is
-removed and nothing is left changed: purpose is in charge again the moment
-BODY returns.  `diogenes-old--display-in-this-window\=' has always bound
-`display-buffer-overriding-action\=' to nil for the same purpose, which was
-half of this; the other half is that its advice needs neutralising too."
+Left in place, doing nothing, only so that a compiled caller from the
+intervening commits does not break.  Callers should be plain
+`display-buffer\=' calls."
   (declare (indent 0) (debug t))
-  `(let ((purpose-action-function
-          (if (boundp 'purpose-action-function) #'ignore
-            (bound-and-true-p purpose-action-function))))
-     ,@body))
+  `(progn ,@body))
 
 (cl-defun diogenes--display-buffer (buffer &key kind same-window action
                                           no-select)

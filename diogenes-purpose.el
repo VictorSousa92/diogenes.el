@@ -76,6 +76,25 @@ entry is (MAJOR-MODE . PURPOSE)."
   :type '(alist :key-type symbol :value-type symbol)
   :group 'diogenes)
 
+(defcustom diogenes-purpose-regexp-purposes
+  '(("\\`\\*diogenes-lookup" . diogenes-lookup)
+    ("\\`\\*Diogenes Analysis" . diogenes-lookup)
+    ("\\`\\*Diogenes Forms" . diogenes-lookup)
+    ("\\`\\*diogenes-browser" . diogenes-browser))
+  "Buffer-name regexps and the window-purpose each names.
+The MODE table below says the same thing and cannot be relied on, which is
+why this exists: a lookup buffer is created, displayed, and only then put
+into `diogenes-lookup-mode\=', so at the moment purpose classifies it the mode
+is `fundamental-mode\=' and the mode table has nothing to say.  Purpose then
+files the entry under `general\=' and shows it in the window the reader was
+reading in.
+
+A name is settled when the buffer is made, so this cannot be consulted too
+early.  Regexps rather than plain names because every entry gets a buffer of
+its own -- `*diogenes-lookup<2>*\=' and upwards."
+  :type '(alist :key-type regexp :value-type symbol)
+  :group 'diogenes)
+
 (defcustom diogenes-purpose-extra-name-purposes nil
   "Extra (BUFFER-NAME . PURPOSE) pairs to add to `purpose-user-name-purposes'.
 Handy for purposing dictionary PDF buffers, which are named after
@@ -121,38 +140,30 @@ this module needs to know about."
        (or (diogenes--home-buffer-p name)
            (member name diogenes-purpose-home-buffer-names))))
 
-(defun diogenes-purpose--diogenes-buffer-p (buffer)
-  "Non-nil if BUFFER is a Diogenes buffer this module gives a purpose.
-Recognised by major mode (the keys of `diogenes-purpose-mode-purposes')
-or by a lookup-family buffer name (`*diogenes-lookup*', analysis, forms)."
-  (let ((buffer (get-buffer buffer)))
-    (and buffer
-         (or (assq (buffer-local-value 'major-mode buffer)
-                   diogenes-purpose-mode-purposes)
-             (let ((n (buffer-name buffer)))
-               (and n (string-match-p
-                       "\\`\\*\\(?:[Dd]iogenes[ -][Ll]ookup\\|Diogenes Analysis\\|Diogenes Forms\\|diogenes-browser\\)"
-                       n)))))))
+(define-obsolete-function-alias 'diogenes-purpose--overriding-action
+  'purpose--action-function "modular-customizable"
+  "The wrapper is gone; see below.")
 
-(defun diogenes-purpose--sole-home-window-p ()
-  "Non-nil if the selected frame has ONE window showing a home buffer."
-  (and (one-window-p)
-       (diogenes-purpose--home-buffer-name-p
-        (buffer-name (window-buffer (selected-window))))))
-
-(defun diogenes-purpose--overriding-action (buffer alist)
-  "`display-buffer' overriding action wrapping window-purpose's own.
-When `diogenes-purpose-reuse-home-window' is on, BUFFER is a Diogenes
-buffer, and the frame's only window shows the startup/home buffer,
-display BUFFER in that window (reusing it, no split, no pop).
-Otherwise fall through to window-purpose's normal action
-\(`purpose--action-function')."
-  (if (and diogenes-purpose-reuse-home-window
-           (diogenes-purpose--diogenes-buffer-p buffer)
-           (diogenes-purpose--sole-home-window-p))
-      (window--display-buffer buffer (selected-window) 'reuse alist)
-    (when (fboundp 'purpose--action-function)
-      (purpose--action-function buffer alist))))
+;; WHAT WAS HERE, AND WHY IT WENT.
+;;
+;; This module used to install itself as `display-buffer-overriding-action',
+;; wrapping `purpose--action-function' so that a Diogenes buffer could reuse
+;; the sole startup window before purpose had its say.  purpose ADVISES
+;; `display-buffer', so the wrapper ran from inside that advice -- and then
+;; called `purpose--action-function' itself, a second time, from within
+;; purpose's own machinery.  Once was a split; twice was a reuse.  Which is
+;; why a lookup made from the browser took the browser's window on Spacemacs
+;; and nowhere else, and why nothing else touched it: not the display action,
+;; not `display-buffer-alist', not the thresholds, not the purposes.  None of
+;; them was reached.
+;;
+;; The carve-out it existed for is `diogenes--sole-home-window-p' now, applied
+;; by `diogenes--display-buffer' to every Diogenes buffer whether purpose is
+;; loaded or not.  So the wrapper had nothing left to do but the harm.
+;;
+;; What remains of this module is telling purpose what our buffers ARE.  That
+;; is all it should ever have done: purpose decides where a buffer goes, and
+;; does it well, given the truth about the buffer.
 
 ;;;; Focus: moving between the browser, the lookup and the dictionary
 ;;
@@ -379,16 +390,22 @@ Idempotent."
           (diogenes-purpose--merge diogenes-purpose-extra-name-purposes
                                    (and (boundp 'purpose-user-name-purposes)
                                         purpose-user-name-purposes))))
+  ;; BY NAME as well as by mode, and the names are what actually work.  A
+  ;; lookup buffer is created, displayed, and only then put into
+  ;; `diogenes-lookup-mode' -- so at the moment purpose classifies it the mode
+  ;; is `fundamental-mode', the mode table says nothing, and purpose files it
+  ;; under `general' and shows it in the window we were reading in.  Measured:
+  ;; `purpose-buffer-purpose' on a fresh `*diogenes-lookup*' returned
+  ;; `general' where the browser correctly returned `diogenes-browser'.
+  ;;
+  ;; A name is settled when the buffer is made, so a regexp cannot be too
+  ;; early.  Regexps rather than names because every entry gets its own
+  ;; buffer -- `*diogenes-lookup<2>*' and upwards.
+  (when (boundp 'purpose-user-regexp-purposes)
+    (setq purpose-user-regexp-purposes
+          (diogenes-purpose--merge diogenes-purpose-regexp-purposes
+                                   purpose-user-regexp-purposes)))
   (purpose-compile-user-configuration)
-  ;; Wrap window-purpose's overriding action so a Diogenes buffer reuses the
-  ;; sole startup/home window when appropriate.  Only do this when purpose's
-  ;; own action is the current override (so we compose with it, not clobber
-  ;; something else), and not twice.
-  (when (and (equal display-buffer-overriding-action
-                    '(purpose--action-function))
-             (fboundp 'purpose--action-function))
-    (setq display-buffer-overriding-action
-          '(diogenes-purpose--overriding-action)))
   ;; Focus conventions between the three purposed windows.
   (diogenes-purpose--install-focus)
   t)
@@ -401,13 +418,19 @@ own `display-buffer-overriding-action' if this module had wrapped it.
 Only the entries this module added are removed; unrelated user entries
 stay."
   (interactive)
-  ;; Restore purpose's overriding action if we had wrapped it.
+  ;; An older version of this module put itself in
+  ;; `display-buffer-overriding-action'.  Undo that if it is still there.
   (when (equal display-buffer-overriding-action
                '(diogenes-purpose--overriding-action))
     (setq display-buffer-overriding-action
           (if (fboundp 'purpose--action-function)
               '(purpose--action-function)
             nil)))
+  (when (boundp 'purpose-user-regexp-purposes)
+    (setq purpose-user-regexp-purposes
+          (cl-remove-if (lambda (cell)
+                          (assoc (car cell) diogenes-purpose-regexp-purposes))
+                        purpose-user-regexp-purposes)))
   (when (boundp 'purpose-user-mode-purposes)
     (setq purpose-user-mode-purposes
           (cl-remove-if (lambda (cell)

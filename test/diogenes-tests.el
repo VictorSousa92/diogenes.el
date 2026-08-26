@@ -38,6 +38,7 @@
 (require 'cl-lib)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-perseus)
+(require 'diogenes-purpose)
 
 ;; Every file, not just the two the assertions name.  The command-shape test
 ;; below scans whatever commands are DEFINED, and headless only these two
@@ -444,27 +445,34 @@ buffer being killed, which it was not."
     (should (progn (diogenes--claim-buffer buffer) t))
     (should (buffer-live-p buffer))))
 
-(ert-deftest diogenes-test-purpose-stands-aside ()
-  "An action of ours is not defeated by window-purpose's advice.
-Regression, and the most expensive of them: window-purpose ADVISES
-`display-buffer' rather than merely installing an action, so its advice runs
-before `display-buffer-overriding-action', before `display-buffer-alist' and
-before any action a caller passes.  Every attempt to make a lookup open in
-its own window therefore did nothing on Spacemacs, while behaving correctly
-under `emacs -Q' -- and the earlier claim that an overriding action came
-first had been tested against Doom, where the rules live in the alist, and
-assumed of purpose.
+(ert-deftest diogenes-test-purpose-regexps-cover-numbered-buffers ()
+  "Every lookup buffer a lookup can make is classified by name.
+Regression: window-purpose classifies by MAJOR MODE, and a lookup buffer has
+none yet when it is displayed -- so purpose filed entries under `general' and
+showed them in the window the reader was reading in.  Names work where modes
+cannot, and every entry gets a numbered buffer of its own, so the patterns
+have to match those too.
 
-Asserts the binding rather than the outcome: purpose is not installed in a
-batch Emacs, so what can be checked here is that the macro binds what the
-advice consults."
-  (let ((purpose-action-function 'something-else))
-    (diogenes--with-our-answer
-      (should (eq purpose-action-function #'ignore))))
-  ;; And leaves it as it was afterwards.
-  (let ((purpose-action-function 'something-else))
-    (diogenes--with-our-answer nil)
-    (should (eq purpose-action-function 'something-else))))
+An earlier test here asserted that a macro bound `purpose-action-function'
+to `ignore'.  No such variable exists, so it passed while checking nothing --
+which is the second time in this suite's short life, and the reason this one
+asserts against real buffer names instead of a mechanism."
+  (let ((names '("*diogenes-lookup*" "*diogenes-lookup<2>*"
+                 "*diogenes-lookup<17>*" "*Diogenes Analysis*"
+                 "*Diogenes Forms*")))
+    (dolist (name names)
+      (should (eq 'diogenes-lookup
+                  (cdr (cl-find-if (lambda (rule)
+                                     (string-match-p (car rule) name))
+                                   diogenes-purpose-regexp-purposes))))))
+  (should (eq 'diogenes-browser
+              (cdr (cl-find-if (lambda (rule)
+                                 (string-match-p (car rule) "*diogenes-browser*"))
+                               diogenes-purpose-regexp-purposes))))
+  ;; And nothing else is swept up.
+  (should-not (cl-find-if (lambda (rule)
+                            (string-match-p (car rule) "*scratch*"))
+                          diogenes-purpose-regexp-purposes)))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
