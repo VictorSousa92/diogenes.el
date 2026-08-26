@@ -11,11 +11,23 @@
 
 ;;; Code:
 (require 'cl-lib)
+(require 'text-property-search)  ; prop-match-value
 (require 'seq)
 (require 'replace)
 (require 'transient)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-user-interface)
+
+;; Called across files that cannot be required from here without a
+;; cycle, and -- where the name is one of this package's own caches --
+;; defined inside a `let', which the compiler does not count as a
+;; definition at all.
+(declare-function diogenes--get-filter-file "diogenes-perl-interface" (&optional type))
+(declare-function diogenes--get-author-list "diogenes-perl-interface" (options &optional regex))
+(declare-function diogenes--get-works-list "diogenes-perl-interface" (options author))
+(declare-function diogenes--get-tlg-categories "diogenes-perl-interface" ())
+(declare-function diogenes--define-corpus-script "diogenes-perl-interface" (options plist))
+(declare-function diogenes--get-info "diogenes-perl-interface" (script &optional a b))
 
 ;;; EDIT EXISTING CORPORA
 (defvar diogenes--user-corpora []
@@ -276,7 +288,7 @@ BUFFER defaults to the current buffer."
 
 (defun diogenes--add-work-to-corpus (pos)
   (interactive "d")
-  (when-let* ((properties (copy-list (text-properties-at pos)))
+  (when-let* ((properties (cl-copy-list (text-properties-at pos)))
 	      (corpus-type (plist-get properties 'corpus-type))
 	      (author-region (diogenes--get-text-prop-boundaries
 			      pos 'author-num))
@@ -466,7 +478,7 @@ inside the region."
 				 (push (cons id corpus) corpora))
 		   unless (or (y-or-n-p
 			       "Name already in use! Choose another name?")
-			      (not (y-or-n-q
+			      (not (y-or-n-p
 				    "Are you sure you want to discard it?")))
 		   return nil))
 		 ("discard")
@@ -500,7 +512,7 @@ error."
 (defun diogenes-manage-user-corpora ()
   "Manage all user defined corpora."
   (interactive)
-  (if-let ((corpora-buffer (get-buffer "*diogenes-corpora*")))
+  (if-let* ((corpora-buffer (get-buffer "*diogenes-corpora*")))
       (diogenes--display-buffer corpora-buffer) 
     (diogenes--load-user-corpora)
     (diogenes--display-buffer (get-buffer-create "*diogenes-corpora*"))
@@ -578,19 +590,19 @@ corpus or, when supplied, call CALLBACK on it. If NO-ASK is not nil, it should b
 ;;; MAKE NEW CORPORA
 (defun diogenes--define-user-corpus (type &rest author-plist)
   "Define a subset of the databases to be used for searching."
-  (when-let (authors (diogenes--get-info #'diogenes--define-corpus-script
-					 (list :type type)
-					 author-plist))
+  (when-let* ((authors (diogenes--get-info #'diogenes--define-corpus-script
+					  (list :type type)
+					  author-plist)))
     (list :type type :authors authors)))
 
 (defun diogenes--define-simple-corpus (type)
   "Define a simple corpus for searching the Diogenes database TYPE."
-  (when-let ((authors (diogenes--select-author-nums (list :type type))))
+  (when-let* ((authors (diogenes--select-author-nums (list :type type))))
     (list :type type :authors authors)))
 
 (defun diogenes--define-regexp-corpus (type)
   "Define a corpus for searching using a perl regexp."
-  (when-let ((regexp (read-from-minibuffer
+  (when-let* ((regexp (read-from-minibuffer
 		      "Select authors matching perl regex: ")))
     (diogenes--define-user-corpus type :author-regex regexp)))
 

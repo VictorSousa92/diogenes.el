@@ -34,6 +34,12 @@
 (require 'ucs-normalize)
 (require 'diogenes-lisp-utils)          ; diogenes--require-path, --path-usable-p
 
+;; Called across files that cannot be required from here without a
+;; cycle, and -- where the name is one of this package's own caches --
+;; defined inside a `let', which the compiler does not count as a
+;; definition at all.
+(declare-function reader-open-doc "reader" (file))
+
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus" (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 (declare-function reader-fit-to-width "reader" ())

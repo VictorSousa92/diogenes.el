@@ -39,13 +39,24 @@
 
 ;;;###autoload
 (defun diogenes-tidy-up-search-results ()
-  "Post-processes search results of diogenes"
+  "Post-process the search results in this buffer.
+Joins words broken across lines, then closes up the ->word<- marks that
+Diogenes puts around a hit, so the arrows sit outside the word.
+
+The first step called `diogenes-unhyphen-greek\=', which is defined nowhere in
+this package and never was -- so this command has always failed at its first
+line with a void-function error.  `diogenes-remove-hyphenation\=' is the
+function that does that work, and it is not specific to Greek.
+
+`replace-regexp\=' is likewise gone: it is for interactive use, and warns when
+called from Lisp."
   (interactive)
   (save-excursion
     (goto-char (point-min))
-    (diogenes-unhyphen-greek)
+    (diogenes-remove-hyphenation)
     (goto-char (point-min))
-    (replace-regexp "->\\([[:alpha:]]*\\)<-\\([[:alpha:]]*\\)" "-> \\1\\2 -<")))
+    (while (re-search-forward "->\\([[:alpha:]]*\\)<-\\([[:alpha:]]*\\)" nil t)
+      (replace-match "-> \\1\\2 -<"))))
 
 (provide 'diogenes-legacy)
 

@@ -241,7 +241,7 @@ buffer, or in the active region."
 			  (match-end 1)))
 	       while pos-a
 	       for pos-b =
-	       (when-let ((next-line (and (zerop (forward-line))
+	       (when-let* ((next-line (and (zerop (forward-line))
 					  (thing-at-point 'line))))
 		 (when (cl-find-if (lambda (regexp) (string-match regexp next-line))
 				   '("^\\S-+\\s-\\{3,\\}\\(\\S-+\\)"

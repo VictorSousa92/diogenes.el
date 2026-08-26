@@ -11,10 +11,20 @@
 
 ;;; Code:
 (require 'cl-lib)
+(require 'text-property-search)  ; prop-match-value, text-property-search-backward
 (require 'seq)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-dict-faces)          ; diogenes-browser-header
 (require 'diogenes-perl-interface)
+
+;; Called across files that cannot be required from here without a
+;; cycle, and -- where the name is one of this package's own caches --
+;; defined inside a `let', which the compiler does not count as a
+;; definition at all.
+(declare-function diogenes--select-author-num "diogenes-user-interface" (options &optional regex))
+(declare-function diogenes--select-work-num "diogenes-user-interface" (options author))
+(declare-function diogenes--select-passage "diogenes-user-interface" (options author work))
+(declare-function diogenes-lookup-in-dictionary "diogenes-perseus" (&optional word parse))
 
 ;;;; --------------------------------------------------------------------
 ;;;; BROWSER
@@ -103,7 +113,7 @@ Takes no prefix argument, as `diogenes-browser-forward' takes none."
 			       (next-single-property-change (point) 'cit))
 			 (goto-char prop-change)
 			 (not (eobp)))
-	       (when-let ((citation (get-text-property (point) 'cit)))
+	       (when-let* ((citation (get-text-property (point) 'cit)))
 		 (insert (diogenes--browser-format-citation citation)))))))))
 
 (defun diogenes-browser-remove-hyphenation (&optional mark-with-vertical-bar)
@@ -250,7 +260,7 @@ If it is incomplete, buffer it and prepend it when called again."
 
 (defun diogenes--browser-filter (proc string)
   (when (buffer-live-p (process-buffer proc))
-    (when-let ((data (diogenes--read-browser-output string)))
+    (when-let* ((data (diogenes--read-browser-output string)))
      (with-current-buffer (process-buffer proc)
        (seq-let (cit header &rest lines) data
 	 (unless lines (error "No input received!"))

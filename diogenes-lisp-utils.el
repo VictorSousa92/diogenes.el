@@ -11,6 +11,7 @@
 
 ;;; Code:
 (require 'cl-lib)
+(require 'transient)             ; transient-scope
 (require 'seq)
 (require 'ucs-normalize)                ; diogenes--ascii-alpha-only folds NFD
 

@@ -476,7 +476,7 @@ QUERY is interpreted as a regular expression which must match the forms."
 If a region is active, convert the contents of the region in place;
 otherwise, prompt the user for input."
   (interactive "i")
-  (cond (str (diogenes--uft8-to-beta str))
+  (cond (str (diogenes--utf8-to-beta str))
 	((use-region-p) (translate-region (point) (mark)
 					  diogenes--utf8-to-beta-table))
 	(t (let ((str (read-from-minibuffer "Convert to Greek Beta Code: "

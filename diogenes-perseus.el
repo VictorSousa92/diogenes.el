@@ -17,6 +17,20 @@
 (require 'diogenes-utils)
 (require 'diogenes-perl-interface)
 
+;; Called across files that cannot be required from here without a
+;; cycle, and -- where the name is one of this package's own caches --
+;; defined inside a `let', which the compiler does not count as a
+;; definition at all.
+(declare-function diogenes--browse-work "diogenes-browser" (options passage))
+(declare-function diogenes--perseus-path "diogenes-perl-interface" (&rest parts))
+(declare-function diogenes--dict-file "diogenes-perl-interface" (lang))
+(declare-function diogenes--get-all-analyses "diogenes-perseus" (query &rest args))
+(declare-function diogenes--get-all-lemmata "diogenes-perseus" (query &rest args))
+(declare-function diogenes--get-analyses-index "diogenes-perseus" (lang))
+(declare-function diogenes--all-matches-in-hashtable "diogenes-perseus" (query hash filter ignore-case no-diacritics))
+(declare-function diogenes--lookup-insert-xml "diogenes-perseus" (xml start end buffer))
+
+(declare-function rng-first-error "rng-valid" ())
 (declare-function diogenes-perseus-action nil)
 (declare-function diogenes-lookup-open-old "diogenes-old" (&optional word))
 (declare-function diogenes-lookup-open-tll "diogenes-tll" (&optional word))
@@ -1842,7 +1856,7 @@ the file only at the first call."
 (defun diogenes-analysis-cycle (pos)
   "On a heading in analysis mode, show or hide its contents."
   (interactive "d")
-  (when-let ((level (get-char-property pos 'heading))
+  (when-let* ((level (get-char-property pos 'heading))
 	     (region-start (next-single-property-change pos level))
 	     (region-end (or (next-single-property-change region-start level)
 			     (point-max))))
@@ -1953,7 +1967,7 @@ Additionally, letter case and diacritics can be ignored."
 					      (gethash (funcall transformation k) hash))
 				     finally return hash)))))
 	  (results (if (eq filter #'string-equal)
-		       (when-let ((entry (gethash query hash)))
+		       (when-let* ((entry (gethash query hash)))
 			 (list (cons query entry)))
 		     (cl-loop for k being the hash-keys of hash
 			      using (hash-values v)

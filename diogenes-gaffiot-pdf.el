@@ -57,6 +57,12 @@
 (require 'diogenes-old)                 ; reuse the PDF display driver
 (require 'diogenes-gaffiot)             ; reuse the collation key
 
+;; Called across files that cannot be required from here without a
+;; cycle, and -- where the name is one of this package's own caches --
+;; defined inside a `let', which the compiler does not count as a
+;; definition at all.
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" (&rest args))
+
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 
 ;;;; --------------------------------------------------------------------

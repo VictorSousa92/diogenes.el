@@ -18,6 +18,12 @@
 (require 'diogenes-user-interface)
 (require 'diogenes-perseus)
 
+;; Called across files that cannot be required from here without a
+;; cycle, and -- where the name is one of this package's own caches --
+;; defined inside a `let', which the compiler does not count as a
+;; definition at all.
+(declare-function diogenes--browse-work "diogenes-browser" (options passage))
+
 (require 'diogenes-forms)
 (require 'diogenes-corpora)
 
