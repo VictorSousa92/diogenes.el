@@ -612,7 +612,7 @@ intervening commits does not break.  Callers should be plain
   `(progn ,@body))
 
 (cl-defun diogenes--display-buffer (buffer &key kind same-window action
-                                          no-select)
+                                          fallback no-select)
   "Show BUFFER and return the window it is in.
 The one place that decides where a Diogenes buffer goes, so that a reader
 who wants to change it has one thing to change and the package has one
@@ -625,6 +625,13 @@ beside it.
 
 KIND selects the action -- see `diogenes--display-action\=' -- and ACTION
 overrides it, for a caller that has computed one.
+
+FALLBACK is an action for when nothing else has an opinion: after what the
+reader asked for, and after the gathering.  A module with a display
+arrangement of its own passes it there rather than as ACTION, so that
+`diogenes-window-behaviour\=' and `diogenes-gather-frames\=' can still answer --
+an arrangement the package chose is not a decision the reader made, and
+should not outrank one.
 
 SAME-WINDOW puts BUFFER where we are.  Not a preference but a statement
 about what was asked: pressing a key inside an entry to see another entry
@@ -724,9 +731,15 @@ miss and was missed here."
               (list :pop-up-frames pop-up-frames))
         (let ((display-buffer-overriding-action (diogenes--gathering-action)))
           (diogenes--with-our-answer (display-buffer buffer))))
-       ;; No frames, nothing set: whatever is installed decides, exactly as it
-       ;; did before any of this -- `window-purpose' under Spacemacs, the
-       ;; popup manager under Doom, plain `display-buffer' elsewhere.
+       ;; A module's own arrangement, where it has one and nothing above had
+       ;; an opinion.
+           (fallback
+            (setq diogenes--display-log-branch "the module's own action"
+                  diogenes--display-log-detail (list :fallback fallback))
+            (diogenes--with-our-answer (display-buffer buffer fallback)))
+       ;; Nothing set and no frames: whatever is installed decides --
+       ;; `window-purpose' under Spacemacs, a popup manager under Doom, plain
+       ;; `display-buffer' elsewhere.
            (t
             (setq diogenes--display-log-branch "deferred to what is installed"
                   diogenes--display-log-detail

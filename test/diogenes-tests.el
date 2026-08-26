@@ -753,6 +753,36 @@ needs the TGL's volumes, which a batch Emacs has not got."
             (setq count (1+ count)))
           (should (= count 1)))))))
 
+(ert-deftest diogenes-test-fallback-yields-to-the-reader ()
+  "A module's own action is used last, not first.
+`diogenes-old.el' has a display arrangement for the scans -- reuse a window
+already showing a document, and so on -- and passes it as FALLBACK.  Passed
+as ACTION it would outrank `diogenes-window-behaviour' and the gathering, so
+every dictionary would open a frame of its own however they were set."
+  (diogenes-tests--with-two-windows
+    (let ((buffer (get-buffer-create " *diogenes-test-target*"))
+          (diogenes-window-behaviour 'defer)
+          (diogenes-gather-frames nil)
+          (diogenes-dictionary-display-action nil))
+      ;; With nothing else to say, the fallback is what runs.
+      (diogenes--display-buffer buffer :kind 'dictionary
+                                :fallback '((display-buffer-same-window)
+                                            (inhibit-same-window . nil)))
+      (should (eq (window-buffer (selected-window)) buffer))))
+  ;; And an action the reader set comes first.
+  (diogenes-tests--with-two-windows
+    (let ((buffer (get-buffer-create " *diogenes-test-target2*"))
+          (here (selected-window))
+          (diogenes-gather-frames nil)
+          (diogenes-dictionary-display-action
+           '((display-buffer-use-some-window) (inhibit-same-window . t))))
+      (diogenes--display-buffer buffer :kind 'dictionary
+                                :fallback '((display-buffer-same-window)
+                                            (inhibit-same-window . nil)))
+      ;; The reader's action sent it elsewhere; the fallback would have kept
+      ;; it here.
+      (should-not (eq (window-buffer here) buffer)))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

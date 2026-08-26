@@ -1081,8 +1081,19 @@ place of the entry the lookup was made from.
 A frame showing only a startup page is the exception either way: there is a
 window there and nothing in it worth keeping, so the page takes it rather
 than opening a frame beside it.  See `diogenes--sole-home-window-p'."
-  (if (and other-window (not (diogenes--sole-home-window-p)))
-      (display-buffer buffer action)
+  (if other-window
+      ;; Through the one helper, so that a page is placed by the same rules
+      ;; as everything else: `diogenes-window-behaviour', the frame
+      ;; gathering, the startup-window guard.  ACTION goes as the FALLBACK
+      ;; rather than as the action, which is the whole point -- it is this
+      ;; module's own arrangement, to be used when the reader has expressed
+      ;; none, and it must not outrank `frames' or an action they have set.
+      ;; Passed as ACTION it did outrank them, so every dictionary opened a
+      ;; frame of its own however the gathering was configured.
+      (diogenes--display-buffer buffer :kind 'dictionary :fallback action)
+    ;; The page replaces the entry it was consulted from, which wants the
+    ;; bespoke function: it undedicates the window, remembers what it
+    ;; displaced, and puts `q' on going back to it.
     (diogenes-old--display-in-this-window buffer))
   buffer)
 
