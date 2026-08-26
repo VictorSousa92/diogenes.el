@@ -579,7 +579,7 @@ and `P` opens it.
 
 - The XML is the whole of the Bailly 2020 edition — the same text its PDF prints — so there is no coverage boundary and nothing to fall back on.
 - With only `diogenes-bailly-pdf-file` set and no XML built, `B` opens the printed page instead, and Bailly behaves like the OLD.
-- Pressed a second time from inside a Bailly entry, `B` opens that word's page in the print. That is the only route to the PDF; `C-u B` looks another word up in the XML.
+- Pressed a second time from inside a Bailly entry, `B` opens that word's page in the print. That is the only route to the PDF; `C-u B` (`SPC u B`) looks another word up in the XML.
 
 ### Georges
 
@@ -757,11 +757,11 @@ What to do about it, as a user, when a jump lands you off:
  
 1. **Look nearby first.** The target is usually only a page or two away, so scroll a little before anything else. This alone resolves most misses.
 2. **Search inside the open PDF with `L`.** From the PDF, `L` re-looks-up an entry and jumps to it (see [Searching inside an open PDF](#searching-inside-an-open-pdf)); it is the best remedy for a link or `o t m c b B p g G` key that landed wrong.
-3. **For the TGL specifically**, reach a badly-OCR'd word by its **root** with `C-u L` (compounds and derivatives are often printed under the root, not as separate entries), or open volume V's index near the word with `i` (`diogenes-tgl-open-index-here`) and find it by eye. Once the index shows a reference like `t.3 c.746`, follow it with `C-u L` (choose the index-reference / other-tome option, give that tomus and column) and it jumps straight there.
+3. **For the TGL specifically**, reach a badly-OCR'd word by its **root** with `C-u L` (`SPC u L` under Doom and Spacemacs) (compounds and derivatives are often printed under the root, not as separate entries), or open volume V's index near the word with `i` (`diogenes-tgl-open-index-here`) and find it by eye. Once the index shows a reference like `t.3 c.746`, follow it with `C-u L` (`SPC u L`) (choose the index-reference / other-tome option, give that tomus and column) and it jumps straight there.
 | Command / key | Does |
 | --- | --- |
 | `L` (in the open PDF) | Re-look-up an entry and jump to it; works for every dictionary |
-| `C-u L`, approximate | Search for the word's **root** to land in the right article, then read within it |
+| `C-u L` (`SPC u L`), approximate | Search for the word's **root** to land in the right article, then read within it |
 | `i` (`diogenes-tgl-open-index-here`) | Opens volume V's index near the word, to find it by eye |
  
 The TGL is the hard case, and a good deal happens behind the scenes to keep
@@ -784,22 +784,22 @@ already have open and jumps to its page.
 | Key | Action |
 | --- | --- |
 | `L` | Exact lookup of a headword |
-| `C-u L` | Approximate jump: type the beginning of a word (even one letter) and land at that alphabetical position |
+| `C-u L` (`SPC u L`) | Approximate jump: type the beginning of a word (even one letter) and land at that alphabetical position |
  
 Syntax note: type this as the sequence `C-u` then `L` (then answer the
 prompts). It is not the usual numeric prefix, so do not type `C-u 4 L`
-or the like; just `C-u L`.
+or the like; just `C-u L` (`SPC u L`).
  
-Approximate (`C-u L`) details:
+Approximate (`C-u L` (`SPC u L`)) details:
  
 - Single-PDF dictionaries: reuses their own positional index.
 - TGL: navigates by the clean running headers at the top of each column (short, all-caps, far more OCR-legible than the body), so it reaches the right article even when the body is garbled. This is the most dependable way to reach a badly OCR'd word.
 - TGL also offers a jump **by index reference** (the `t.N c.NNN` citations): choose the index-reference option, give the tomus and column, and it converts the column to a page. This is how you follow a reference you found in the index (e.g. `t.3 c.746`) to its place in another tome.
-  - From tomes I-IV, `C-u L` asks approximate-or-index-reference first.
+  - From tomes I-IV, `C-u L` (`SPC u L`) asks approximate-or-index-reference first.
   - From volume V, the reference option appears in its menu as "other tome" (see below).
 ### Volume V (special menu)
  
-Volume V has extra structure, so `C-u L` answering `5` to
+Volume V has extra structure, so `C-u L` (`SPC u L`) answering `5` to
 the tomus prompt offers a small menu.
  
 | Choose | Then | Result |
@@ -811,6 +811,12 @@ the tomus prompt offers a small menu.
  
 Note on the key: lowercase `l` is taken in pdf-view-mode, so the default
 is capital `L`. Change it with `diogenes-pdf-search-key` before load.
+
+Note on the prefix: `C-u` is Emacs's universal argument and evil leaves it
+alone, so `C-u L` works in normal state as it does anywhere. A configuration
+that restores Vim's `C-u` for scrolling puts the argument on the leader
+instead — `SPC u` under Doom and Spacemacs — and `M-1` in place of `C-u` works
+either way. `(key-binding (kbd "C-u"))` says which you have.
  
 
 ## When an analysis is wrong
