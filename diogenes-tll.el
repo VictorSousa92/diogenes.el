@@ -37,6 +37,8 @@
 (require 'seq)
 (require 'diogenes-old)                 ; sort-key, diacritics, PDF display
 
+(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+                  (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 (declare-function pdf-info-number-of-pages "pdf-info" (&optional file-or-buffer))
 

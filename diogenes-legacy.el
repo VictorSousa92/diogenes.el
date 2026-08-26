@@ -11,6 +11,8 @@
 
 ;;; Code:
 
+(require 'diogenes-utils)               ; diogenes-remove-hyphenation
+
 
 ;;;###autoload
 (defun diogenes-delete-line-numbers ()

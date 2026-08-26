@@ -44,6 +44,8 @@
 (require 'ucs-normalize)
 (require 'diogenes-old)                 ; reuse PDF display + cache pattern
 
+(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+                  (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 (declare-function diogenes--perseus-beta-to-utf8 "diogenes-utils" (str))
 

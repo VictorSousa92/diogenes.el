@@ -181,6 +181,8 @@
 (require 'diogenes-old)                 ; reuse the PDF display driver
 (require 'diogenes-montanari)           ; reuse the Greek collation key
 
+(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+                  (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 
 ;;;; --------------------------------------------------------------------
