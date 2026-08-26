@@ -908,22 +908,6 @@ state for a moment if you want its motions.
 - A mode whose state you have set yourself is left alone — an explicit `evil-set-initial-state` in your config wins.
 - `diogenes-evil-manage-initial-states` nil disables the whole thing, for anyone who would rather bind the letters into normal state by hand. That costs `o d p b t g G` inside dictionary buffers and keeps `j` and `k`.
 
-**The motions and the leader come back.** Emacs state hands the single letters
-to the dictionaries, which is the point — but it took the rest of the keyboard
-with them, and the rest of the keyboard is how you move about. So `j` `k`
-`C-d` `C-u` `C-f` `C-b` `{` `}` `w` `e` `0` `$` `^` `%`, the searches `/` `?`
-`n` `N` `*`, the jump list `C-o` `C-i`, and the whole of `C-w` for windows are
-bound back on the keys they already have — and `SPC` gives you Doom's or
-Spacemacs's leader, since in a read-only buffer it was doing nothing but
-complaining.
-
-Six keys could not come back, being dictionaries: `d` `c` `p` `P` (Bailly,
-Cambridge, Passow, Pape) and `b` `l` (BDAG, Lewis & Short). Three of those are
-evil operators with nothing to operate on in a read-only buffer. Nothing
-already bound is disturbed, so your own bindings survive too.
-`diogenes-evil-restored-keys` is the list and `diogenes-evil-leader-key` the
-key.
-
 ## A frame with only a startup page in it
 
 Whatever module you load, and with none, a lookup made from a frame showing

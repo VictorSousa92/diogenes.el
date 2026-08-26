@@ -28,7 +28,7 @@
 
 ;;; Code:
 
-(require 'cl-lib)                        ; cl-pushnew, cl-some
+(require 'cl-lib)                        ; cl-pushnew
 
 (defgroup diogenes-evil nil
   "Diogenes under evil-mode."
@@ -78,117 +78,6 @@ So that `diogenes-evil-uninstall' can undo exactly those, and no more.")
        (assq mode evil-initial-state-alist)
        (not (memq mode diogenes-evil--set))))
 
-(defcustom diogenes-evil-restore-keys t
-  "Whether evil\='s motions and the leader are put back in Emacs state.
-Emacs state hands the single letters to the dictionaries, which is what it is
-for -- but it takes away the rest of the keyboard with them, and the rest of
-the keyboard is how one moves about.  An entry is a long text to be read and
-searched, so `j\=', `k\=', `C-d\=', `gg\=', `/\=' and `n\=' are the keys that matter most
-in it, and `C-w h\=' and its family are how one gets to another window.
-
-So they come back, on the keys they already have, except where a dictionary
-has claimed the key -- see `diogenes-evil-restored-keys\='.  Nil leaves Emacs
-state bare, which is what it was."
-  :type 'boolean
-  :group 'diogenes-evil)
-
-(defcustom diogenes-evil-restored-keys
-  '(;; --- moving within the entry ---
-    ("j" . evil-next-line)
-    ("k" . evil-previous-line)
-    ("C-d" . evil-scroll-down)
-    ("C-u" . evil-scroll-up)
-    ("C-f" . evil-scroll-page-down)
-    ("C-b" . evil-scroll-page-up)
-    ("}" . evil-forward-paragraph)
-    ("{" . evil-backward-paragraph)
-    ("w" . evil-forward-word-begin)
-    ("e" . evil-forward-word-end)
-    ("0" . evil-beginning-of-line)
-    ("$" . evil-end-of-line)
-    ("^" . evil-first-non-blank)
-    ("%" . evil-jump-item)
-    ;; --- searching it ---
-    ("/" . evil-ex-search-forward)
-    ("?" . evil-ex-search-backward)
-    ("n" . evil-ex-search-next)
-    ("N" . evil-ex-search-previous)
-    ("*" . evil-ex-search-word-forward)
-    ;; --- getting back to where one was ---
-    ("C-o" . evil-jump-backward)
-    ("C-i" . evil-jump-forward)
-    ;; --- and to another window ---
-    ("C-w" . evil-window-map))
-  "Keys to put back in the Diogenes buffers, and what to put on them.
-An alist of (KEY . COMMAND); COMMAND may be a keymap, which is how `C-w\='
-comes back as evil\='s whole window map.
-
-The dictionaries\=' own keys are NOT here and must not be: `d\=', `c\=', `p\=' and
-`P\=' would take Bailly, Cambridge, Passow and Pape, and `b\=' and `l\=' would take
-BDAG and Lewis & Short.  Their loss is small -- three of them are operators
-with nothing to operate on in a read-only buffer -- and the dictionaries are
-the reason for being here.
-
-`h\=' and `l\=' are likewise absent: `l\=' is Lewis & Short, and `h\=' alone would be
-odd.  The arrow keys work, and both are remapped by the lookup buffer anyway
-to keep the entry\='s links in view."
-  :type '(alist :key-type key-sequence :value-type sexp)
-  :group 'diogenes-evil)
-
-(defcustom diogenes-evil-leader-key "SPC"
-  "Where the distribution\='s leader map goes in a Diogenes buffer.
-`SPC\=' by default, and free for the taking: in Emacs state it is
-`self-insert-command\=', and these buffers are read-only, so it does nothing
-but complain.
-
-Doom\='s `doom-leader-map\=' and Spacemacs\='s `spacemacs-default-map\=' are both
-found; nil binds nothing.  Without this, choosing Emacs state took away the
-key a Doom or Spacemacs reader reaches for most, which was not a trade
-anybody agreed to."
-  :type '(choice key-sequence (const :tag "Do not bind" nil))
-  :group 'diogenes-evil)
-
-(defconst diogenes-evil--maps
-  '(diogenes-lookup-mode-map
-    diogenes-analysis-mode-map
-    diogenes-select-forms-mode-map
-    diogenes-search-mode-map
-    diogenes-corpus-mode-map)
-  "The mode maps that Emacs state applies to, and so want their keys back.")
-
-(defun diogenes-evil--leader-map ()
-  "The leader map of whatever distribution this is, or nil."
-  (cl-some (lambda (symbol)
-             (and (boundp symbol)
-                  (keymapp (symbol-value symbol))
-                  (symbol-value symbol)))
-           '(doom-leader-map spacemacs-default-map)))
-
-(defun diogenes-evil-restore-keys ()
-  "Put evil\='s motions and the leader back into the Diogenes maps.
-Each key is bound only if the map has nothing on it already, so a dictionary
-key is never taken and neither is anything a reader has bound themselves."
-  (when (and diogenes-evil-restore-keys (featurep 'evil))
-    (dolist (map-symbol diogenes-evil--maps)
-      (when (and (boundp map-symbol) (keymapp (symbol-value map-symbol)))
-        (let ((map (symbol-value map-symbol)))
-          (dolist (entry diogenes-evil-restored-keys)
-            (let* ((key (kbd (car entry)))
-                   (command (cdr entry))
-                   (value (if (and (symbolp command) (boundp command)
-                                   (keymapp (symbol-value command)))
-                              (symbol-value command)
-                            command)))
-              ;; Nothing already bound HERE is disturbed: the dictionaries
-              ;; got there first, and so did the reader.
-              (unless (lookup-key map key)
-                (when (or (keymapp value) (fboundp value))
-                  (keymap-set map (car entry) value)))))
-          (when-let* ((key diogenes-evil-leader-key)
-                      (leader (diogenes-evil--leader-map)))
-            (unless (lookup-key map (kbd key))
-              (keymap-set map key leader))))))))
-
 ;;;###autoload
 (defun diogenes-evil-install ()
   "Start the read-only Diogenes buffers in evil's Emacs state.  Idempotent.
@@ -200,16 +89,8 @@ elsewhere -- `evil-set-initial-state' in an init file wins."
       (unless (diogenes-evil--spoken-for-p mode)
         (evil-set-initial-state mode 'emacs)
         (cl-pushnew mode diogenes-evil--set)))
-    ;; And the keys Emacs state took away, minus the ones the dictionaries
-    ;; want.  After the maps exist: they are defined in files this one does
-    ;; not require.
-    (with-eval-after-load 'diogenes-perseus (diogenes-evil-restore-keys))
-    (with-eval-after-load 'diogenes-forms (diogenes-evil-restore-keys))
-    (with-eval-after-load 'diogenes-search (diogenes-evil-restore-keys))
-    (with-eval-after-load 'diogenes-corpora (diogenes-evil-restore-keys))
     (when (called-interactively-p 'interactive)
-      (message "Diogenes buffers: Emacs state, with the motions and %s kept"
-               (or diogenes-evil-leader-key "no leader")))))
+      (message "Diogenes buffers will start in Emacs state (C-z for normal)"))))
 
 ;;;###autoload
 (defun diogenes-evil-uninstall ()
