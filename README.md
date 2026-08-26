@@ -970,105 +970,182 @@ of Emacs.
 
 ### Or in detail
 
-The three actions below take precedence, and are consulted per kind — so
-naming one leaves the other two on the shorthand:
+`diogenes-window-behaviour` also takes an **alist**, so the three kinds need
+not agree:
+
+```elisp
+(setq diogenes-window-behaviour '((lookup . split) (browser . frames)))
+```
+
+A kind the alist does not mention is deferred rather than guessed at. Beneath
+that, three actions take precedence, and are consulted per kind — so naming
+one leaves the other two on the shorthand:
 
 | Set | To say |
 | --- | --- |
 | `diogenes-lookup-display-action` | where an entry or an analysis appears |
 | `diogenes-browser-display-action` | where a passage appears |
 | `diogenes-dictionary-display-action` | where a scanned page appears |
+| `diogenes-split-direction` | `below`, `above`, `right`, `left`, or nil to let Emacs choose |
+| `diogenes-split-from` | `selected`, `largest` or `root` — which window is divided |
+| `diogenes-split-size` | lines, columns, or a fraction |
 | `diogenes-gather-frames` | whether each kind shares a frame (follows `pop-up-frames`) |
+| `diogenes-frame-parameters` | what a Diogenes frame asks for; the `name` is matchable by a tiling WM |
 | `diogenes-claim-buffers` | whether a perspective is told about the buffer |
+
+A named split direction **asks Emacs nothing**, which is the point: a
+distribution may set `split-height-threshold` so that no frame you actually
+have can be split — Spacemacs ships 80 against a frame of 68 lines — and then
+`split` would quietly become `reuse`.
 
 An action you set takes precedence over all three modules. Two things it
 cannot override, because neither is about layout: a `C-c C-c` chain stays in
 one window, and a frame holding only a startup page yields it.
 
-### `diogenes-doom`: frames instead of windows
+### What each module does now
+
+**`diogenes-purpose`** tells window-purpose what our buffers are, by mode and
+by name. Required from `diogenes.el` and installing itself when
+window-purpose appears, in either load order — there is nothing to add to an
+init file.
+
+The name matters more than the mode: a lookup buffer is created, displayed,
+and only *then* put into `diogenes-lookup-mode`, so at the moment purpose
+classifies it the mode is `fundamental-mode` and the mode table has nothing to
+say. `diogenes-purpose-regexp-purposes` says the same thing by name, which is
+settled when the buffer is made.
+
+| | |
+| --- | --- |
+| `diogenes-purpose-manage-purposes` | nil leaves purpose's own configuration alone |
+| `diogenes-purpose-regexp-purposes` | names to purposes; what actually works |
+| `diogenes-purpose-mode-purposes` | modes to purposes; kept, and true once the mode is set |
+| `diogenes-purpose-extra-name-purposes` | for grouping dictionary PDFs, which are named after their files |
+
+It no longer installs a `display-buffer-overriding-action`. It used to, and
+that was the cause of a fault worth recording: purpose *advises*
+`display-buffer`, so the wrapper ran from inside that advice and called
+`purpose--action-function` a second time — and twice through that function is a
+reuse where once is a split. Every attempt to make a lookup open in its own
+window on Spacemacs did nothing, and nothing reached it: not the display
+action, not `display-buffer-alist`, not the thresholds, not disabling
+`purpose-mode`.
+
+**`diogenes-evil`** tells evil that the read-only buffers are Emacs state, so
+the single-letter dictionary keys reach the dictionaries. Also automatic. See
+[Under evil](#under-evil-doom-spacemacs-with-evil).
+
+**`diogenes-doom`** is now only the focus commands —
+`diogenes-doom-focus-lookup-frame`, `-browser-frame`, `-dictionary-frame`, and
+`diogenes-doom-delete-frames`. Everything else it once did is core, and better
+there:
+
+- the frame **gathering** is `diogenes-gather-frames` and `diogenes-frame-parameters`, so Spacemacs and plain Emacs get it too;
+- the **buffer roles** are `diogenes-role-regexps`, which is where a dictionary PDF goes to be given a frame of its own;
+- the **workspace claiming** is `diogenes-claim-buffers`, because persp-mode is a package rather than a Doom feature and perspective.el poses the same problem.
+
+Its old options still work, as aliases: `diogenes-doom-gather`,
+`diogenes-doom-frame-parameters`, `diogenes-doom-claim-buffers`, and
+`diogenes-doom-dictionary-regexps`, which is folded into
+`diogenes-role-regexps` at install.
+
+## Presets
+
+The settings you want are not one set but several, and which you want depends
+on what you are doing: reading at length, glancing at one word while writing,
+the machine with the small screen. Those differ in a dozen variables at once.
+
+A preset is an ordinary Lisp file that sets them:
 
 ```elisp
-(with-eval-after-load 'diogenes
-  (require 'diogenes-doom nil t))
+;;; my-2024.el --- Diogenes preset  -*- lexical-binding: t -*-
+;; Description: entries beside the text, scans in their own frame
+(setq diogenes-window-behaviour '((lookup . split) (dictionary . frames)))
+(setq diogenes-split-direction 'right)
 ```
 
-- **It only acts where acting means something.** With `pop-up-frames` nil it stands aside altogether and Emacs displays a lookup as it displays anything else. Set `pop-up-frames` and the gathering begins — asked at display time, so setting or unsetting it in a running Emacs takes effect at once. `diogenes-doom-gather` overrides either way.
-- A lookup or an analysis goes to the frame that already holds one, or to a new frame — so the second entry replaces the first rather than covering your text.
-- The browser keeps a frame of its own.
-- **The startup-page guard is unconditional**, frames or no frames: a frame showing only `*doom*`, `*spacemacs*` or Emacs's own splash has a window going spare, and a lookup takes it.
-- Dictionary PDFs too, once you have named them: `(setq diogenes-doom-dictionary-regexps '("Oxford Latin Dictionary\\.pdf" "Montanari\\.pdf"))`.
-- `diogenes-doom-frame-parameters` sets the size and the frame name, which a tiling window manager can match on. `diogenes-doom-reuse-frames` nil gives a frame per buffer instead of one per kind.
-- `diogenes-doom-focus-lookup-frame`, `-browser-frame`, `-dictionary-frame` raise a frame that is already open; `diogenes-doom-delete-frames` closes them all.
+**The folder is optional.** With none, `M-x diogenes-load-preset` still offers
+`defer`, `reuse`, `split` and `frames` — the four behaviours are presets
+already, and asking anyone to write four files saying one thing each would be a
+poor beginning. Set `diogenes-preset-directory` when you have something of your
+own to keep, which is the arrangement the dictionaries have: an unset path
+means one fewer thing rather than a broken one.
 
-**It asks nothing of Doom.** Doom's popup manager keeps its rules in
-`display-buffer-alist` like everything else, and `display-buffer` takes the
-first entry that matches — so these rules are prepended and a Diogenes buffer
-never reaches the popup manager. No `set-popup-rule!`, no `after!`, nothing
-to order correctly, and the same file works on plain Emacs.
+**A file replaces a builtin of the same name.** Write `split.el` and `split`
+means what your file says; the builtin drops out of the list rather than
+arguing with it.
 
-Matching is by buffer name rather than major mode, deliberately: a name is
-settled when the buffer is created, where the mode is set *after* display
-unless `diogenes-purpose` is loaded.
+| | |
+| --- | --- |
+| `M-x diogenes-load-preset` | offers the builtins and whatever is in the folder, annotated with each `Description` line |
+| `M-x diogenes-list-presets` | what exists, which are files, which was loaded |
+| `M-x diogenes-preset-write-current` | writes this session's settings out as a preset |
+| `diogenes-preset` | a preset to load at startup, by name |
 
-**Making Doom prefer frames generally** is a separate question, and Doom's own:
-remove `popup` from the `:ui` section of `init.el`, then
+`diogenes-preset` takes a name, not a behaviour: `(setq diogenes-preset
+"my-2024")` loads that file, where `(setq diogenes-window-behaviour 'my-2024)`
+would be a display rule that does not exist. Set both
+`diogenes-preset-directory` and `diogenes-preset` in `:init`, so the name is
+there before the package reads it.
 
-```elisp
-(setq pop-up-frames 'graphic-only)
+A preset is loaded *after* your init file, deliberately: an init file holds
+what is true of the machine — the dictionary paths — and a preset what is true
+of what you are doing now, which is the more particular.
+`diogenes-preset-write-current` writes only options differing from their
+standard value, so a preset says what is particular about it and nothing else.
+
+### Building one in a browser
+
+`tools/diogenes-preset-builder.html` needs no server and no dependencies.
+Choose how the windows should behave and it draws what that does, step by
+step: browse a text, look a word up, look up another, follow a word *inside*
+an entry, open the OLD, open the TLL, close the page. Then it hands you the
+file, and the two lines your init file needs.
+
+The simulation applies the same rules in the same order the package does, so
+the four that are hard to guess are visible rather than described — a `C-c C-c`
+chain staying put, a lone startup window being taken, a second entry joining
+the first rather than splitting again, and `q` returning to the entry rather
+than to whatever the window held before it.
+
+**It has no dictionary paths, deliberately.** Those are facts about the
+machine, not about what you are doing: they belong in the init file, where they
+stay put whichever preset you load. Nor corrections or extra lemmata, which are
+corrections to the *data* and equally true whatever you are reading.
+
+## Tests
+
+Two runs, and both are wanted.
+
+**Headless** — the logic, identically on any machine:
+
+```fish
+make test          # or: emacs -Q -batch -L . -L test -l test/diogenes-tests.el -f ert-run-tests-batch-and-exit
+make compile       # fails on a compilation error
+make check         # both
 ```
 
-With the popup module left in, `diogenes-doom` still does its job for
-Diogenes buffers; everything else stays in popups.
+**Inside a live configuration** — Doom, Spacemacs, plain Emacs:
 
-### `diogenes-purpose`: windows, under window-purpose
-
-Matters for **Spacemacs**, which turns window-purpose on for everyone, and
-for anyone running `(setq pop-up-frames t)` — common with tiling window
-managers.
-
-**The problem:**
-
-- Out of the box every Diogenes buffer has the same generic `edit` purpose.
-- Purpose shows a buffer in a window that already carries its purpose, so a lookup launched from the browser lands in the browser's window instead of its own.
-- With `pop-up-frames t`, every lookup spawns another frame until the screen is buried.
-
-**The fix:** purposes of their own — one `diogenes-lookup` for lookups and
-analyses, `diogenes-browser` for the browser — so a lookup never displaces the
-browser and lookups reuse one window.
-
-- It has to be done in purpose's terms: in Spacemacs, purpose runs *before* `pop-up-frames` and `display-buffer-alist` and overrides both.
-- On plain Emacs without `purpose-mode` you do not need the module at all.
-
-### Loading it is the switch
-
-There is no variable — loading the module is the toggle.
-
-- **Loaded:** the lookup code sets its major mode before display, which is what lets purpose classify a lookup.
-- **Not loaded:** Emacs's ordinary display is in charge, reusing a suitable window or opening a new one.
-
-```elisp
-(with-eval-after-load 'window-purpose
-  (require 'diogenes-purpose nil t))
+```
+M-x diogenes-tests-run
 ```
 
-In Spacemacs that goes in `dotspacemacs/user-config`. Loading installs the
-purposes immediately and is idempotent;
-`M-x diogenes-purpose-uninstall` and `-install` toggle them within a session.
+The same tests, with everything the distribution has done still in place. The
+headless run is necessary and not sufficient — the hardest faults in this
+package's history were each a distribution's doing and invisible under
+`emacs -Q`:
 
-### Dictionary PDFs
+- Doom's `find-file-hook` and three VC backends, which made opening a 549 MB dictionary take 3.65 seconds instead of 0.09
+- evil's state maps, which turned `q` in a dictionary page into `kill-current-buffer`
+- persp-mode, which hid a lookup buffer from `C-x <left>` while `switch-to-buffer` still found it by name
+- window-purpose's advice on `display-buffer`, which made every display setting unreachable
 
-PDF buffers are left alone, because purpose matches on major mode or buffer
-name and a dictionary PDF is an ordinary `pdf-view-mode` buffer named after
-its file. To group them, name them:
+`M-x diogenes-tests-environment` reports what the surrounding configuration is
+doing, and is the first thing to paste into a bug report.
 
-```elisp
-(setq diogenes-purpose-extra-name-purposes
-      '(("Oxford Latin Dictionary.pdf" . diogenes-dict)
-        ("Montanari.pdf"               . diogenes-dict)))
-```
-
-Single-file dictionaries have predictable names; the directory-based ones
-(TLL, Passow, TGL) open one file per volume, so theirs vary.
+Each test names the fault it guards against, and one that says *regression* is
+one a real bug walked through.
 
 # Appendix: other commands
 
@@ -1150,88 +1227,6 @@ read-only buffer.
 - `diogenes-purpose-focus-lookup-window`, `diogenes-purpose-focus-browser-window`
 - `diogenes-purpose-focus-dictionary-window` — bound to `Q` in a dictionary buffer, the way back from the page to the entry it came from
 - `diogenes-purpose-install`, `diogenes-purpose-uninstall`
-
-## Presets
-
-The settings you want are not one set but several, and which you want depends
-on what you are doing: reading at length, glancing at one word while writing,
-the machine with the small screen. Those differ in a dozen variables at once.
-
-A preset is an ordinary Lisp file that sets them:
-
-```elisp
-;;; reading.el --- Diogenes preset  -*- lexical-binding: t -*-
-;; Description: entries beside the text, dictionaries in their own frame
-(setq diogenes-window-behaviour 'split)
-(setq diogenes-lookup-show-all-entries t)
-```
-
-Put it in `diogenes-preset-directory` — `~/.emacs.d/diogenes-presets/` by
-default — and:
-
-| | |
-| --- | --- |
-| `M-x diogenes-load-preset` | offers what is there, annotated with each `Description` line |
-| `M-x diogenes-list-presets` | what exists, and which was loaded last |
-| `M-x diogenes-preset-write-current` | writes this session's settings out as a preset — what you arrived at by experiment, kept |
-| `diogenes-preset` | a preset to load at startup |
-
-Nothing validates what a preset may set. It is Lisp, it is yours, and a preset
-that also sets `line-spacing` or turns off a minor mode is doing something
-reasonable. A preset is loaded *after* your init file, deliberately: an init
-file holds what is true of the machine, a preset what is true of what you are
-doing now, and the second is the more particular.
-
-`diogenes-preset-write-current` writes only the options that differ from their
-standard value, so a preset says what is particular about it and nothing else.
-
-### Building one by hand is optional
-
-`tools/diogenes-preset-builder.html` opens in any browser, with no server and
-no dependencies. Choose how the windows should behave and it draws what that
-does — frames, windows, where an entry lands, what a second lookup replaces —
-then gives you the file to download.
-
-The diagram runs the same rules the package does, in the same order, so
-`split` reusing the second time and `frames` gathering are visible rather than
-described.
-
-## Tests
-
-Two runs, and both are wanted.
-
-**Headless** — the logic, identically on any machine:
-
-```fish
-make test          # or: emacs -Q -batch -L . -l test/diogenes-tests.el -f ert-run-tests-batch-and-exit
-make compile       # fails on a compilation error; warnings are inherited and many
-make check         # both
-```
-
-**Inside a live configuration** — Doom, Spacemacs, plain Emacs:
-
-```
-M-x diogenes-tests-run
-```
-
-The same tests, with everything the distribution has done still in place:
-evil owning the single-letter keys, window-purpose dedicating windows, a
-popup manager holding `display-buffer-alist`, persp-mode hiding buffers. The
-headless run is necessary and not sufficient — the hardest faults in this
-package's history were each a distribution's doing and invisible under
-`emacs -Q`:
-
-- Doom's `find-file-hook` and three VC backends, which made opening a 549 MB dictionary take 3.65 seconds instead of 0.09
-- evil's state maps, which swallowed `q` in a dictionary page and turned it into `kill-current-buffer`
-- persp-mode, which hid a lookup buffer from `C-x <left>` while `switch-to-buffer` still found it by name
-
-`M-x diogenes-tests-environment` reports what the surrounding configuration
-is doing — Emacs version, evil, purpose, the popup manager, persp-mode,
-`pop-up-frames`, the length of `find-file-hook`, `vc-handled-backends`,
-`pdf-view-use-scaling`. It is the first thing to paste into a bug report.
-
-Each test names the fault it guards against, and one that says *regression*
-is one a real bug walked through.
 
 # Appendix: how TGL lookups stay on target
 
