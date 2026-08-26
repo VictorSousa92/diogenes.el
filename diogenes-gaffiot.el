@@ -142,7 +142,14 @@ when the lookup was made from a lookup buffer.  Asked for from a browser,
 or from anywhere else, the entry never takes the window it was called
 from: the text being read would be the thing replaced.  Where it goes
 then is `display-buffer''s to decide, which is what `pop-up-frames' and
-`diogenes-purpose' are for."
+`diogenes-purpose' are for.
+
+Left as it is, and not folded into `diogenes-window-behaviour\=': this says
+whether THIS dictionary replaces the entry it was consulted from, which is a
+different question from where a lookup goes in general.  It applies only from
+a lookup buffer -- asked for from a browser, an entry never takes the window
+the text is in -- and where it says nil, `diogenes-lookup-display-action\=' and
+`diogenes-window-behaviour\=' decide as they do for anything else."
   :type 'boolean
   :group 'diogenes)
 

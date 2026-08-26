@@ -934,7 +934,34 @@ None of the three is Spacemacs- or Doom-specific in what it does.
 which is how most people meet it, but anyone may load it — and so is
 persp-mode, whose buffer claiming is in the core for the same reason.
 
-Where the buffers actually go is decided in one place, and by you:
+### Where the buffers go, in one word
+
+```elisp
+(setq diogenes-window-behaviour 'split)
+```
+
+| | |
+| --- | --- |
+| `defer` | whatever is installed decides — window-purpose, a popup manager, plain `display-buffer`. The default |
+| `reuse` | one window for entries, each replacing the last |
+| `split` | an entry gets a window of its own beside the text, and later entries share it |
+| `frames` | each kind in a frame of its own, entries gathered into the lookup frame |
+
+`split` gives a window the first time and reuses it after — splitting again
+for every entry would fill the frame with the same word. And all three of the
+non-`defer` behaviours end by splitting **regardless of
+`split-height-threshold`**: a distribution may set those so that no frame you
+actually have can be split — Spacemacs ships 80 against a frame of 68 lines —
+and without that fallback `split` would quietly become `reuse`.
+
+`frames` switches the gathering on by itself. Whether a *new* buffer gets a
+frame at all is `pop-up-frames`, which stays yours, since it governs the whole
+of Emacs.
+
+### Or in detail
+
+The three actions below take precedence, and are consulted per kind — so
+naming one leaves the other two on the shorthand:
 
 | Set | To say |
 | --- | --- |

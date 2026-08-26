@@ -241,7 +241,14 @@ integer to pin it if a particular scan defeats detection."
   "If non-nil, show the TGL PDF in another window, keeping the entry visible.
 Bound to `diogenes-old-display-in-other-window' for the duration of the
 display, and defaults to nil for the same reason: the page appears in the
-window the lookup was made from, replacing the entry."
+window the lookup was made from, replacing the entry.
+
+Left as it is, and not folded into `diogenes-window-behaviour\=': this says
+whether THIS dictionary's page goes somewhere other than the window it was
+asked for from, which is a question about one printed dictionary rather than
+about where Diogenes buffers go.  Where it sends the page elsewhere,
+`diogenes-dictionary-display-action\=' and `diogenes-window-behaviour\=' decide
+where elsewhere is."
   :type 'boolean
   :group 'diogenes)
 

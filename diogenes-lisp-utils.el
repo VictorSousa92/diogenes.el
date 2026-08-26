@@ -267,7 +267,8 @@ turn: normally `display-buffer-pop-up-frame\='."
 Asked at display time, so `pop-up-frames\=' may be set or unset in a running
 Emacs and the answer changes with it."
   (pcase diogenes-gather-frames
-    ('auto (and pop-up-frames t))
+    ('auto (or (eq diogenes-window-behaviour 'frames)
+               (and pop-up-frames t)))
     (value (and value t))))
 
 (defun diogenes--gathering-action ()
@@ -277,14 +278,102 @@ Emacs and the answer changes with it."
     (reusable-frames . visible)
     (pop-up-frame-parameters . ,diogenes-frame-parameters)))
 
+(defcustom diogenes-window-behaviour 'defer
+  "Where Diogenes buffers go, said in one word.
+A shorthand for the three actions below, and consulted only where the action
+for a kind of buffer is nil -- so setting
+`diogenes-lookup-display-action\=' keeps its own answer for lookups while the
+browser and the dictionaries follow this.
+
+  `defer\='   -- the default, and what the package did before this existed:
+             whatever is installed decides.  `window-purpose\=' where it is
+             loaded, a popup manager under Doom, plain `display-buffer\='
+             elsewhere.  A reader who has arranged their windows to their
+             liking wants this.
+
+  `reuse\='   -- one window for entries, each replacing the last.  Nothing is
+             split and nothing is covered but the previous entry.
+
+  `split\='   -- an entry gets a window of its own beside the text, and later
+             entries share it.  A window the first time, reuse after that:
+             the alternative -- splitting again for every entry -- fills the
+             frame with the same word.
+
+  `frames\='  -- each kind of buffer in a frame of its own, entries gathered
+             into the lookup frame.  This sets the gathering; whether a new
+             buffer gets a frame at all is `pop-up-frames\=', which is yours
+             to set, since it governs the whole of Emacs and not just this.
+
+None of the four can override two things, both being statements about what
+was asked rather than about layout: a `C-c C-c\=' chain stays in the window it
+was pressed in, and a frame holding only a startup page yields its window."
+  :type '(choice (const :tag "Let what is installed decide" defer)
+                 (const :tag "One window, entries replacing each other" reuse)
+                 (const :tag "A window of its own, then shared" split)
+                 (const :tag "A frame of its own, gathered" frames))
+  :group 'diogenes)
+
+(defconst diogenes--behaviour-actions
+  '((reuse . ((diogenes-display-in-role-frame
+               display-buffer-same-window)
+              (inhibit-same-window . nil)))
+    (split . ((diogenes-display-in-role-frame
+               display-buffer-pop-up-window
+               diogenes--display-split-anyway)))
+    (frames . ((diogenes-display-in-role-frame
+                display-buffer-pop-up-frame
+                display-buffer-pop-up-window
+                diogenes--display-split-anyway)
+               (inhibit-same-window . t)
+               (reusable-frames . visible))))
+  "The action each `diogenes-window-behaviour\=' stands for.
+`diogenes-display-in-role-frame\=' comes first in all three: a second entry
+belongs where the first is, whether that is a window or a frame, and only a
+first entry needs somewhere new.
+
+`frames\=' falls back to a window and then to splitting, because a frame
+cannot always be made -- and the failure is silent, `display-buffer\=' simply
+carrying on to its own devices, which reuse the current window.  That is how
+`frames\=' came to mean `nothing happens\=' on a machine where frame creation
+declined.")
+
+(defun diogenes--display-split-anyway (buffer alist)
+  "Split the selected window and show BUFFER there, whatever the thresholds say.
+The last resort of every behaviour but `defer\=', and needed because
+`display-buffer-pop-up-window\=' asks `split-window-sensibly\=' for
+permission -- which consults `split-height-threshold\=' and
+`split-width-threshold\=', and a distribution may set those so that no frame
+the reader actually has can be split.  Spacemacs ships 80 against a frame of
+68 lines.
+
+So `split\=' would quietly become `reuse\=', and the entry would take the
+window holding the text it was looked up from: the one outcome every one of
+these behaviours exists to prevent."
+  (when (window-splittable-p (selected-window) t)
+    (window--display-buffer buffer (split-window (selected-window) nil t)
+                            'window alist))
+  (or (get-buffer-window buffer)
+      (when (window-splittable-p (selected-window))
+        (window--display-buffer buffer (split-window (selected-window))
+                                'window alist))))
+
 (defun diogenes--display-action (kind)
   "The `display-buffer\=' action for a Diogenes buffer of KIND.
-KIND is `lookup\=', `browser\=', `dictionary\=', or anything else for none."
-  (pcase kind
-    ('lookup diogenes-lookup-display-action)
-    ('browser diogenes-browser-display-action)
-    ('dictionary diogenes-dictionary-display-action)
-    (_ nil)))
+KIND is `lookup\=', `browser\=', `dictionary\=', or anything else for none.
+
+The action set for that kind if there is one, and otherwise whatever
+`diogenes-window-behaviour\=' says -- in that order, so that naming an action
+for lookups leaves the browser and the dictionaries on the shorthand.  A
+reader who wants one thing arranged specially should not have to spell out
+the other two."
+  (or (pcase kind
+        ('lookup diogenes-lookup-display-action)
+        ('browser diogenes-browser-display-action)
+        ('dictionary diogenes-dictionary-display-action)
+        (_ nil))
+      ;; `defer' is absent from the table on purpose: there is nothing for it
+      ;; to be, `defer' meaning that no action of ours is passed at all.
+      (cdr (assq diogenes-window-behaviour diogenes--behaviour-actions))))
 
 (defcustom diogenes-claim-buffers t
   "Whether a Diogenes buffer is claimed by the perspective it appears in.

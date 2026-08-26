@@ -503,6 +503,38 @@ which is what a fault upstream of every measurement looks like."
       (should (eq (window-buffer (selected-window)) here))
       (should (eq (current-buffer) here)))))
 
+(ert-deftest diogenes-test-window-behaviour-presets ()
+  "The shorthand answers for a kind whose own action is nil, and not otherwise."
+  ;; `defer' is no action at all: whatever is installed decides.
+  (let ((diogenes-window-behaviour 'defer)
+        (diogenes-lookup-display-action nil))
+    (should-not (diogenes--display-action 'lookup)))
+  ;; The other three each stand for something.
+  (dolist (behaviour '(reuse split frames))
+    (let ((diogenes-window-behaviour behaviour)
+          (diogenes-lookup-display-action nil))
+      (should (equal (diogenes--display-action 'lookup)
+                     (cdr (assq behaviour diogenes--behaviour-actions))))))
+  ;; An action named for one kind leaves the others on the shorthand.
+  (let ((diogenes-window-behaviour 'split)
+        (diogenes-lookup-display-action '((display-buffer-same-window)))
+        (diogenes-browser-display-action nil))
+    (should (equal (diogenes--display-action 'lookup)
+                   '((display-buffer-same-window))))
+    (should (equal (diogenes--display-action 'browser)
+                   (cdr (assq 'split diogenes--behaviour-actions))))))
+
+(ert-deftest diogenes-test-frames-preset-gathers ()
+  "`frames' turns the gathering on without `pop-up-frames' being set.
+Otherwise the preset would name a behaviour and then not produce it -- the
+gathering is what makes frames usable rather than one per entry."
+  (let ((diogenes-gather-frames 'auto)
+        (pop-up-frames nil))
+    (let ((diogenes-window-behaviour 'frames))
+      (should (diogenes--gathering-p)))
+    (let ((diogenes-window-behaviour 'split))
+      (should-not (diogenes--gathering-p)))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

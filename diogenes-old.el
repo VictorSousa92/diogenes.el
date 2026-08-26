@@ -94,7 +94,14 @@ once.  Which window, or frame, the page then goes to is decided by
 
 Passow and the TGL bind this to their own equivalents; see
 `diogenes-passow-display-in-other-window' and
-`diogenes-tgl-display-in-other-window'."
+`diogenes-tgl-display-in-other-window'.
+
+Left as it is, and not folded into `diogenes-window-behaviour': this says
+whether the page goes somewhere other than the window it was asked for from,
+which is a question about the printed dictionaries rather than about where
+Diogenes buffers go.  Where it sends the page elsewhere,
+`diogenes-dictionary-display-action' and `diogenes-window-behaviour' decide
+where elsewhere is."
   :type 'boolean
   :group 'diogenes)
 
