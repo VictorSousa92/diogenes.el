@@ -331,7 +331,8 @@ rather than broken.
 
   ;; Analyses the shipped data gets wrong (see below)
   (setq diogenes-latin-analysis-corrections
-        '(("experire" :info "pres imperat pass 2nd sg")))
+        '(("experire"   :info "pres imperat pass 2nd sg")
+          ("superstite" :lemma "superstes" :info "abl sg")))
 
   ;; Forms the analyses file has no entry for (see below)
   (setq diogenes-latin-extra-lemmata
@@ -896,7 +897,8 @@ Short keys them.
 
 ```elisp
 (setq diogenes-latin-analysis-corrections
-      '(("experire" :info "pres imperat pass 2nd sg")))
+      '(("experire"   :info "pres imperat pass 2nd sg")
+        ("superstite" :lemma "superstes" :info "abl sg")))
 ```
 
 `experīre` is the second singular present imperative of the deponent
@@ -904,7 +906,15 @@ Short keys them.
 active infinitive. The lemma and the entry it points at are right, so only
 the morphology needs saying again.
 
+`superstite` is the ablative singular of *superstes*, the adjective, and the
+file analyses it from *super-sto*, the verb — which is *superstes*'s own
+etymology, so the mistake is an understandable one. Here the lemma is wrong as
+well as the morphology, and that matters more: a wrong lemma sends `o`, `t`,
+`g` and `G` to the wrong entry. `:lemma` says which headword is meant, and the
+entry those keys open follows it.
+
 - `:info STRING` replaces the morphology of every analysis of that form; `:info ((OLD . NEW) …)` replaces only the ones reading OLD, for a form with several analyses of which one is wrong.
+- `:lemma STRING` replaces the headword. The entry the dictionary keys open follows it, found by name among the dictionary's keys — so the spelling wants to be one Lewis & Short is keyed under. Where it cannot be found the morphology is still shown, with the caveat that the headword is a guess.
 - `:add ((LEMMA . INFO) …)` adds analyses rather than replacing. `LEMMA` nil means the lemma the file already names — use this to record a missing reading while keeping the file's; a string is a headword, whose entry is then shown alongside.
 - Keys are the form as the file files it, and are matched through the same spelling variants as everything else, so one entry answers for `experire` and `experīre` alike.
 - A corrected morphology prints with `[corr.]` after it, so what you read is never silently other than what the data says. `diogenes-latin-mark-corrections` turns that off.
