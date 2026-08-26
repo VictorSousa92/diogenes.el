@@ -231,7 +231,9 @@ print one headword and open another."
                   "latin"))
          (first (car (plist-get record :analyses))))
     (should (equal (plist-get first :lemma) "corrected-lemma [corr.]"))
-    (should-not (plist-get first :offset))
+    ;; ZERO, not nil: this file's way of saying `find the entry by name', and
+    ;; the offsets are compared with `=' elsewhere, where a nil is an error.
+    (should (equal (plist-get first :offset) 0))
     ;; The morphology is untouched where only the lemma is corrected.
     (should (equal (plist-get first :info) "neut gen pl")))
   ;; And both at once, which is the case that prompted this.
@@ -244,7 +246,9 @@ print one headword and open another."
          (first (car (plist-get record :analyses))))
     (should (equal (plist-get first :lemma) "superstes"))
     (should (equal (plist-get first :info) "abl sg"))
-    (should-not (plist-get first :offset))))
+    (should (equal (plist-get first :offset) 0))
+    ;; And a number, so that comparing it cannot signal.
+    (should (numberp (plist-get first :offset)))))
 
 (ert-deftest diogenes-test-corrections-add-a-reading ()
   "`:add' keeps the file's analysis and appends one of its own."

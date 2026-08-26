@@ -2986,18 +2986,24 @@ analyses have no such table, there being no reported need for one."
                                                  (diogenes--mark-correction new)))))
                      ;; A corrected LEMMA replaces the offset as well as the
                      ;; name.  The offset in the file points at the entry for
-                     ;; the lemma the file names, so keeping it would print
-                     ;; the new headword and open the old entry -- which is
-                     ;; the fault being corrected, wearing a different label.
-                     ;; Nil sends the dictionary keys through the by-name path
-                     ;; instead, as a Morpheus lemma goes.
+                     ;; the lemma the FILE names, so keeping it would print
+                     ;; the new headword and open the old entry -- the fault
+                     ;; being corrected, wearing a better label.
+                     ;;
+                     ;; ZERO, which is how this file says `no offset, find the
+                     ;; entry by name' -- see `diogenes--added-analysis' and
+                     ;; the Morpheus analyses, which are built the same way.
+                     ;; Nil is not: `diogenes--lookup-same-entry-p' compares
+                     ;; offsets with `=', so a nil there is a
+                     ;; `number-or-marker-p' error on the next lookup of the
+                     ;; same word.
                      (if (not lemma-spec)
                          analysis
                        (let ((copy (copy-sequence analysis)))
                          (setq copy (plist-put copy :lemma
                                                (diogenes--mark-correction
                                                 lemma-spec)))
-                         (plist-put copy :offset nil)))))
+                         (plist-put copy :offset 0)))))
                  analyses)
          (cl-loop for (lemma . info) in (plist-get spec :add)
                   collect (diogenes--added-analysis lemma info model lang)))))))
