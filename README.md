@@ -35,17 +35,17 @@ add it to your load-path:
 
     (add-to-list 'load-path (expand-file-name "~/.emacs.d/elisp/diogenes.el"))
 
-Now require it and set the path to the diogenes-libary-path variable
-to the root of your Diogenes installation:
+Now require it and point `diogenes-path` at the root of your Diogenes
+installation:
 
     (require 'diogenes)
-    (setq diogenes-library-path "/path/to/diogenes)
+    (setq diogenes-path "/path/to/diogenes")
 
 Or, with use-package (with some handy key-bindings)
 
     (use-package diogenes
       :init
-      (diogenes-path "/path/to/diogenes")
+      (setq diogenes-path "/path/to/diogenes")
         :bind (("C-c d" . diogenes))
         :commands (diogenes-ad-to-ol
                  diogenes-ol-to-ad
@@ -365,7 +365,7 @@ rather than broken.
 - `:config` is for the two lines above and anything like them: a `keymap-set` in one of the package's maps, an `add-to-list` on one of its variables, advice on its functions. In `:init` those are void-variable errors, the symbols not existing yet.
 - The flyspell lines are worth having if you use it globally. `diogenes-browser-mode-hook` too, if you read texts in the browser.
 - `(diogenes-purpose-install)` is only needed if you have uninstalled the purposes within a session; loading `diogenes-purpose` installs them already. Harmless either way, and it makes the intent visible.
-- `diogenes-path` is the variable; there is no `diogenes-library-path`.
+- **`diogenes-path` is the only path Diogenes itself needs.** It is the root of the installation, and everything inside is reached from there: the Perl modules in `server/`, the bundled libraries in `dependencies/CPAN/`, and the Perseus analyses with the LSJ and Lewis & Short in `dependencies/data/`. That layout is the Diogenes distribution's own, so there is nothing else to name. The dictionary scans and the XML dictionaries are a separate matter — they are your files rather than part of a Diogenes installation, which is why each has a variable of its own.
 - Passow and the TGL take the **parent** folder of the per-volume material; see [The dictionaries themselves](#the-dictionaries-themselves) for the layout and the OCR text files they need.
 - The XML dictionaries are built once from their TEI source: `-source-file` is what you downloaded, `-file` is where the built dictionary goes. Pressing the key offers to build it.
 - The two preset lines are optional, and both belong in `:init` so that the name is set before the package reads it. Leave `diogenes-preset-directory` out and `M-x diogenes-load-preset` offers `defer`, `reuse`, `split` and `frames`; leave `diogenes-preset` out and nothing is loaded until you ask. See [Presets](#presets).
@@ -650,12 +650,19 @@ has its own path variable, which must be set before use.
  
 Notes on the data:
  
-- OLD, TLL, Montanari, CGL, BDAG: the page index comes from the PDF's own bookmarks and embedded text layer. No extra files needed, but the bookmarks have to say what a page holds:
-  - **Each bookmark must name a headword** and point at the page it is on. `ἀγαθός`, `abacus`, or a running head like `ἀγαθός — ἀγών`: what matters is that the text of the bookmark begins with a word from the dictionary, since that word is the key the search compares against.
-  - **A bookmark per page, or per column, is what works best.** One bookmark per letter gives a letter's worth of pages and no way to choose among them, so the jump lands at the start of the letter.
-  - **The order must be alphabetical**, since the lookup is a binary search over the bookmark list. A PDF whose bookmarks run front-matter, plates, then the dictionary is fine — the non-alphabetical ones simply never match — but a shuffled dictionary is not.
-  - **The text layer is what confirms a hit.** Without OCR the jump still works from the bookmarks alone; with it, `diogenes-pdf-search` can look inside the open page.
-  - Montanari, CGL and BDAG as sold have bookmarks of this kind. A scan of your own may not: `M-x diogenes-old-show-bookmarks` (and the equivalents) prints what the package can see, which is the quickest way to find out whether a copy will work.
+- OLD and TLL: the page index is the PDF's own outline, whose bookmarks are the printed running heads of each page. No extra files needed. This is what the OLD's first edition carries and what the upstream Diogenes build tools rely on.
+- Montanari, BDAG, CGL: each reads its own edition's bookmark convention, and they are three different conventions rather than one. What a copy must carry, and the regexp that reads it:
+
+| | Bookmarks per page | Regexps |
+| --- | --- | --- |
+| Montanari | an interval, `288: άραιρη- – Άραυάκαι`; some pages carry a single word instead | `diogenes-montanari-interval-regexp`, `-single-regexp` |
+| BDAG | an interval, `2: ἀβροχία - ἀγαθός`; letter-openings and long entries carry one word | `diogenes-bdag-interval-regexp`, `-single-regexp` |
+| CGL | **one** guide word, `3: άγακτίμενος`, numbered sequentially | `diogenes-cambridge-entry-regexp` |
+
+  - The CGL is the particular one: with a single word per page, which word it is depends on the **parity** of that sequential number — even bookmarks give the page's first headword, odd ones its last, except the first odd bookmark of a letter, which opens the letter. The module refines a match using that parity, so a copy bookmarked some other way will not do, however well-formed.
+  - Montanari's bookmark text is OCR'd, so its accents, breathings and iota subscripts cannot be trusted; comparison is accent-insensitive. BDAG's is clean accented Greek and is compared more strictly.
+  - The regexps are ordinary options. If your copy numbers or separates its bookmarks differently, adjusting one is the fix — group 1 the first headword, group 2 the last, and for the CGL group 1 the number and group 2 the word.
+  - `M-x diogenes-montanari-show-bookmarks` and its equivalents print what the package can read from your PDF, which is the quickest way to find out whether a copy will work at all.
 - Bailly: its bookmarks name a word *somewhere* on the page rather than the page's bounds, so they give no page interval; the index comes from the **running heads** instead (`first lemma — page number — last lemma`), read from the PDF's text layer. No extra files needed, and nothing is built up front: a lookup reads only the dozen pages its binary search touches. Written for the typeset *Bailly 2020* named above; optionally run `M-x diogenes-bailly-build-index` once to read every head and write a portable `<pdf-name>-index.eld` beside the PDF.
 - Georges: bookmarked once per page, and each bookmark names **every entry on that page** (`Bd1_Sp0005-0006_a-3_abacinus_abactio_…`), which gives some 43 000 headword-to-page pairs. A word among them lands on its exact page; one that is not — an entry a crowded bookmark could not list (those end in `ua13`, *und andere*), a spelling filed differently, or a word Georges lacks — lands where it would stand alphabetically, and the echo area says so. Volumes are routed by the letters each covers, read from its own bookmarks. No extra files needed. Built after the zeno.org digitisation named above.
 - Passow and TGL: each volume folder needs **two files**, the volume PDF and a plain-text OCR `.txt` of the same volume. Lookups run against the `.txt`, so it is required.
@@ -1188,11 +1195,21 @@ five named `diogenes-lookup-…`. `diogenes-lookup-lewis-or-lsj` is `l`, the
 way back to the language's own dictionary. `diogenes-undo` undoes in a
 read-only buffer.
 
-**Window management** (only with `diogenes-purpose` loaded)
+**Windows, with `window-purpose`**
 
 - `diogenes-purpose-focus-lookup-window`, `diogenes-purpose-focus-browser-window`
 - `diogenes-purpose-focus-dictionary-window` — bound to `Q` in a dictionary buffer, the way back from the page to the entry it came from
-- `diogenes-purpose-install`, `diogenes-purpose-uninstall`
+- `diogenes-purpose-install`, `diogenes-purpose-uninstall` — the purposes are installed for you; these are for putting them back after taking them out within a session
+
+**Frames**
+
+- `diogenes-doom-focus-lookup-frame`, `diogenes-doom-focus-browser-frame`, `diogenes-doom-focus-dictionary-frame`
+- `diogenes-doom-delete-frames` — closes every frame holding nothing but Diogenes buffers
+
+**Presets**
+
+- `diogenes-load-preset`, `diogenes-list-presets`
+- `diogenes-preset-write-current` — writes this session's settings to a named preset
 
 # Appendix: how TGL lookups stay on target
 
