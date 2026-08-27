@@ -26,18 +26,15 @@
   .tab.on { background: var(--paper); border-color: var(--rule); color: var(--ink);
             font-weight: 600; }
   .tabnote { margin-left: auto; font-size: .82rem; color: var(--quiet); padding: .55rem 0; }
-  main[hidden] { display: none; }
-  /* The Configuration tab reads top to bottom: a form, then what it produces.
-     The Presets tab is two columns, its diagram being something one watches
-     while changing the other side. */
-  main.single { display: block; max-width: 62rem; }
-  main.single .pane { border-left: 0; padding-bottom: 1rem; }
-  main.single .pane.result {
-    border-top: 1px solid var(--rule); padding-top: 1.4rem; margin-top: .5rem;
-  }
-  main.single .pane.result pre { max-height: none; }
-  main.single .kinds, main.single .pair { max-width: 34rem; }
-  main.single .field, main.single .row { max-width: 46rem; }
+  /* `!important' because a panel also has a layout class, and `main.single'
+     matched with the same specificity as `main[hidden]' -- so the later rule
+     won and a hidden panel stayed on the page, both tabs showing at once. */
+  main[hidden] { display: none !important; }
+  /* The Configuration tab is two EQUAL columns: a form and what it produces,
+     neither of which is the other's illustration.  The Presets tab gives its
+     right-hand side more room, the diagram there being the thing one watches
+     while changing the left. */
+  main.half { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .keybox { display: grid; grid-template-columns: minmax(4.5rem, auto) auto; gap: .3rem; }
   .keybox input { field-sizing: content; min-width: 4.5rem; }
   .keybox button {
@@ -274,7 +271,7 @@
   <span class="tabnote">Configuration is what is true of this machine; a preset is what varies with what you are doing.</span>
 </nav>
 
-<main id="panel-config" class="single">
+<main id="panel-config" class="half">
 <section class="pane">
   <h2>What you run</h2>
   <p class="note">So that the key boxes below can warn you about a key your
@@ -343,7 +340,7 @@
   </div>
 </section>
 
-<section class="pane result">
+<section class="pane watch">
   <h2>Your configuration</h2>
   <pre id="c-out"></pre>
   <div class="actions">
