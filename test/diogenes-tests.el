@@ -1046,6 +1046,35 @@ last, which is why registration goes through the installer."
         (funcall dispatcher)
         (should (eq called 'latin))))))
 
+(ert-deftest diogenes-test-greek-has-the-same-tables ()
+  "Greek gets extra lemmata and analysis corrections, as Latin does.
+The two features were gated to Latin by five `(string= lang \"latin\")' tests,
+which was an accident of where they were written rather than a judgement: the
+Greek data is wrong more often, Morpheus knowing less of it and the LSJ keying
+some headwords differently from the form Morpheus gives."
+  (should (boundp 'diogenes-greek-extra-lemmata))
+  (should (boundp 'diogenes-greek-analysis-corrections))
+  ;; Each language reads its own table and not the other's.
+  (let ((diogenes-greek-extra-lemmata '(("οὑτοσί" . "οὗτος")))
+        (diogenes-latin-extra-lemmata '(("valde" . "validus"))))
+    (should (equal (diogenes--extra-lemma "οὑτοσί" "greek") "οὗτος"))
+    (should (equal (diogenes--extra-lemma "valde" "latin") "validus"))
+    ;; ...and a Latin form finds nothing in the Greek table.
+    (should-not (diogenes--extra-lemma "valde" "greek"))
+    (should-not (diogenes--extra-lemma "οὑτοσί" "latin")))
+  ;; Corrections likewise.
+  (let ((diogenes-greek-analysis-corrections '(("ᾖ" :info "pres subj act 3rd sg")))
+        (diogenes-latin-analysis-corrections '(("experire" :info "imperat"))))
+    (should (equal (plist-get (diogenes--analysis-correction "ᾖ" "greek") :info)
+                   "pres subj act 3rd sg"))
+    (should (equal (plist-get (diogenes--analysis-correction "experire" "latin") :info)
+                   "imperat"))
+    (should-not (diogenes--analysis-correction "ᾖ" "latin"))
+    (should-not (diogenes--analysis-correction "experire" "greek")))
+  ;; And an empty table costs nothing and answers nothing.
+  (let ((diogenes-greek-extra-lemmata nil))
+    (should-not (diogenes--extra-lemma "οὑτοσί" "greek"))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

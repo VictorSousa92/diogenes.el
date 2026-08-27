@@ -1542,9 +1542,8 @@ another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
 				(substring field (match-end 0))
 			      field)))
 		(diogenes--munge-ls-lemma (string-trim lemma) lang))))))
-      (and (fboundp 'diogenes--latin-extra-lemma)
-	   (string= lang "latin")
-	   (diogenes--latin-extra-lemma word))
+      (and (fboundp 'diogenes--extra-lemma)
+	   (diogenes--extra-lemma word lang))
       ;; Morpheus, which the two lines above and the parse before them have
       ;; between them failed to answer for.  The order is
       ;; `diogenes--parse-and-lookup''s: the shipped analyses, then the
@@ -2965,6 +2964,69 @@ harvesting a corpus -- rather than for a longer alist."
 		:value-type (string :tag "Headword"))
   :group 'diogenes)
 
+(defcustom diogenes-greek-extra-lemmata nil
+  "Greek forms the wordlists have no analysis for, and the headword to show.
+An alist of (FORM . HEADWORD), as `diogenes-latin-extra-lemmata\=' is for Latin:
+
+    (setq diogenes-greek-extra-lemmata
+          \='((\"οὑτοσί\" . \"οὗτος\")
+            (\"ταὐτόν\"  . \"αὐτός\")))
+
+Consulted only when the analyses file has nothing at all for the form, so it
+adds and never overrides.  Accents and breathings are compared as the rest of
+the Greek lookup compares them, so an entry written unaccented answers for the
+accented form.
+
+Deictic and crasis forms are what this is mostly for: the wordlists carry the
+plain word and not `οὑτοσί\=', and Morpheus does not always oblige."
+  :type '(alist :key-type (string :tag "Form")
+                :value-type (string :tag "Headword"))
+  :group 'diogenes)
+
+(defcustom diogenes-greek-analysis-corrections nil
+  "Greek analyses the shipped data gets wrong, and what to say instead.
+Keyed by the form, as `diogenes-latin-analysis-corrections\=' is for Latin, and
+taking the same three keys:
+
+  :info STRING     -- the morphology to print instead
+  :lemma STRING    -- the headword, and the entry the dictionary keys open
+  :add ENTRIES     -- ((LEMMA . INFO) ...), readings to show as well
+
+    (setq diogenes-greek-analysis-corrections
+          \='((\"ᾖ\" :info \"pres subj act 3rd sg\")))
+
+The Greek data is wrong more often than the Latin, not less: Morpheus knows
+less of it, and the LSJ keys some headwords differently from the form Morpheus
+gives.  A reader who has worked out what a form actually is should be able to
+record it."
+  :type '(alist :key-type (string :tag "Form") :value-type plist)
+  :group 'diogenes)
+
+(defun diogenes--extra-lemmata-for (lang)
+  "The extra-lemmata table for LANG."
+  (if (string= lang "greek")
+      diogenes-greek-extra-lemmata
+    diogenes-latin-extra-lemmata))
+
+(defun diogenes--analysis-corrections-for (lang)
+  "The corrections table for LANG."
+  (if (string= lang "greek")
+      diogenes-greek-analysis-corrections
+    diogenes-latin-analysis-corrections))
+
+(defun diogenes--extra-lemma (word lang)
+  "The headword the extra-lemmata table for LANG gives WORD, or nil.
+Latin tries every spelling variant, so an entry written with v and j answers
+for the form written with u and i; Greek compares the form as it stands and
+again stripped of its accents, so an entry written unaccented answers for the
+accented word."
+  (let ((table (diogenes--extra-lemmata-for lang)))
+    (when table
+      (cl-loop for variant in (if (string= lang "greek")
+                                  (list word (diogenes--ascii-alpha-only word))
+                                (diogenes--latin-form-variants word))
+               thereis (cdr (assoc-string variant table t))))))
+
 (defun diogenes--latin-extra-lemma (word)
   "The headword `diogenes-latin-extra-lemmata\=' gives for WORD, or nil.
 Every spelling variant of WORD is tried, so an entry written with v and j
@@ -3034,6 +3096,16 @@ systematic error in it is one error, not a hundred."
                 :value-type (sexp :tag "Plist"))
   :group 'diogenes)
 
+(defun diogenes--analysis-correction (form lang)
+  "The correction plist for FORM in LANG, or nil.
+The Greek and Latin tables are read the same way; only the table differs."
+  (let ((table (diogenes--analysis-corrections-for lang)))
+    (and table
+         (cl-loop for variant in (if (string= lang "greek")
+                                     (list form (diogenes--ascii-alpha-only form))
+                                   (diogenes--latin-form-variants form))
+                  thereis (cdr (assoc-string variant table t))))))
+
 (defun diogenes--latin-analysis-correction (form)
   "The correction plist `diogenes-latin-analysis-corrections' gives FORM.
 Every spelling variant is tried, so an entry written with v and j answers
@@ -3082,10 +3154,10 @@ the headword being a guess."
 (defun diogenes--correct-analyses (form analyses lang)
   "ANALYSES of FORM, with `diogenes-latin-analysis-corrections' applied.
 Returns ANALYSES unchanged when there is no entry for FORM, which is the
-usual case and costs one `assoc-string' per lookup.  Latin only: the Greek
-analyses have no such table, there being no reported need for one."
-  (let ((spec (and (string= lang "latin")
-                   (diogenes--latin-analysis-correction form))))
+usual case and costs one `assoc-string' per lookup.  Either language: the
+table is `diogenes-latin-analysis-corrections' or
+`diogenes-greek-analysis-corrections' according to LANG."
+  (let ((spec (diogenes--analysis-correction form lang)))
     (if (null spec)
         analyses
       (let ((info-spec (plist-get spec :info))
@@ -3314,8 +3386,7 @@ in the analyses record is fetched from the byte offset recorded there.
 Only a form that will not parse falls back on searching the dictionary by
 headword, exactly as the application does."
   (let* ((raw (diogenes--do-parse word lang))
-	 (extra (and (string= lang "latin")
-		     (diogenes--latin-extra-lemma word)))
+	 (extra (diogenes--extra-lemma word lang))
 	 ;; Only where the shipped data has nothing: its offsets and glosses
 	 ;; are better than anything that can be recovered from a lemma.
 	 (morpheus (and (not raw) (not extra)
