@@ -1634,31 +1634,31 @@ function internalClashes() {
     const id = k.where + ' ' + k.key;
     (groups[id] = groups[id] || []).push(k);
   });
+  const related = (a, b) =>
+    (a.owns || []).includes(b.slot) || (b.owns || []).includes(a.slot);
+  // Two entries collide unless a language tells them apart, or one is the
+  // dispatcher for the other.  PAIRWISE, and symmetrically: an earlier version
+  // walked the group asking each member which OTHERS it clashed with, and for
+  // a non-dictionary that list came out empty -- so the dictionary knew about
+  // the collision and the command sharing its key did not, which is a warning
+  // on one box and none on the other.
   const clashes = {};
   Object.values(groups).forEach(group => {
-    if (group.length < 2) return;
-    const dicts = group.filter(g => g.lang);
-    const others = group.filter(g => !g.lang);
-    const related = (a, b) =>
-      (a.owns || []).includes(b.slot) || (b.owns || []).includes(a.slot);
-    const report = (g, against) => {
-      const real = against.filter(x => !related(g, x));
-      if (!real.length) return;
-      // The partner's SLOT as well as its name, so the prompt can take the
-      // reader to the box that holds it.
-      clashes[g.slot] = (clashes[g.slot] || [])
-        .concat(real.map(x => ({ slot: x.slot, what: x.what })));
-    };
-    // Dictionary against dictionary: only within a language.
-    dicts.forEach(g =>
-      report(g, dicts.filter(x => x !== g && x.lang === g.lang)));
-    // And anything against a non-dictionary command, which cannot dispatch.
-    if (others.length) {
-      group.forEach(g => report(g, others.filter(x => x !== g)));
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const a = group[i], b = group[j];
+        if (related(a, b)) continue;
+        // A language apart is not a conflict: the package binds a command that
+        // chooses by the language of the entry being read.
+        if (a.lang && b.lang && a.lang !== b.lang) continue;
+        (clashes[a.slot] = clashes[a.slot] || []).push({ slot: b.slot, what: b.what });
+        (clashes[b.slot] = clashes[b.slot] || []).push({ slot: a.slot, what: a.what });
+      }
     }
   });
   return clashes;
 }
+
 
 // Which box the reader last set, so a prompt appears where they are looking
 // rather than on both sides of every collision at once.
