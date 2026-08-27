@@ -1609,15 +1609,130 @@ function leaderReasons(key, distro, evil) {
   if (chords.length === 1)
     return [`the leader in ${name} \u2014 taking it would shadow everything under it`];
   const first = chords[1];
-  const what = spec.taken[first];
-  if (what)
+  const known = spec.taken[first];
+  // DEPTH FIRST: `SPC f p' is not `SPC f'.  A prefix being taken says nothing
+  // about what is free under it -- a sequence of two or more is exactly how
+  // one binds something without disturbing anything, so answering `SPC f p'
+  // with `SPC f is the files prefix' told the reader the opposite of what they
+  // needed.
+  if (chords.length > 2) {
+    const second = chords[2];
+    const deeper = (LEADER_2[distro] || {})[first];
+    if (deeper && deeper[second])
+      return [`<code>${spec.leader} ${first} ${second}</code> is ${name}\u2019s ` +
+              `${deeper[second]}`];
+    if (deeper)
+      return [`under ${name}\u2019s <code>${spec.leader} ${first}</code> ` +
+              `(${known || 'a prefix'}), and <code>${second}</code> is not one ` +
+              `this tool knows of there \u2014 press ` +
+              `<code>${spec.leader} ${first}</code> and which-key will list what ` +
+              `is taken`];
+    return [`under ${name}\u2019s leader \u2014 press ` +
+            `<code>${spec.leader} ${first}</code> and which-key will list what is ` +
+            `taken there`];
+  }
+  if (known)
     return [`under ${name}\u2019s leader, and <code>${spec.leader} ${first}</code> ` +
-            `is its ${what} prefix`];
+            `is its ${known} prefix \u2014 a longer sequence under it, such as ` +
+            `<code>${spec.leader} ${first} d</code>, may well be free`];
   // Not among the ones we know of.  Which is not the same as free: it depends
   // on the modules enabled, and only the reader's own Emacs can say.
   return [`under ${name}\u2019s leader, and <code>${spec.leader} ${first}</code> is ` +
           `not one this tool knows of \u2014 press ${spec.leader} in your Emacs and ` +
           `check that ${first} is unused before settling on it`];
+}
+
+// SECOND-LEVEL keys, for the prefixes where they are worth knowing.  A modest
+// set: which exist depends on the modules enabled and the release, so an
+// unlisted one is handed to which-key rather than guessed at.
+const LEADER_2 = {
+  doom: {
+    f: { f: 'find file', s: 'save', S: 'save as', r: 'recent files',
+         R: 'rename', d: 'find directory', y: 'yank the path',
+         p: 'find file in your private config', P: 'browse your private config',
+         e: 'find file in the Emacs directory', c: 'copy this file',
+         D: 'delete this file', u: 'sudo find file', l: 'locate' },
+    b: { b: 'switch buffer', B: 'switch buffer anywhere', k: 'kill buffer',
+         i: 'imenu', n: 'next buffer', p: 'previous buffer', s: 'save',
+         r: 'revert', z: 'save all', N: 'a new buffer' },
+    p: { p: 'switch project', f: 'find file in project', a: 'add a project',
+         c: 'compile', i: 'invalidate the cache', r: 'recent project files',
+         t: 'todos', '!': 'a shell command' },
+    w: { w: 'other window', v: 'split right', s: 'split below',
+         c: 'close', o: 'close the others', h: 'left', j: 'down',
+         k: 'up', l: 'right', '=': 'balance' },
+    h: { h: 'help for a key', f: 'describe function', v: 'describe variable',
+         k: 'describe key', m: 'describe mode', r: 'reload' },
+    g: { g: 'magit status', b: 'blame', c: 'create', f: 'find file at revision',
+         '/': 'search the history' },
+    o: { o: 'open externally', p: 'the project sidebar', t: 'a terminal',
+         '-': 'dired here' },
+    t: { t: 'a theme', f: 'flycheck', l: 'line numbers', s: 'spelling',
+         w: 'soft wrap', z: 'zen mode' },
+  },
+  spacemacs: {
+    f: { f: 'find file', s: 'save', S: 'save all', r: 'recent files',
+         R: 'rename', d: 'delete', y: 'yank the path', c: 'copy',
+         e: 'the Spacemacs files prefix', b: 'bookmarks', j: 'dired here',
+         t: 'the file tree', o: 'open externally', v: 'variables' },
+    b: { b: 'switch buffer', d: 'kill buffer', n: 'next', p: 'previous',
+         s: 'the scratch buffer', h: 'home', m: 'messages', R: 'revert',
+         w: 'read only', Y: 'copy the whole buffer' },
+    p: { p: 'switch project', f: 'find file in project', d: 'directories',
+         b: 'project buffers', r: 'recent project files', t: 'the file tree',
+         '!': 'a shell command' },
+    w: { w: 'other window', '/': 'split right', '-': 'split below',
+         d: 'close', m: 'maximise', h: 'left', j: 'down', k: 'up', l: 'right',
+         '=': 'balance', o: 'other frame' },
+    h: { d: 'describe', k: 'the key bindings', i: 'search the info manuals',
+         m: 'the Spacemacs manual', SPC: 'the Spacemacs help' },
+    g: { s: 'magit status', b: 'blame', c: 'commit', f: 'the file history',
+         m: 'the git submodes' },
+  },
+};
+
+// `C-c' and `C-x', which have a rule and a map rather than a module list.
+const CC_RESERVED = /^C-c ([^C]|C-)?/;   // shape only; the tests are below
+
+function chordRules(key) {
+  const out = [];
+  const chords = key.split(/\s+/).filter(Boolean);
+  if (chords[0] === 'C-c') {
+    if (chords.length === 1)
+      return ['a prefix rather than a key: `C-c\u2019 begins a sequence'];
+    const second = chords[1];
+    // The Emacs conventions RESERVE `C-c' plus an unmodified letter for users,
+    // and no package may take it.  That is a rule rather than an observation,
+    // so it is worth saying as one -- it is the one place a reader can bind
+    // freely and know they are safe.
+    if (/^[A-Za-z]$/.test(second) && chords.length === 2)
+      return [`safe by convention: <code>C-c</code> and a plain letter is ` +
+              `reserved for you, and no package may take it`];
+    if (/^C-[A-Za-z]$/.test(second))
+      return [`<code>C-c ${second}</code> belongs to the major mode by ` +
+              `convention, so it depends on the buffer and may be taken`];
+    return [];
+  }
+  if (chords[0] === 'C-x') {
+    const map = {
+      f: 'set fill column', s: 'save some buffers', b: 'switch buffer',
+      k: 'kill buffer', o: 'other window', '0': 'delete window',
+      '1': 'delete other windows', '2': 'split below', '3': 'split right',
+      h: 'mark the whole buffer', u: 'undo', d: 'dired', 'C-f': 'find file',
+      'C-s': 'save', 'C-c': 'exit Emacs', 'C-e': 'evaluate the last sexp',
+      'C-b': 'list buffers', r: 'the register and rectangle prefix',
+      v: 'the version-control prefix', '4': 'the other-window prefix',
+      '5': 'the other-frame prefix', n: 'the narrowing prefix',
+      a: 'the abbrev prefix', '8': 'insert a character',
+    };
+    if (chords.length === 1) return ['a prefix rather than a key'];
+    const what = map[chords[1]];
+    return what
+      ? [`<code>C-x ${chords[1]}</code> is Emacs\u2019s own \u2014 ${what}`]
+      : [`under <code>C-x</code>, which is Emacs\u2019s own map \u2014 press ` +
+         `<code>C-x C-h</code> to see what is free there`];
+  }
+  return out;
 }
 
 // Where a key lives decides which tables apply.
@@ -1630,6 +1745,10 @@ function clashesFor(key, context) {
   const test = table => (CLASHES[table] || []).forEach(([re, why]) => {
     if (re.test(key)) out.push(why);
   });
+  // `C-c' and `C-x' first: where one of those has a rule, it is the answer and
+  // the general Emacs table below would only add noise.
+  const chord = chordRules(key);
+  if (chord.length) return chord;
   test('emacs');
   leaderReasons(key, distro, evil).forEach(r => out.push(r));
   if (distro === 'doom') test('doom');
