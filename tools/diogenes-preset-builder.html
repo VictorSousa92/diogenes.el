@@ -310,6 +310,7 @@
       in Emacs state, so the single letters are free there &mdash; but a scanned
       page stays in normal state, where evil's own keys apply.</em></label>
   </div>
+  <p class="note" id="c-evilnote"></p>
 
   <h2>Your own keys</h2>
   <p class="note">Optional, and it makes the warnings below far better: add the
@@ -1255,16 +1256,41 @@ el('c-distro').innerHTML = `
       </label>`).join('')}
   </div>`;
 
-// Doom and Spacemacs default to evil; plain Emacs does not.  Changeable, since
-// a Doom without evil is a thing people run.
+// DOOM presumes evil and plain Emacs presumes not.  Spacemacs presumes
+// nothing: it asks at first start -- vim, emacs, or hybrid -- so the box is
+// left as the reader set it and a line below says what the answer decides.
 document.addEventListener('change', e => {
   if (e.target.name === 'distro') {
+    const distro = e.target.value;
     document.querySelectorAll('.distro label').forEach(l =>
-      l.classList.toggle('on', l.dataset.distro === e.target.value));
-    el('c-evil').checked = e.target.value !== 'vanilla';
+      l.classList.toggle('on', l.dataset.distro === distro));
+    if (distro === 'doom') el('c-evil').checked = true;
+    else if (distro === 'vanilla') el('c-evil').checked = false;
     renderConfig();
   }
+  if (e.target.id === 'c-evil') renderConfig();
 });
+
+function renderEvilNote() {
+  const distro = (document.querySelector('input[name=distro]:checked') || {}).value
+                 || 'vanilla';
+  const evil = el('c-evil').checked;
+  const note = el('c-evilnote');
+  if (!note) return;
+  if (distro === 'spacemacs')
+    note.innerHTML = 'Spacemacs asks which editing style you want when you ' +
+      'first start it. <b>vim</b> or <b>hybrid</b> means evil; <b>emacs</b> ' +
+      'does not, and then the leader is <code>M-m</code> rather than ' +
+      '<code>SPC</code>.';
+  else if (distro === 'doom')
+    note.innerHTML = 'Doom turns evil on unless you remove <code>:editor evil</code> ' +
+      'from your <code>init.el</code>.';
+  else
+    note.innerHTML = evil
+      ? 'With evil in a plain Emacs the leader is whatever you have bound, ' +
+        'so the leader warnings below do not apply.'
+      : '';
+}
 
 // The four builtins, each with a drawing of what it does.  A preset is
 // reached BY NAME, so the picker writes `diogenes-preset'; the builtins need
@@ -1528,10 +1554,15 @@ const CLASHES = {
     [/^,/, 'the local leader in Doom'],
     [/^C-c$/, 'used by Doom for its own chords'],
   ],
-  spacemacs: [
+  // `SPC' is the leader only in an evil state, so in Spacemacs's emacs style
+  // it is free and `M-m' is the leader instead.  `M-m' is the leader either
+  // way, which is what makes it the safe one to avoid.
+  spacemacsLeader: [
     [/^SPC/, 'the leader in Spacemacs'],
-    [/^M-m/, 'the leader again, for terminals'],
     [/^,/, 'the local leader in Spacemacs'],
+  ],
+  spacemacs: [
+    [/^M-m/, 'the leader in Spacemacs, and the only one in its emacs style'],
   ],
 };
 
@@ -1547,7 +1578,10 @@ function clashesFor(key, context) {
   });
   test('emacs');
   if (distro === 'doom') test('doom');
-  if (distro === 'spacemacs') test('spacemacs');
+  if (distro === 'spacemacs') {
+    test('spacemacs');
+    if (evil) test('spacemacsLeader');
+  }
   // A scanned dictionary is a viewer's own buffer, so its keys apply there.
   if (context === 'document') {
     viewerTables().forEach(([, table]) =>
@@ -1845,6 +1879,7 @@ function renderConfig() {
   installKeyCapture();
   renderWarnings();
   fitKeyBoxes();
+  renderEvilNote();
 }
 
 document.querySelectorAll('.tab').forEach(tab => {
