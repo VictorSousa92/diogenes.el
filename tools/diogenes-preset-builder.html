@@ -48,6 +48,12 @@
   }
   input.capturing { border-color: var(--accent); background: #fbf3f0; }
   .kwarn { font-size: .78rem; margin: .15rem 0 0; grid-column: 1 / -1; }
+  /* A warning belongs to its ROW and not to a cell.  Inside `.keybox' it
+     landed in a 4.5rem column, so a prompt rendered there was invisible and
+     looked like no prompt at all -- the dictionary rows, which had it outside,
+     showed theirs correctly, which is what made the difference hard to see. */
+  .warnline { grid-column: 1 / -1; }
+  .keybox > [data-warnfor] { grid-column: 1 / -1; }
   .kwarn.clash { color: var(--accent); }
   .kwarn.fine { color: var(--quiet); }
   .kwarn.prompt { display: block; margin-top: .2rem; color: var(--quiet); }
@@ -106,7 +112,7 @@
   .dictrow .name em { font-style: normal; font-weight: 400; color: var(--quiet); }
   .dictrow .keycol span { font-size: .72rem; color: var(--quiet); display: block; }
   .keyrow { display: grid; grid-template-columns: 1fr minmax(9rem, max-content);
-            gap: .5rem; align-items: baseline; margin: .5rem 0; }
+            gap: .5rem .5rem; align-items: baseline; margin: .5rem 0; }
   .keyrow .what { font-size: .88rem; }
   .keyrow .what em { font-style: normal; color: var(--quiet); font-size: .8rem; display: block; }
   main {
@@ -1188,8 +1194,8 @@ el('c-keys').innerHTML =
         <input type="text" data-lookupkey="${i}" placeholder="${k[1]}"
                data-context="lookup">
         <button data-record="1" title="Press the keys instead of typing them">\u2328</button>
-        <div data-warnfor="lk${i}"></div>
       </div>
+      <div data-warnfor="lk${i}" class="warnline"></div>
     </div>`).join('') +
   SINGLE_KEYS.map(k => `
     <div class="keyrow">
@@ -1201,8 +1207,8 @@ el('c-keys').innerHTML =
                                : k[0] === 'diogenes-evil-normal-state-key' ? 'lookup'
                                : 'lookup'}">
         <button data-record="1" title="Press the keys instead of typing them">\u2328</button>
-        <div data-warnfor="${k[0]}"></div>
       </div>
+      <div data-warnfor="${k[0]}" class="warnline"></div>
     </div>`).join('');
 
 el('c-distro').innerHTML = `
