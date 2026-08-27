@@ -1168,6 +1168,85 @@ An action you set takes precedence over all three modules. Two things it
 cannot override, because neither is about layout: a `C-c C-c` chain stays in
 one window, and a frame holding only a startup page yields it.
 
+#### What to write
+
+All of these go in `:init`, or in a preset — both are read before the display
+happens.
+
+```elisp
+;; How a window is made. A named direction asks Emacs nothing.
+(setq diogenes-split-direction 'right)   ; below, above, right, left, or nil
+(setq diogenes-split-from 'selected)     ; selected, largest, or root
+(setq diogenes-split-size 0.4)           ; a fraction of what is divided...
+(setq diogenes-split-size 30)            ; ...or lines, or columns
+(setq diogenes-split-size                ; ...or one share per kind
+      '((lookup . 0.4) (dictionary . 0.55)))
+
+;; Frames.
+(setq diogenes-gather-frames 'auto)      ; auto follows pop-up-frames; t, or nil
+;; Anything `make-frame' takes. The NAME is the useful one: it is what a
+;; tiling window manager matches on to place these frames by rule.
+(setq diogenes-frame-parameters
+      '((name . "Diogenes")))
+
+;; A width and a height are deliberately not in the default, and are a bad
+;; idea under a tiling manager: it assigns the space, and a frame that asks
+;; for a size it cannot have leaves part of its tile empty. Under a floating
+;; manager they are reasonable.
+(setq diogenes-frame-parameters
+      '((name . "Diogenes") (width . 100) (height . 45)))
+
+;; Perspectives. Both are the defaults, so write them only to change them.
+(setq diogenes-claim-buffers nil)         ; nil to stay out of them entirely
+(setq diogenes-claim-buffer-function 'auto) ; auto, a function, or nil
+```
+
+**On perspectives.** persp-mode and perspective.el give each workspace its own
+buffer list, and `switch-to-buffer`, `C-x <left>` and the buffer menu show only
+what belongs to the one you are in. A buffer has to be *added* to that list, and
+persp-mode does it by watching the ordinary ways buffers appear —
+`find-file`, `switch-to-buffer`. Diogenes uses neither: it creates a buffer and
+displays it, which can slip past that watch, and the result is a buffer you are
+looking at that `C-x <left>` will not return to, though
+`switch-to-buffer` still finds it if you type the whole name.
+
+So Diogenes adds each buffer itself, as it is displayed —
+`diogenes-claim-buffers`, on by default. `diogenes-claim-buffer-function` is how:
+`auto` detects which of the two packages is running, since they share both a
+minor-mode name and a `persp-add-buffer` function; give it a function of your own
+for a package neither branch handles. Set `diogenes-claim-buffers` to nil and
+Diogenes stays out of your perspectives, with the consequence above.
+
+The three **display actions** take a `display-buffer` action, which is a cons
+of *(FUNCTIONS . ALIST)* — so a list of functions needs the outer parentheses
+as well:
+
+```elisp
+;; An entry beside the text: reuse a lookup window if there is one, else split.
+(setq diogenes-lookup-display-action
+      '((diogenes-display-in-role-frame display-buffer-pop-up-window)))
+
+;; With an alist entry as well.
+(setq diogenes-browser-display-action
+      '((display-buffer-reuse-window display-buffer-pop-up-window)
+        (inhibit-same-window . t)))
+
+;; A single function may be written bare.
+(setq diogenes-dictionary-display-action '(display-buffer-same-window))
+```
+
+`'(diogenes-display-in-role-frame display-buffer-pop-up-window)` without the
+outer parentheses means *one* function and an alist entry called
+`display-buffer-pop-up-window`, which is nothing, and the action is ignored.
+The extra pair is easy to lose and the failure is silent, so it is worth
+checking against these examples.
+
+`diogenes-display-in-role-frame` is the package's own: it reuses a window or
+frame already showing a buffer of the same kind, which is what keeps a second
+entry from splitting again. `diogenes--display-split-anyway` splits without
+asking `split-window-sensibly` for permission, and is worth having last in any
+action of your own for the reason given above.
+
 ### What each module does now
 
 **`diogenes-purpose`** tells window-purpose what our buffers are, by mode and
