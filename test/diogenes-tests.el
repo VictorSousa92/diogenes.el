@@ -945,6 +945,77 @@ the same number either way -- `diogenes-split-direction' decides which."
       (should (equal (cdr (assq 'window-height action)) 0.35))
       (should-not (assq 'window-width action)))))
 
+(ert-deftest diogenes-test-dictionary-key-override ()
+  "A reader's key for a dictionary wins, and nil unbinds it."
+  (let ((diogenes-lookup-dictionary-keys '((old . "O") (bdag . nil))))
+    ;; Moved.
+    (should (equal (diogenes--lookup-dictionary-key 'old "o") "O"))
+    ;; Unbound: nil is an answer, not an absence -- which is why the reader's
+    ;; alist is consulted with `assq' rather than by reading its cdr.
+    (should-not (diogenes--lookup-dictionary-key 'bdag "b"))
+    ;; Unmentioned: the dictionary's own key stands.
+    (should (equal (diogenes--lookup-dictionary-key 'gaffiot "g") "g")))
+  ;; With no option at all, every default stands.
+  (let ((diogenes-lookup-dictionary-keys nil))
+    (should (equal (diogenes--lookup-dictionary-key 'old "o") "o"))))
+
+(ert-deftest diogenes-test-banner-says-the-key-that-is-bound ()
+  "The banner reads the same source as the binding.
+A banner naming a key the reader has moved would be worse than none: what is
+printed under an entry is the package saying what to press.
+
+Reads `diogenes--lookup-dict-specs', which is what the banner is built from."
+  (let* ((spec-for
+          (lambda (id lang)
+            (cl-find id (diogenes--lookup-dict-specs lang)
+                     :key (lambda (e) (nth 2 e))))))
+    (let ((diogenes-lookup-dictionary-keys '((lewis . "L"))))
+      (let ((lewis (funcall spec-for 'lewis "latin")))
+        (when lewis (should (equal (nth 1 lewis) "L")))))
+    ;; An unbound dictionary offers no key at all.
+    (let ((diogenes-lookup-dictionary-keys '((lewis . nil))))
+      (let ((lewis (funcall spec-for 'lewis "latin")))
+        (when lewis (should-not (nth 1 lewis)))))
+    ;; And with nothing set, its own key stands.
+    (let ((diogenes-lookup-dictionary-keys nil))
+      (let ((lewis (funcall spec-for 'lewis "latin")))
+        (when lewis (should (equal (nth 1 lewis) "l")))))))
+
+(ert-deftest diogenes-test-lookup-keys-are-a-table ()
+  "Every key the lookup buffer binds for itself is in one option.
+So any of them can be moved or removed, which eight separate defcustoms would
+have made eight things to find."
+  (let ((commands (mapcar #'car diogenes-lookup-keys)))
+    (dolist (command '(diogenes-perseus-action
+                       diogenes-lookup-in-dictionary
+                       diogenes-lookup-next
+                       diogenes-lookup-previous
+                       diogenes--quit))
+      (should (memq command commands))))
+  ;; A command may appear twice: the action is on RET and on `C-c C-c'.
+  (should (= 2 (cl-count 'diogenes-perseus-action diogenes-lookup-keys
+                         :key #'car)))
+  ;; Every command named exists, a table of keys for absent commands being
+  ;; worse than no table.
+  (dolist (cell diogenes-lookup-keys)
+    (should (fboundp (car cell)))))
+
+(ert-deftest diogenes-test-tgl-index-key-is-an-option ()
+  "The TGL's index key can be moved or removed."
+  (should (boundp 'diogenes-tgl-index-key))
+  (let ((diogenes-tgl-index-key "I"))
+    (diogenes-tgl-install-index-key)
+    (should (eq (lookup-key diogenes-tgl-pdf-mode-map (kbd "I"))
+                #'diogenes-tgl-open-index-here))
+    ;; The old key is gone rather than kept alongside.
+    (should-not (lookup-key diogenes-tgl-pdf-mode-map (kbd "i"))))
+  (let ((diogenes-tgl-index-key nil))
+    (diogenes-tgl-install-index-key)
+    (should-not (lookup-key diogenes-tgl-pdf-mode-map (kbd "I"))))
+  ;; Put it back, the map being global.
+  (let ((diogenes-tgl-index-key "i"))
+    (diogenes-tgl-install-index-key)))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

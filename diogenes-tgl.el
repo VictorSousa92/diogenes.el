@@ -3672,11 +3672,39 @@ none of these and its volume/letter is uninstalled."
 (defvar-local diogenes-tgl--pdf-word nil
   "The word this TGL PDF buffer was opened for, for the manual-check `i' key.")
 
+(defcustom diogenes-tgl-index-key "i"
+  "Key that opens volume V's index around the current word, or nil for none.
+Bound in a TGL volume only, `diogenes-tgl-pdf-mode\=' being enabled there and
+nowhere else -- so `i\=' is free to mean this without being taken from any
+other document.  Under evil the map overrides normal state, where `i\=' is
+`evil-insert-state\='.
+
+Nil binds nothing; `M-x diogenes-tgl-open-index-here\=' still works.  Use
+`diogenes-tgl-install-index-key\=' after changing this in a running Emacs."
+  :type '(choice key-sequence (const :tag "Unbound" nil))
+  :group 'diogenes)
+
 (defvar diogenes-tgl-pdf-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "i") #'diogenes-tgl-open-index-here)
+    (when diogenes-tgl-index-key
+      (keymap-set map diogenes-tgl-index-key #'diogenes-tgl-open-index-here))
     map)
   "Keymap active in TGL volume PDF buffers (see `diogenes-tgl-pdf-mode').")
+
+;;;###autoload
+(defun diogenes-tgl-install-index-key ()
+  "Apply `diogenes-tgl-index-key\=' to `diogenes-tgl-pdf-mode-map\='.
+Whatever the key was before is unbound first, so it does not accumulate."
+  (interactive)
+  (dolist (key (where-is-internal #'diogenes-tgl-open-index-here
+                                  diogenes-tgl-pdf-mode-map))
+    (ignore-errors
+      (keymap-unset diogenes-tgl-pdf-mode-map (key-description key) t)))
+  (when diogenes-tgl-index-key
+    (keymap-set diogenes-tgl-pdf-mode-map diogenes-tgl-index-key
+                #'diogenes-tgl-open-index-here))
+  (when (called-interactively-p 'interactive)
+    (message "TGL index key: %s" (or diogenes-tgl-index-key "unbound"))))
 
 (define-minor-mode diogenes-tgl-pdf-mode
   "Minor mode for PDF buffers opened by the TGL module.

@@ -923,6 +923,61 @@ A long list here is an argument for reporting the analyses upstream rather
 than for maintaining it: a systematic error in a batch run is one error, not
 a hundred.
 
+## Changing the keys
+
+Every key the package binds can be moved or removed.
+
+**The dictionary letters** — `o` for the OLD, `g` for the Gaffiot, and the rest
+— are one option, keyed by the dictionary's name:
+
+```elisp
+(setq diogenes-lookup-dictionary-keys
+      '((old . "O")            ; move it
+        (gaffiot . "F")
+        (bdag . nil)))         ; bind nothing, freeing `b'
+```
+
+The banner under an entry reads the same option, so `[OLD (O)]` says what the
+key now is. `nil` frees a letter for something of your own.
+
+**The lookup buffer's own keys** are a second table, by command:
+
+```elisp
+(setq diogenes-lookup-keys
+      '((diogenes-perseus-action       . "RET")
+        (diogenes-perseus-action       . "C-c C-c")
+        (diogenes-lookup-in-dictionary . "C-c C-o")
+        (diogenes-lookup-next          . "C-c C-n")
+        (diogenes-lookup-previous      . "C-c C-p")
+        (diogenes-lookup-open-tll-or-tgl . "t")
+        (diogenes-lookup-lewis         . "l")
+        (diogenes--quit                . "q")))
+```
+
+That is the default; change what you want and leave the rest. A command may
+appear twice — the action is on `RET` and on `C-c C-c` both — and `nil` for a
+key binds nothing.
+
+**And four keys have options of their own:**
+
+| | |
+| --- | --- |
+| `diogenes-pdf-search-key` | the lookup key in a scanned dictionary, `L` |
+| `diogenes-tgl-index-key` | volume V's index from a TGL volume, `i` |
+| `diogenes-old-visit-dictionary-key` | back to the page from an entry, `C-c C-e` |
+| `diogenes-evil-normal-state-key` | out of Emacs state, `<escape>` |
+
+Both tables are read when the maps are built, so set them in `:init` — or in a
+preset, which is loaded early enough. `M-x diogenes-lookup-install-dictionary-keys`
+and `M-x diogenes-tgl-install-index-key` apply a change without restarting.
+
+Anything not listed is an ordinary keymap and an ordinary `keymap-set`:
+
+```elisp
+(with-eval-after-load 'diogenes-browser
+  (keymap-set diogenes-browser-mode-map "N" #'diogenes-browser-forward))
+```
+
 ## Under evil (Doom, Spacemacs with evil)
 
 Nothing to configure — this is handled, and the reason is worth knowing.

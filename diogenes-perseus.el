@@ -61,7 +61,6 @@
 (defconst diogenes-perseus-action-map
   (let ((map (make-sparse-keymap)))
     (keymap-set map "RET" #'diogenes-perseus-action)
-    (keymap-set map "C-c C-c" #'diogenes-perseus-action)
     (keymap-set map "<double-mouse-1>" #'diogenes-perseus-action)
     (keymap-set map "<mouse-2>" #'diogenes-perseus-action)
     map)
@@ -911,6 +910,60 @@ which route, and what their paths are doing."
   :type '(repeat symbol)
   :group 'diogenes)
 
+(defcustom diogenes-lookup-keys
+  '((diogenes-perseus-action        . "RET")
+    (diogenes-perseus-action        . "C-c C-c")
+    (diogenes-lookup-in-dictionary  . "C-c C-o")
+    (diogenes-lookup-next           . "C-c C-n")
+    (diogenes-lookup-previous       . "C-c C-p")
+    (diogenes-lookup-open-tll-or-tgl . "t")
+    (diogenes-lookup-lewis          . "l")
+    (diogenes--quit                 . "q"))
+  "The keys of a lookup buffer, as (COMMAND . KEY).
+Every key the lookup buffer binds for itself is here, so that any of them can
+be moved or removed -- nil for a KEY binds nothing.  A command may appear
+twice, `diogenes-perseus-action\=' being on `RET\=' and `C-c C-c\=' both.
+
+The dictionary letters are NOT here: they belong to the dictionaries, which
+come and go with the modules that provide them, and
+`diogenes-lookup-dictionary-keys\=' answers for those.  `t\=' and `l\=' are here
+because they dispatch between two dictionaries rather than naming one.
+
+Consulted when the map is built, so set it before the package loads -- in
+`:init\=' with `use-package\=', or in a preset."
+  :type '(alist :key-type function
+                :value-type (choice key-sequence (const :tag "Unbound" nil)))
+  :group 'diogenes)
+
+(defcustom diogenes-lookup-dictionary-keys nil
+  "Keys for the dictionaries in a lookup buffer, overriding their defaults.
+An alist of (ID . KEY), where ID is a dictionary\='s registered identifier --
+`old\=', `tll\=', `gaffiot\=', `georges\=', `montanari\=', `cambridge\=', `bdag\=',
+`passow\=', `tgl\=', `bailly\=', `pape\=', `dge\=', `lewis\=' -- and KEY a key
+description, or nil to bind nothing at all:
+
+    (setq diogenes-lookup-dictionary-keys
+          \='((old . \"O\") (gaffiot . \"F\") (bdag . nil)))
+
+The letters the package chooses are opinionated and finite, and a reader who
+consults the Gaffiot constantly and the BDAG never has better uses for `g\=' and
+`b\='.  Nil frees a letter for something of your own.
+
+The BANNER reads this too, so `[OLD (O)]\=' says what the key now is.  A
+rebinding the banner did not know about would be worse than none: the offer
+printed under an entry is the package telling the reader what to press."
+  :type '(alist :key-type symbol
+                :value-type (choice key-sequence (const :tag "Unbound" nil)))
+  :group 'diogenes)
+
+(defun diogenes--lookup-dictionary-key (id default)
+  "The key for dictionary ID: what the reader asked for, or DEFAULT.
+Returns nil where the reader asked for nil, which means bind nothing -- so a
+caller must distinguish `no preference\=' from `no key\=', and consult
+`diogenes-lookup-dictionary-keys\=' with `assq\=' rather than reading its cdr."
+  (let ((cell (assq id diogenes-lookup-dictionary-keys)))
+    (if cell (cdr cell) default)))
+
 (cl-defun diogenes-lookup-register-dictionary
     (id &key name lang key command help (show 'always) buffer-p of
              available-p (order 50) bind declared paths)
@@ -985,8 +1038,10 @@ so such modules leave BIND nil and bind the key themselves."
           (append (cl-remove id diogenes--lookup-dictionaries
                              :key (lambda (e) (plist-get e :id)))
                   (list entry)))
-    (when (and bind key command (boundp 'diogenes-lookup-mode-map))
-      (keymap-set diogenes-lookup-mode-map key command))
+    (when (and bind command (boundp 'diogenes-lookup-mode-map))
+      (let ((wanted (diogenes--lookup-dictionary-key id key)))
+        (when wanted
+          (keymap-set diogenes-lookup-mode-map wanted command))))
     id))
 
 (defun diogenes--lookup-dictionary (id)
@@ -1000,10 +1055,22 @@ Called once `diogenes-lookup-mode-map' exists, for modules that registered
 before it did; `diogenes-lookup-register-dictionary' binds directly when it
 can.  Re-registering is idempotent, so doing both is harmless."
   (dolist (entry diogenes--lookup-dictionaries)
-    (let ((key (plist-get entry :key))
-          (command (plist-get entry :command)))
+    (let* ((id (plist-get entry :id))
+           (command (plist-get entry :command))
+           (key (diogenes--lookup-dictionary-key id (plist-get entry :key))))
       (when (and (plist-get entry :bind) key command)
         (keymap-set diogenes-lookup-mode-map key command)))))
+
+;;;###autoload
+(defun diogenes-lookup-install-dictionary-keys ()
+  "Apply `diogenes-lookup-dictionary-keys\=' to the lookup buffers.
+Called for its effect after changing that option in a running Emacs; the
+keys are installed at load time without it."
+  (interactive)
+  (when (boundp 'diogenes-lookup-mode-map)
+    (diogenes--lookup-install-registered-keys)
+    (when (called-interactively-p 'interactive)
+      (message "Diogenes: dictionary keys installed"))))
 
 (defun diogenes--lookup-dict-in-buffer-p (id)
   "Non-nil if the current lookup buffer is showing dictionary ID.
@@ -1078,7 +1145,12 @@ order their modules were loaded."
                          (diogenes--lookup-dict-visible-p e)))
                   diogenes--lookup-dictionaries)))
     (mapcar (lambda (e)
-              (list (plist-get e :name) (plist-get e :key)
+              ;; The key as it IS, not as it was registered: a reader who has
+              ;; moved the OLD to `O' must be told `O', the banner being the
+              ;; package saying what to press.
+              (list (plist-get e :name)
+                    (diogenes--lookup-dictionary-key (plist-get e :id)
+                                                     (plist-get e :key))
                     (plist-get e :id) (plist-get e :help)))
             (sort entries (lambda (a b) (< (plist-get a :order)
                                            (plist-get b :order)))))))
@@ -1180,8 +1252,12 @@ that is not loaded at all is not here, having never registered."
                                       (plist-get entry :id))
                               'face 'bold))
           (insert (format "  %s" (or (plist-get entry :lang) "-")))
-          (when (plist-get entry :key)
-            (insert (format "  key %s" (plist-get entry :key))))
+          (let ((key (diogenes--lookup-dictionary-key (plist-get entry :id)
+                                                      (plist-get entry :key))))
+            (cond (key (insert (format "  key %s" key)))
+                  ((plist-get entry :key)
+                   (insert (format "  key %s (unbound by you)"
+                                   (plist-get entry :key))))))
           (insert "\n")
           (insert (format "  %s, %s\n"
                           (diogenes--lookup-dict-declared-how entry)
@@ -1780,14 +1856,13 @@ Returns a list that diogenes--browse-work can be applied to."
 (defvar diogenes-lookup-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
     ;; Overrides of movement keys
+    (dolist (cell diogenes-lookup-keys)
+      (when (cdr cell)
+        (keymap-set map (cdr cell) (car cell))))
     (keymap-set map "<remap> <previous-line>"       #'diogenes-lookup-backward-line)
     (keymap-set map "<remap> <next-line>"           #'diogenes-lookup-forward-line)
     (keymap-set map "<remap> <beginning-of-buffer>" #'diogenes-lookup-beginning-of-buffer)
     (keymap-set map "<remap> <end-of-buffer>"       #'diogenes-lookup-end-of-buffer)
-    (keymap-set map "C-c C-n"                       #'diogenes-lookup-next)
-    (keymap-set map "C-c C-p"                       #'diogenes-lookup-previous)
-    (keymap-set map "C-c C-c"                       #'diogenes-perseus-action)
-    (keymap-set map "C-c C-o"                       #'diogenes-lookup-in-dictionary)
     ;; Keys that dispatch between two dictionaries, or between the two
     ;; languages, are bound here when the command that does the dispatching
     ;; lives here too: `t' is the TLL in Latin and the TGL in Greek, and
@@ -1797,9 +1872,6 @@ Returns a list that diogenes--browse-work can be applied to."
     ;; its registration or by hand -- so a dictionary whose module is not
     ;; loaded leaves its key alone instead of binding it to a command that
     ;; does not exist.
-    (keymap-set map "t"                             #'diogenes-lookup-open-tll-or-tgl)
-    (keymap-set map "l"                             #'diogenes-lookup-lewis)
-    (keymap-set map "q"                             #'diogenes--quit)
     map)
   "Basic mode map for the Diogenes Lookup Mode.")
 
