@@ -1537,7 +1537,11 @@ function installKeyCapture() {
       const chord = chordOf(ev);
       if (!chord) return;
       input.value = input.value ? input.value + ' ' + chord : chord;
-      renderWarnings();
+      // Setting `value' by hand fires no `input' event, so the box has to
+      // announce itself: without this `lastTouched' stayed null and a key
+      // RECORDED rather than typed produced a warning and no prompt.
+      lastTouched = slotOf(input);
+      renderConfig();
     });
     input.addEventListener('blur', () => {
       if (button.classList.contains('recording')) stop();
@@ -1635,6 +1639,15 @@ function internalClashes() {
 // rather than on both sides of every collision at once.
 let lastTouched = null;
 
+// The reverse of `inputForSlot': which slot a box belongs to.
+function slotOf(input) {
+  const d = input.dataset;
+  if (d.dictkey) return d.dictkey;
+  if (d.singlekey) return d.singlekey;
+  if (d.lookupkey !== undefined) return 'lk' + d.lookupkey;
+  return null;
+}
+
 function inputForSlot(slot) {
   return document.querySelector(`input[data-dictkey="${slot}"]`) ||
          document.querySelector(`input[data-singlekey="${slot}"]`) ||
@@ -1714,10 +1727,8 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 document.addEventListener('input', e => {
   if (!e.target.closest('#panel-config')) return;
-  const key = e.target.dataset;
-  if (key.dictkey) lastTouched = key.dictkey;
-  else if (key.lookupkey !== undefined) lastTouched = 'lk' + key.lookupkey;
-  else if (key.singlekey) lastTouched = key.singlekey;
+  const slot = slotOf(e.target);
+  if (slot) lastTouched = slot;
   renderConfig();
 });
 el('c-copy').addEventListener('click', async () => {
