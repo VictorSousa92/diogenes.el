@@ -56,6 +56,12 @@
   .keybox > [data-warnfor] { grid-column: 1 / -1; }
   /* A prompt reads as prose, so it wraps rather than stretching its column. */
   .kwarn.prompt { line-height: 1.5; }
+  .caveat {
+    font-size: .86rem; color: var(--ink); background: #fbf6f0;
+    border-left: 2px solid var(--accent); padding: .55rem .7rem;
+    margin: .6rem 0; max-width: 60ch;
+  }
+  .caveat + .caveat { margin-top: -.2rem; }
   .kwarn.clash { color: var(--accent); }
   .kwarn.fine { color: var(--quiet); }
   .kwarn.prompt { display: block; margin-top: .2rem; color: var(--quiet); }
@@ -368,6 +374,16 @@
   <h2>Keys</h2>
   <p class="note">Blank keeps the default. <code>-</code> binds nothing, and the
      keyboard button records the keys you press.</p>
+  <p class="caveat"><b>Check every key in your own Emacs before you settle on
+     it.</b> What this tool knows is a curated list &mdash; Emacs itself, your
+     distribution's usual bindings, evil, and the PDF viewer you chose &mdash;
+     and it cannot know your packages, your modules, or anything you have bound
+     yourself. Nothing here is a guarantee that a key is free.</p>
+  <p class="caveat">The way to find out takes a moment. Open a Diogenes entry
+     and press <code>C-h k</code> then the key: Emacs names whatever holds it,
+     or says it is undefined. In a scanned dictionary do the same &mdash; the
+     answer differs there. For a sequence under a leader, press the leader and
+     let which-key list what is taken.</p>
   <div id="c-keys"></div>
 
   <h2>Frames</h2>
@@ -1440,6 +1456,13 @@ function configText() {
 
   out.push('');
   out.push('  :bind ("C-c d" . diogenes))');
+  const changedKeys = out.some(l => /diogenes-lookup-keys|dictionary-keys|-key /.test(l));
+  if (changedKeys) {
+    out.push('');
+    out.push(';; Keys are worth checking in your own Emacs: open an entry, press');
+    out.push(';; C-h k and then the key, and Emacs will name whatever holds it.');
+    out.push(';; A scanned dictionary answers differently, being a viewer\'s buffer.');
+  }
   return out.join('\n');
 }
 
@@ -1771,7 +1794,8 @@ function warnFor(key, context) {
   const found = clashesFor(key, context);
   if (!key) return '';
   if (!found.length)
-    return '<span class="kwarn fine">Free, as far as this tool knows.</span>';
+    return '<span class="kwarn fine">Nothing known wants it \u2014 check with ' +
+           '<code>C-h k</code> in your own Emacs.</span>';
   const soft = found.every(w => /harmless in a read-only buffer/.test(w));
   return `<span class="kwarn ${soft && context === 'lookup' ? 'fine' : 'clash'}">` +
          (soft && context === 'lookup' ? '' : '\u26a0 ') + found.join('; ') +
