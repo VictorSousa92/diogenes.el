@@ -54,6 +54,8 @@
      showed theirs correctly, which is what made the difference hard to see. */
   .warnline { grid-column: 1 / -1; }
   .keybox > [data-warnfor] { grid-column: 1 / -1; }
+  /* A prompt reads as prose, so it wraps rather than stretching its column. */
+  .kwarn.prompt { line-height: 1.5; }
   .kwarn.clash { color: var(--accent); }
   .kwarn.fine { color: var(--quiet); }
   .kwarn.prompt { display: block; margin-top: .2rem; color: var(--quiet); }
@@ -70,6 +72,12 @@
   }
   .distro label.on { border-color: var(--accent); box-shadow: inset 2px 0 0 var(--accent); }
   .distro input { display: none; }
+  .uploadrow { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap;
+               margin: .4rem 0 .2rem; }
+  .uploadrow input[type=file] { font: inherit; font-size: .84rem; }
+  .kwarn.blocked { color: var(--accent); font-weight: 600; }
+  .filelist { font-size: .82rem; color: var(--quiet); margin: .3rem 0 0; }
+  .filelist code { color: var(--ink); }
   .presets { display: grid; gap: .4rem; margin: .3rem 0 .5rem; }
   .presetrow {
     display: grid; grid-template-columns: 4.2rem 1fr; gap: .7rem;
@@ -111,8 +119,13 @@
   .dictrow .name { font-weight: 600; font-size: .9rem; margin-bottom: .2rem; }
   .dictrow .name em { font-style: normal; font-weight: 400; color: var(--quiet); }
   .dictrow .keycol span { font-size: .72rem; color: var(--quiet); display: block; }
-  .keyrow { display: grid; grid-template-columns: 1fr minmax(9rem, max-content);
-            gap: .5rem .5rem; align-items: baseline; margin: .5rem 0; }
+  /* The right-hand column holds the key AND its warning, so a prompt appears
+     under the key it is about -- as it does in the dictionary rows, where the
+     `.keycol' does the same.  Wide enough for a sentence: it was the warning
+     squeezed into a narrow cell that made one invisible before. */
+  .keyrow { display: grid; grid-template-columns: 1fr minmax(15rem, 24rem);
+            gap: .35rem .6rem; align-items: baseline; margin: .6rem 0; }
+  .keyrow > .warnline { grid-column: 2; }
   .keyrow .what { font-size: .88rem; }
   .keyrow .what em { font-style: normal; color: var(--quiet); font-size: .8rem; display: block; }
   main {
@@ -298,6 +311,16 @@
       page stays in normal state, where evil's own keys apply.</em></label>
   </div>
 
+  <h2>Your own keys</h2>
+  <p class="note">Optional, and it makes the warnings below far better: add the
+     file or files where your keys are set, and this checks against them.
+     Nothing is uploaded anywhere &mdash; the page reads them in your browser.</p>
+  <div class="uploadrow">
+    <input type="file" id="c-dotfiles" multiple accept=".el,.org,text/plain">
+    <span class="note" id="c-dotstatus">No files added.</span>
+  </div>
+  <p class="note" id="c-dothelp"></p>
+
   <h2>Diogenes itself</h2>
   <div class="field">
     <span><code>diogenes-path</code> &mdash; the root of your installation; everything inside is found from here</span>
@@ -319,6 +342,17 @@
   <div id="c-dicts"></div>
 
   <h2>Reading</h2>
+  <div class="field">
+    <span>Which viewer opens a scanned dictionary &mdash;
+      <code>diogenes-old-pdf-viewer</code>. The keys it takes for itself are
+      checked against yours below.</span>
+    <select id="c-viewer">
+      <option value="auto">auto &mdash; pdf-tools if you have it, else doc-view</option>
+      <option value="pdf-tools">pdf-tools</option>
+      <option value="doc-view">doc-view, which ships with Emacs</option>
+      <option value="emacs-reader">the Emacs Reader (MuPDF)</option>
+    </select>
+  </div>
   <div class="row">
     <input type="checkbox" id="c-allentries" checked>
     <label for="c-allentries">Show every matching entry
@@ -1303,6 +1337,8 @@ function configText() {
 
   // Reading, only where it differs from the default.
   const reading = [];
+  if (el('c-viewer').value !== 'auto')
+    reading.push(`  (setq diogenes-old-pdf-viewer '${el('c-viewer').value})`);
   if (!el('c-allentries').checked)
     reading.push('  (setq diogenes-lookup-show-all-entries nil)');
   if (el('c-alwaysask').checked)
@@ -1417,6 +1453,57 @@ function chordOf(ev) {
 // evil's Emacs state, so a single letter is free there however much evil wants
 // it elsewhere; a scanned page is in normal state, where evil's keys do apply;
 // and a global binding must dodge whatever the distribution has taken.
+// What a document viewer takes for itself.  This matters more than the
+// distribution's keys do, because a scanned dictionary IS one of these buffers:
+// `L' was chosen for the lookup because most of the alphabet is already spoken
+// for here.
+const VIEWERS = {
+  'pdf-tools': [
+    [/^[np]$/, 'the next or previous page in pdf-tools'],
+    [/^[gG]$/, 'the first or last page in pdf-tools'],
+    [/^o$/, '`pdf-outline\u2019, the bookmark tree'],
+    [/^b$/, 'a bookmark in pdf-tools'],
+    [/^[WPh]$/, 'fit width, page or height in pdf-tools'],
+    [/^r$/, 'revert, in pdf-tools'],
+    [/^s/, 'a prefix in pdf-tools \u2014 slicing and scrolling'],
+    [/^[+=-]$/, 'zoom in pdf-tools'],
+    [/^SPC$/, 'scroll forward in pdf-tools'],
+    [/^DEL$/, 'scroll back in pdf-tools'],
+    [/^m$/, 'the midnight and other display commands in pdf-tools'],
+    [/^C-c C-[ade]$/, 'an annotation command in pdf-tools'],
+  ],
+  'doc-view': [
+    [/^[np]$/, 'the next or previous page in doc-view'],
+    [/^[<>]$/, 'shrink or enlarge in doc-view'],
+    [/^[WPHK]$/, 'fit or kill, in doc-view'],
+    [/^SPC$/, 'scroll forward in doc-view'],
+    [/^DEL$/, 'scroll back in doc-view'],
+    [/^[+=-]$/, 'zoom in doc-view'],
+    [/^r$/, 'revert, in doc-view'],
+    [/^C-c C-c$/, 'toggle between the text and the page in doc-view'],
+    [/^C-c C-t$/, 'a conversion command in doc-view'],
+  ],
+  'emacs-reader': [
+    [/^[np]$/, 'the next or previous page in the Emacs Reader'],
+    [/^[gG]$/, 'the first or last page in the Emacs Reader'],
+    [/^[WPh]$/, 'fitting the page in the Emacs Reader'],
+    [/^[+=-]$/, 'zoom in the Emacs Reader'],
+    [/^o$/, 'the outline in the Emacs Reader'],
+    [/^r$/, 'rotate, in the Emacs Reader'],
+    [/^SPC$/, 'scroll forward in the Emacs Reader'],
+  ],
+};
+
+// `auto' means pdf-tools where it is installed and doc-view otherwise, so a key
+// wanted by either is worth warning about: the reader may not know which they
+// will get, and the answer can change when they install a package.
+function viewerTables() {
+  const chosen = el('c-viewer') ? el('c-viewer').value : 'auto';
+  if (chosen === 'auto') return [['pdf-tools', VIEWERS['pdf-tools']],
+                                 ['doc-view', VIEWERS['doc-view']]];
+  return [[chosen, VIEWERS[chosen] || []]];
+}
+
 const CLASHES = {
   emacs: [
     [/^C-x/, 'a prefix in Emacs: `C-x\u2019 opens the whole file and buffer map'],
@@ -1461,6 +1548,11 @@ function clashesFor(key, context) {
   test('emacs');
   if (distro === 'doom') test('doom');
   if (distro === 'spacemacs') test('spacemacs');
+  // A scanned dictionary is a viewer's own buffer, so its keys apply there.
+  if (context === 'document') {
+    viewerTables().forEach(([, table]) =>
+      table.forEach(([re, why]) => { if (re.test(key)) out.push(why); }));
+  }
   // Evil's own keys matter in a document buffer, which stays in normal state,
   // and in a global binding -- not in a lookup buffer, which is Emacs state.
   if (evil && context !== 'lookup') test('evilNormal');
