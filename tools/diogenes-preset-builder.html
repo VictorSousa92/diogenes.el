@@ -50,6 +50,13 @@
   .kwarn { font-size: .78rem; margin: .15rem 0 0; grid-column: 1 / -1; }
   .kwarn.clash { color: var(--accent); }
   .kwarn.fine { color: var(--quiet); }
+  .kwarn.prompt { display: block; margin-top: .2rem; color: var(--quiet); }
+  .kwarn.prompt button {
+    font: inherit; font-size: .78rem; padding: .1rem .4rem; margin: 0 .1rem;
+    cursor: pointer; border: 1px solid var(--accent); background: #fff;
+    color: var(--accent); border-radius: 3px;
+  }
+  .kwarn.prompt button:hover { background: var(--accent); color: #fff; }
   .distro { display: flex; gap: .4rem; flex-wrap: wrap; margin: .3rem 0 .6rem; }
   .distro label {
     border: 1px solid var(--rule); border-radius: 3px; padding: .35rem .7rem;
@@ -1608,7 +1615,10 @@ function internalClashes() {
     const report = (g, against) => {
       const real = against.filter(x => !related(g, x));
       if (!real.length) return;
-      clashes[g.slot] = (clashes[g.slot] || []).concat(real.map(x => x.what));
+      // The partner's SLOT as well as its name, so the prompt can take the
+      // reader to the box that holds it.
+      clashes[g.slot] = (clashes[g.slot] || [])
+        .concat(real.map(x => ({ slot: x.slot, what: x.what })));
     };
     // Dictionary against dictionary: only within a language.
     dicts.forEach(g =>
@@ -1621,18 +1631,62 @@ function internalClashes() {
   return clashes;
 }
 
+// Which box the reader last set, so a prompt appears where they are looking
+// rather than on both sides of every collision at once.
+let lastTouched = null;
+
+function inputForSlot(slot) {
+  return document.querySelector(`input[data-dictkey="${slot}"]`) ||
+         document.querySelector(`input[data-singlekey="${slot}"]`) ||
+         (String(slot).startsWith('lk')
+          ? document.querySelector(`input[data-lookupkey="${String(slot).slice(2)}"]`)
+          : null);
+}
+
+// Take the reader to a box, empty it, and start recording -- so answering the
+// prompt puts them straight into pressing the replacement.  Whatever they
+// press is checked in turn, so if it collides with something else the prompt
+// appears there, naming this box among the things it now clashes with.
+function takeMeTo(slot) {
+  const input = inputForSlot(slot);
+  if (!input) return;
+  input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  input.value = '';
+  lastTouched = slot;
+  const button = input.parentElement.querySelector('button[data-record]');
+  if (button && !button.classList.contains('recording')) button.click();
+  else input.focus();
+  renderConfig();
+}
+
+document.addEventListener('click', ev => {
+  const goto = ev.target.closest && ev.target.closest('button[data-goto]');
+  if (goto) { ev.preventDefault(); takeMeTo(goto.dataset.goto); }
+});
+
 function renderWarnings() {
   const mine = internalClashes();
   const show = (slot, input) => {
     const box = document.querySelector(`[data-warnfor="${slot}"]`);
     if (!box || !input) return;
     const key = input.value.trim() === '-' ? '' : input.value.trim();
-    let html = '';
-    if (mine[slot] && mine[slot].length)
-      html += '<span class="kwarn clash">\u26a0 the same key as ' +
-              mine[slot].join(' and ') + '.</span>';
-    html += warnFor(key, input.dataset.context || 'lookup');
-    box.innerHTML = html;
+    const clashes = mine[slot] || [];
+    // ONE answer.  A key that another of our own commands already has is not
+    // `free', and saying both was telling the reader two things at once.
+    if (clashes.length) {
+      const names = clashes.map(c => c.what).join(' and ');
+      let html = `<span class="kwarn clash">\u26a0 ${key || 'this'} is already ` +
+                 `${names}.</span>`;
+      if (slot === lastTouched) {
+        html += '<span class="kwarn prompt">Change ' +
+          clashes.map(c => `<button data-goto="${c.slot}">${c.what}</button>`)
+                 .join(' or ') +
+          `, or <button data-goto="${slot}">choose another here</button>.</span>`;
+      }
+      box.innerHTML = html;
+      return;
+    }
+    box.innerHTML = warnFor(key, input.dataset.context || 'lookup');
   };
   DICTS.forEach(d =>
     show(d.id, document.querySelector(`input[data-dictkey="${d.id}"]`)));
@@ -1659,7 +1713,12 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 document.addEventListener('input', e => {
-  if (e.target.closest('#panel-config')) renderConfig();
+  if (!e.target.closest('#panel-config')) return;
+  const key = e.target.dataset;
+  if (key.dictkey) lastTouched = key.dictkey;
+  else if (key.lookupkey !== undefined) lastTouched = 'lk' + key.lookupkey;
+  else if (key.singlekey) lastTouched = key.singlekey;
+  renderConfig();
 });
 el('c-copy').addEventListener('click', async () => {
   try {
