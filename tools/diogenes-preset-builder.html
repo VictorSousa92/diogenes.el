@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Diogenes preset builder</title>
+<title>Diogenes configuration &amp; preset builder</title>
 <style>
   :root {
     --ink: #1c1a17; --paper: #f7f4ee; --rule: #d8d2c6; --quiet: #6f6a61;
@@ -122,7 +122,10 @@
              align-items: end; margin: .7rem 0; padding-bottom: .7rem;
              border-bottom: 1px solid var(--rule); }
   .dictrow:last-child { border-bottom: 0; }
-  .dictrow .name { font-weight: 600; font-size: .9rem; margin-bottom: .2rem; }
+  .dictrow .name { font-weight: 600; font-size: .9rem; margin-bottom: .2rem;
+                   display: flex; align-items: baseline; gap: .4rem; }
+  .dictrow .name input { position: relative; top: 2px; }
+  .dictrow .name label { cursor: pointer; }
   .dictrow .name em { font-style: normal; font-weight: 400; color: var(--quiet); }
   .dictrow .keycol span { font-size: .72rem; color: var(--quiet); display: block; }
   /* The right-hand column holds the key AND its warning, so a prompt appears
@@ -290,11 +293,13 @@
 </head>
 <body>
 <header>
-  <h1>Diogenes preset builder</h1>
-  <p>A preset holds what varies with what you are doing. Choose, watch what it
-     does to the windows, take the file. Dictionary paths are not here on
-     purpose: those are facts about the machine and belong in your init file,
-     where they stay put whichever preset you load.</p>
+  <h1>Diogenes configuration &amp; preset builder</h1>
+  <p>Two things, on two tabs. <b>Configuration</b> is what is true of this
+     machine &mdash; where Diogenes and your dictionaries are, which viewer opens
+     a scan, which keys you want &mdash; and it writes the block for your init
+     file. <b>Presets</b> is what varies with what you are doing: where the
+     windows go, how much room each gets, how much of an entry to show. It
+     writes a file you can load and change without touching your init file.</p>
 </header>
 
 <nav class="tabs">
@@ -343,6 +348,12 @@
      there; an empty path means one fewer dictionary rather than a broken one.
      The key box shows the default &mdash; fill it only to change it, or type
      <code>-</code> to bind nothing.</p>
+  <p class="note"><b>Tick a dictionary to declare it</b>
+     (<code>diogenes-declared-dictionaries</code>): it is then offered on every
+     entry of its language whatever its paths say, and pressing its key explains
+     what to set. Worth ticking one you are about to install, or one whose files
+     are somewhere this check cannot see. Leave it unticked and the paths decide,
+     which is what most people want.</p>
   <p class="note"><b>Drag a file or folder</b> from your file manager onto any
      box below and the whole path appears. Nothing is uploaded &mdash; a file
      manager hands the page the path as text. Typing works too.</p>
@@ -1217,7 +1228,13 @@ el('copy').addEventListener('click', async () => {
 el('c-dicts').innerHTML = DICTS.map(d => `
   <div class="dictrow">
     <div>
-      <div class="name">${d.name} <em>&mdash; ${d.lang}${d.shipped ? ', ships with Diogenes' : ''}</em></div>
+      <div class="name">
+        ${d.shipped ? '' :
+          `<input type="checkbox" data-declare="${d.id}"
+                  id="decl-${d.id}" title="Declare this dictionary">`}
+        <label for="decl-${d.id}">${d.name}</label>
+        <em>&mdash; ${d.lang}${d.shipped ? ', ships with Diogenes' : ''}</em>
+      </div>
       ${d.fields.map(([v, label]) => `
         <div class="field">
           <span><code>${v}</code> &mdash; ${label}</span>
@@ -1376,6 +1393,18 @@ function configText() {
   out.push(`  (setq diogenes-path ${JSON.stringify(dpath || "/path/to/diogenes")})`);
   if (morph) out.push(`  (setq diogenes-morpheus-directory ${JSON.stringify(morph)})`);
   if (paths.length) { out.push(''); out.push('  ;; The dictionaries you have.'); out.push(...paths); }
+
+  // Declared dictionaries: offered whatever their paths say, so that pressing
+  // a key says what to configure rather than nothing happening.
+  const declared = [];
+  document.querySelectorAll('input[data-declare]:checked').forEach(i =>
+    declared.push(i.dataset.declare));
+  if (declared.length) {
+    out.push('');
+    out.push('  ;; Offered on every entry of their language, whatever the paths');
+    out.push('  ;; say -- so a key explains what to set rather than doing nothing.');
+    out.push(`  (setq diogenes-declared-dictionaries '(${declared.join(' ')}))`);
+  }
 
   // Reading, only where it differs from the default.
   const reading = [];
@@ -2080,13 +2109,38 @@ function renderConfig() {
   renderEvilNote();
 }
 
+// A tab is reachable by its own URL, so the README can link to whichever half
+// it is talking about: `...html#configuration' or `...html#presets'.
+function showTab(which) {
+  const wanted = which === 'preset' ? 'preset' : 'config';
+  document.querySelectorAll('.tab').forEach(x =>
+    x.classList.toggle('on', x.dataset.tab === wanted));
+  el('panel-config').hidden = wanted !== 'config';
+  el('panel-preset').hidden = wanted !== 'preset';
+  if (wanted === 'preset') render(); else renderConfig();
+}
+
+function tabFromHash() {
+  const h = (location.hash || '').replace('#', '').toLowerCase();
+  if (['preset', 'presets'].includes(h)) return 'preset';
+  if (['config', 'configuration'].includes(h)) return 'config';
+  return null;
+}
+
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === tab));
-    el('panel-config').hidden = tab.dataset.tab !== 'config';
-    el('panel-preset').hidden = tab.dataset.tab !== 'preset';
-    if (tab.dataset.tab === 'preset') render(); else renderConfig();
+    const which = tab.dataset.tab;
+    showTab(which);
+    // `replaceState' rather than assigning to `location.hash', which would
+    // scroll the page to an element of that name if one existed.
+    history.replaceState(null, '',
+      location.pathname + location.search +
+      '#' + (which === 'preset' ? 'presets' : 'configuration'));
   });
+});
+window.addEventListener('hashchange', () => {
+  const which = tabFromHash();
+  if (which) showTab(which);
 });
 document.addEventListener('input', e => {
   if (!e.target.closest('#panel-config')) return;
@@ -2111,6 +2165,9 @@ el('c-download').addEventListener('click', () => {
 renderConfig();
 reset();
 render();
+// The fragment decides which tab opens; Configuration otherwise, being where
+// one starts.
+showTab(tabFromHash() || 'config');
 </script>
 </body>
 </html>
