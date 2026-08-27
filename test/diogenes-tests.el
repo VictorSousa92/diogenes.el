@@ -63,6 +63,7 @@
 ;; was right.  These are the distributions' own variables, absent here.
 (defvar spacemacs-buffer-name)
 (defvar pdf-view-mode-map)
+(defvar diogenes--lookup-lang)
 (defvar doc-view-mode-map)
 (defvar reader-mode-map)
 (defvar +doom-dashboard-name)
@@ -1015,6 +1016,35 @@ have made eight things to find."
   ;; Put it back, the map being global.
   (let ((diogenes-tgl-index-key "i"))
     (diogenes-tgl-install-index-key)))
+
+(ert-deftest diogenes-test-shared-key-dispatches-on-language ()
+  "Two dictionaries may share a key when their languages differ.
+`t\=' is the TLL in a Latin entry and the TGL in a Greek one, and that is not a
+conflict to be resolved but a choice to be made -- by the buffer, which knows
+which language it holds.  A reader who puts Gaffiot and Bailly both on `g\='
+means the same thing: the French dictionary of whatever is in front of them.
+
+Binding directly would have given the key to whichever dictionary registered
+last, which is why registration goes through the installer."
+  (let* ((latin (list :id 'a :lang "latin" :command 'diogenes-tests--latin))
+         (greek (list :id 'b :lang "greek" :command 'diogenes-tests--greek))
+         (dispatcher (diogenes--lookup-key-dispatcher (list latin greek)))
+         (called nil))
+    (cl-letf (((symbol-function 'diogenes-tests--latin)
+               (lambda () (interactive) (setq called 'latin)))
+              ((symbol-function 'diogenes-tests--greek)
+               (lambda () (interactive) (setq called 'greek))))
+      (let ((diogenes--lookup-lang "greek"))
+        (funcall dispatcher)
+        (should (eq called 'greek)))
+      (let ((diogenes--lookup-lang "latin"))
+        (funcall dispatcher)
+        (should (eq called 'latin)))
+      ;; A language neither of them has: the first, which is what asking for a
+      ;; dictionary of another language can only have meant.
+      (let ((diogenes--lookup-lang "syriac"))
+        (funcall dispatcher)
+        (should (eq called 'latin))))))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.

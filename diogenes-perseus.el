@@ -1038,10 +1038,11 @@ so such modules leave BIND nil and bind the key themselves."
           (append (cl-remove id diogenes--lookup-dictionaries
                              :key (lambda (e) (plist-get e :id)))
                   (list entry)))
+    ;; Through the installer rather than by binding here, so that a key two
+    ;; dictionaries want gets the command that chooses between them.  Binding
+    ;; directly would have given it to whichever registered last.
     (when (and bind command (boundp 'diogenes-lookup-mode-map))
-      (let ((wanted (diogenes--lookup-dictionary-key id key)))
-        (when wanted
-          (keymap-set diogenes-lookup-mode-map wanted command))))
+      (diogenes--lookup-install-registered-keys))
     id))
 
 (defun diogenes--lookup-dictionary (id)
@@ -1054,12 +1055,45 @@ so such modules leave BIND nil and bind the key themselves."
 Called once `diogenes-lookup-mode-map' exists, for modules that registered
 before it did; `diogenes-lookup-register-dictionary' binds directly when it
 can.  Re-registering is idempotent, so doing both is harmless."
-  (dolist (entry diogenes--lookup-dictionaries)
-    (let* ((id (plist-get entry :id))
-           (command (plist-get entry :command))
-           (key (diogenes--lookup-dictionary-key id (plist-get entry :key))))
-      (when (and (plist-get entry :bind) key command)
-        (keymap-set diogenes-lookup-mode-map key command)))))
+  (let ((by-key nil))
+    ;; Gather what wants each key, so that a key wanted by two dictionaries can
+    ;; be given a command that chooses between them.
+    (dolist (entry diogenes--lookup-dictionaries)
+      (let* ((id (plist-get entry :id))
+             (command (plist-get entry :command))
+             (key (diogenes--lookup-dictionary-key id (plist-get entry :key))))
+        (when (and (plist-get entry :bind) key command)
+          (let ((cell (assoc key by-key)))
+            (if cell
+                (setcdr cell (append (cdr cell) (list entry)))
+              (push (cons key (list entry)) by-key))))))
+    (dolist (cell by-key)
+      (let ((key (car cell))
+            (entries (cdr cell)))
+        (keymap-set diogenes-lookup-mode-map key
+                    (if (cdr entries)
+                        (diogenes--lookup-key-dispatcher entries)
+                      (plist-get (car entries) :command)))))))
+
+(defun diogenes--lookup-key-dispatcher (entries)
+  "A command opening whichever of ENTRIES matches the language being read.
+Two dictionaries may want one key, and where they are of different languages
+there is no conflict to resolve: `t\=' is the TLL in a Latin entry and the TGL
+in a Greek one, and a reader who puts Gaffiot and Bailly both on `g\=' means the
+same thing -- the French dictionary of whichever language is in front of them.
+
+The buffer says which language it holds, so the choice needs no prompt.  Where
+none of ENTRIES is of that language the first is used, which is what a reader
+asking for a dictionary of the other language can only have meant."
+  (lambda ()
+    (interactive)
+    (let* ((lang (or (and (boundp 'diogenes--lookup-lang) diogenes--lookup-lang)
+                     "latin"))
+           (match (or (cl-find lang entries
+                               :key (lambda (e) (plist-get e :lang))
+                               :test #'equal)
+                      (car entries))))
+      (call-interactively (plist-get match :command)))))
 
 ;;;###autoload
 (defun diogenes-lookup-install-dictionary-keys ()
