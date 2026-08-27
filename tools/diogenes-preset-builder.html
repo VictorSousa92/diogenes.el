@@ -1550,7 +1550,6 @@ const CLASHES = {
     [/^C-[oidufbev]$/, 'an evil scrolling or jump key in normal state'],
   ],
   doom: [
-    [/^SPC/, 'the leader in Doom'],
     [/^,/, 'the local leader in Doom'],
     [/^C-c$/, 'used by Doom for its own chords'],
   ],
@@ -1558,13 +1557,68 @@ const CLASHES = {
   // it is free and `M-m' is the leader instead.  `M-m' is the leader either
   // way, which is what makes it the safe one to avoid.
   spacemacsLeader: [
-    [/^SPC/, 'the leader in Spacemacs'],
     [/^,/, 'the local leader in Spacemacs'],
   ],
   spacemacs: [
     [/^M-m/, 'the leader in Spacemacs, and the only one in its emacs style'],
   ],
 };
+
+// The first key after the leader, where the distribution is known to use it.
+// Not exhaustive -- which of these exist depends on the modules one has
+// enabled -- so an unlisted letter is reported as worth checking rather than
+// as free or as taken.
+const LEADER_KEYS = {
+  doom: {
+    leader: 'SPC',
+    taken: {
+      b: 'buffers', c: 'code', f: 'files', g: 'git', h: 'help', i: 'insert',
+      n: 'notes', o: 'open', p: 'project', q: 'quit', r: 'remote', s: 'search',
+      t: 'toggles', w: 'windows', y: 'snippets', m: 'the local leader',
+      TAB: 'workspaces', ':': 'M-x', '.': 'find file', ',': 'switch buffer',
+      '<': 'switch buffer', "'": 'resume the last search', X: 'org capture',
+      u: 'the prefix argument', x: 'the scratch buffer', SPC: 'find a file in the project',
+      RET: 'a bookmark',
+    },
+  },
+  spacemacs: {
+    leader: 'SPC',
+    taken: {
+      a: 'applications', b: 'buffers', c: 'comments', d: 'debug', e: 'errors',
+      f: 'files', g: 'git', h: 'help', i: 'insertion', j: 'jump', k: 'lisp',
+      l: 'layouts', m: 'the major-mode leader', n: 'narrow', p: 'projects',
+      q: 'quit', r: 'registers', s: 'search', t: 'toggles', u: 'the prefix argument',
+      v: 'expand region', w: 'windows', x: 'text', z: 'zoom',
+      SPC: 'M-x', TAB: 'the last buffer', "'": 'a shell',
+    },
+  },
+};
+
+// A key beginning with the leader is three different situations, and saying
+// `the leader in Doom' to all three was wrong for two of them.
+function leaderReasons(key, distro, evil) {
+  const spec = LEADER_KEYS[distro];
+  if (!spec) return [];
+  // Under Spacemacs the leader is `SPC' only in an evil state; in the emacs
+  // style it is `M-m', and `SPC' is free.
+  if (distro === 'spacemacs' && !evil) return [];
+  const chords = key.split(/\s+/).filter(Boolean);
+  if (chords[0] !== spec.leader) return [];
+  const name = distro === 'doom' ? 'Doom' : 'Spacemacs';
+  // The leader itself.
+  if (chords.length === 1)
+    return [`the leader in ${name} \u2014 taking it would shadow everything under it`];
+  const first = chords[1];
+  const what = spec.taken[first];
+  if (what)
+    return [`under ${name}\u2019s leader, and <code>${spec.leader} ${first}</code> ` +
+            `is its ${what} prefix`];
+  // Not among the ones we know of.  Which is not the same as free: it depends
+  // on the modules enabled, and only the reader's own Emacs can say.
+  return [`under ${name}\u2019s leader, and <code>${spec.leader} ${first}</code> is ` +
+          `not one this tool knows of \u2014 press ${spec.leader} in your Emacs and ` +
+          `check that ${first} is unused before settling on it`];
+}
 
 // Where a key lives decides which tables apply.
 function clashesFor(key, context) {
@@ -1577,6 +1631,7 @@ function clashesFor(key, context) {
     if (re.test(key)) out.push(why);
   });
   test('emacs');
+  leaderReasons(key, distro, evil).forEach(r => out.push(r));
   if (distro === 'doom') test('doom');
   if (distro === 'spacemacs') {
     test('spacemacs');
