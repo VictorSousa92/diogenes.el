@@ -17,6 +17,94 @@
   header { padding: 1.5rem 2rem 1rem; border-bottom: 1px solid var(--rule); }
   h1 { margin: 0; font-size: 1.4rem; font-weight: 600; letter-spacing: -0.01em; }
   header p { margin: .4rem 0 0; color: var(--quiet); max-width: 70ch; }
+  .tabs { display: flex; align-items: baseline; gap: .25rem; padding: 0 2rem;
+          border-bottom: 1px solid var(--rule); background: #f2eee6; }
+  .tab { font: inherit; font-size: .92rem; padding: .55rem 1rem; cursor: pointer;
+         border: 1px solid transparent; border-bottom: 0; background: none;
+         color: var(--quiet); border-radius: 4px 4px 0 0; position: relative; top: 1px; }
+  .tab:hover { color: var(--ink); }
+  .tab.on { background: var(--paper); border-color: var(--rule); color: var(--ink);
+            font-weight: 600; }
+  .tabnote { margin-left: auto; font-size: .82rem; color: var(--quiet); padding: .55rem 0; }
+  main[hidden] { display: none; }
+  /* The Configuration tab reads top to bottom: a form, then what it produces.
+     The Presets tab is two columns, its diagram being something one watches
+     while changing the other side. */
+  main.single { display: block; max-width: 62rem; }
+  main.single .pane { border-left: 0; padding-bottom: 1rem; }
+  main.single .pane.result {
+    border-top: 1px solid var(--rule); padding-top: 1.4rem; margin-top: .5rem;
+  }
+  main.single .pane.result pre { max-height: none; }
+  main.single .kinds, main.single .pair { max-width: 34rem; }
+  main.single .field, main.single .row { max-width: 46rem; }
+  .keybox { display: grid; grid-template-columns: minmax(4.5rem, auto) auto; gap: .3rem; }
+  .keybox input { field-sizing: content; min-width: 4.5rem; }
+  .keybox button {
+    font: inherit; font-size: .74rem; padding: .25rem .45rem; cursor: pointer;
+    border: 1px solid var(--rule); background: #fff; border-radius: 3px;
+    color: var(--quiet);
+  }
+  .keybox button:hover { border-color: var(--accent); color: var(--accent); }
+  .keybox button.recording {
+    border-color: var(--accent); background: var(--accent); color: #fff;
+  }
+  input.capturing { border-color: var(--accent); background: #fbf3f0; }
+  .kwarn { font-size: .78rem; margin: .15rem 0 0; grid-column: 1 / -1; }
+  .kwarn.clash { color: var(--accent); }
+  .kwarn.fine { color: var(--quiet); }
+  .distro { display: flex; gap: .4rem; flex-wrap: wrap; margin: .3rem 0 .6rem; }
+  .distro label {
+    border: 1px solid var(--rule); border-radius: 3px; padding: .35rem .7rem;
+    cursor: pointer; font-size: .9rem; background: #fff;
+  }
+  .distro label.on { border-color: var(--accent); box-shadow: inset 2px 0 0 var(--accent); }
+  .distro input { display: none; }
+  .presets { display: grid; gap: .4rem; margin: .3rem 0 .5rem; }
+  .presetrow {
+    display: grid; grid-template-columns: 4.2rem 1fr; gap: .7rem;
+    border: 1px solid var(--rule); border-radius: 3px; padding: .5rem .6rem;
+    cursor: pointer; background: #fff; align-items: center;
+  }
+  .presetrow.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+  .presetrow input { display: none; }
+  .presetrow b { font-weight: 600; font-size: .9rem; }
+  .presetrow span { display: block; color: var(--quiet); font-size: .84rem; }
+  /* a small drawing of what each does */
+  .mini { display: flex; gap: 2px; height: 2.4rem; }
+  .mf { flex: 1; border: 1px solid var(--ink); border-radius: 2px; display: flex;
+        overflow: hidden; }
+  .mf.col { flex-direction: column; }
+  .mw { flex: 1; }
+  .mw.browser { background: #eaf1f6; }
+  .mw.entry { background: #fbeeea; }
+  .mw.dict { background: #f4f1e4; }
+  .mw + .mw { border-left: 1px solid var(--rule); }
+  .mf.col .mw + .mw { border-left: 0; border-top: 1px solid var(--rule); }
+  .field { position: relative; }
+  input[type=text].dropping {
+    border-color: var(--accent); background: #fbf3f0;
+  }
+  .pathrow { display: grid; grid-template-columns: 1fr auto; gap: .35rem; }
+  .pathrow button {
+    font: inherit; font-size: .78rem; padding: .3rem .5rem; cursor: pointer;
+    border: 1px solid var(--rule); background: #fff; border-radius: 3px;
+    color: var(--quiet); white-space: nowrap;
+  }
+  .pathrow button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .dictrow { display: grid; grid-template-columns: 1fr minmax(5rem, max-content);
+             gap: .5rem;
+             align-items: end; margin: .7rem 0; padding-bottom: .7rem;
+             border-bottom: 1px solid var(--rule); }
+  .dictrow:last-child { border-bottom: 0; }
+  .dictrow .name { font-weight: 600; font-size: .9rem; margin-bottom: .2rem; }
+  .dictrow .name em { font-style: normal; font-weight: 400; color: var(--quiet); }
+  .dictrow .keycol span { font-size: .72rem; color: var(--quiet); display: block; }
+  .keyrow { display: grid; grid-template-columns: 1fr minmax(9rem, max-content);
+            gap: .5rem; align-items: baseline; margin: .5rem 0; }
+  .keyrow .what { font-size: .88rem; }
+  .keyrow .what em { font-style: normal; color: var(--quiet); font-size: .8rem; display: block; }
   main {
     display: grid; grid-template-columns: minmax(19rem, 24rem) minmax(0, 1fr);
     align-items: start; max-width: 106rem;
@@ -180,7 +268,95 @@
      where they stay put whichever preset you load.</p>
 </header>
 
-<main>
+<nav class="tabs">
+  <button class="tab on" data-tab="config">Configuration</button>
+  <button class="tab" data-tab="preset">Presets</button>
+  <span class="tabnote">Configuration is what is true of this machine; a preset is what varies with what you are doing.</span>
+</nav>
+
+<main id="panel-config" class="single">
+<section class="pane">
+  <h2>What you run</h2>
+  <p class="note">So that the key boxes below can warn you about a key your
+     configuration already uses.</p>
+  <div id="c-distro"></div>
+  <div class="row">
+    <input type="checkbox" id="c-evil">
+    <label for="c-evil">Using evil
+      <em>Doom and Spacemacs default to it. Diogenes puts its read-only buffers
+      in Emacs state, so the single letters are free there &mdash; but a scanned
+      page stays in normal state, where evil's own keys apply.</em></label>
+  </div>
+
+  <h2>Diogenes itself</h2>
+  <div class="field">
+    <span><code>diogenes-path</code> &mdash; the root of your installation; everything inside is found from here</span>
+    <input type="text" id="c-path" placeholder="/usr/local/diogenes" data-drop="1">
+  </div>
+  <div class="field">
+    <span><code>diogenes-morpheus-directory</code> &mdash; for forms the wordlists never saw. Optional.</span>
+    <input type="text" id="c-morpheus" placeholder="~/morpheus/morpheus" data-drop="1">
+  </div>
+
+  <h2>Dictionaries</h2>
+  <p class="note">A dictionary appears when its path is set and the file is
+     there; an empty path means one fewer dictionary rather than a broken one.
+     The key box shows the default &mdash; fill it only to change it, or type
+     <code>-</code> to bind nothing.</p>
+  <p class="note"><b>Drag a file or folder</b> from your file manager onto any
+     box below and the whole path appears. Nothing is uploaded &mdash; a file
+     manager hands the page the path as text. Typing works too.</p>
+  <div id="c-dicts"></div>
+
+  <h2>Reading</h2>
+  <div class="row">
+    <input type="checkbox" id="c-allentries" checked>
+    <label for="c-allentries">Show every matching entry
+      <em><code>diogenes-lookup-show-all-entries</code> &mdash; on by default; off shows only the first.</em></label>
+  </div>
+  <div class="row">
+    <input type="checkbox" id="c-alwaysask">
+    <label for="c-alwaysask">Always ask which dictionary
+      <em><code>diogenes-lookup-always-ask-dictionary</code> &mdash; off by default; on prompts rather than choosing by language.</em></label>
+  </div>
+
+  <h2>Keys</h2>
+  <p class="note">Blank keeps the default. <code>-</code> binds nothing, and the
+     keyboard button records the keys you press.</p>
+  <div id="c-keys"></div>
+
+  <h2>A preset at startup</h2>
+  <p class="note">Optional. The four below need nothing else set; for one of
+     your own, name it and say where the presets live. Make one on the
+     <b>Presets</b> tab.</p>
+  <div id="c-presets"></div>
+  <div id="c-preset-other" hidden>
+    <div class="field">
+      <span>Its name &mdash; the file without <code>.el</code></span>
+      <input type="text" id="c-preset-name" placeholder="my-2024">
+    </div>
+    <div class="field">
+      <span><code>diogenes-preset-directory</code> &mdash; where your presets live</span>
+      <input type="text" id="c-preset-dir" placeholder="~/.emacs.d/diogenes-presets/"
+             data-drop="1">
+    </div>
+  </div>
+</section>
+
+<section class="pane result">
+  <h2>Your configuration</h2>
+  <pre id="c-out"></pre>
+  <div class="actions">
+    <button id="c-copy">Copy</button>
+    <button class="ghost" id="c-download">Download</button>
+    <span class="note" id="c-copied"></span>
+  </div>
+  <p class="note">Only what differs from the default is written, so the block
+     says what is particular about your installation and nothing else.</p>
+</section>
+</main>
+
+<main id="panel-preset" hidden>
 <section class="pane">
   <h2>Where things go <i id="mixedhint"></i></h2>
   <div class="kinds" id="kinds"></div>
@@ -354,6 +530,71 @@
 </main>
 
 <script>
+// ======================= the Configuration tab =======================
+// Every dictionary, its paths, and the key it takes by default.  A path left
+// empty means the dictionary is absent, which is not an error: `available-p'
+// asks the file system and the banner simply does not offer it.
+const DICTS = [
+  { id: 'old',       name: 'Oxford Latin Dictionary', lang: 'Latin', key: 'o',
+    fields: [['diogenes-old-pdf-file', 'the scan']] },
+  { id: 'tll',       name: 'Thesaurus Linguae Latinae', lang: 'Latin', key: 't',
+    fields: [['diogenes-tll-pdf-directory', 'the folder of fascicles']] },
+  { id: 'gaffiot',   name: 'Gaffiot', lang: 'Latin', key: 'g',
+    fields: [['diogenes-gaffiot-source-file', 'TEI source, as downloaded'],
+             ['diogenes-gaffiot-file', 'built XML, written by the package'],
+             ['diogenes-gaffiot-pdf-file', 'the scan (optional)']] },
+  { id: 'georges',   name: 'Georges', lang: 'Latin', key: 'G',
+    fields: [['diogenes-georges-source-file', 'TEI source'],
+             ['diogenes-georges-file', 'built XML'],
+             ['diogenes-georges-directory', 'the scans (optional)']] },
+  { id: 'montanari', name: 'Montanari', lang: 'Greek', key: 'm',
+    fields: [['diogenes-montanari-pdf-file', 'the scan']] },
+  { id: 'cambridge', name: 'Cambridge Greek Lexicon', lang: 'Greek', key: 'c',
+    fields: [['diogenes-cambridge-pdf-file', 'the scan']] },
+  { id: 'bdag',      name: 'BDAG', lang: 'Greek', key: 'b',
+    fields: [['diogenes-bdag-pdf-file', 'the scan']] },
+  { id: 'passow',    name: 'Passow', lang: 'Greek', key: 'p',
+    fields: [['diogenes-passow-directory', 'the folder of volumes']] },
+  { id: 'tgl',       name: 'Thesaurus Graecae Linguae', lang: 'Greek', key: 't',
+    fields: [['diogenes-tgl-directory', 'the folder of volumes']] },
+  { id: 'bailly',    name: 'Bailly', lang: 'Greek', key: 'B',
+    fields: [['diogenes-bailly-source-file', 'TEI source'],
+             ['diogenes-bailly-file', 'built XML'],
+             ['diogenes-bailly-pdf-file', 'the scan (optional)']] },
+  { id: 'pape',      name: 'Pape', lang: 'Greek', key: 'P',
+    fields: [['diogenes-pape-source-file', 'TEI source'],
+             ['diogenes-pape-file', 'built XML']] },
+  { id: 'dge',       name: 'DGE', lang: 'Greek', key: 'd',
+    fields: [['diogenes-dge-source-file', 'the DGE folder, as downloaded'],
+             ['diogenes-dge-file', 'built XML']] },
+  { id: 'lewis',     name: 'Lewis & Short', lang: 'Latin', key: 'l',
+    fields: [], shipped: true },
+  { id: 'lsj',       name: 'LSJ', lang: 'Greek', key: 'l',     fields: [], shipped: true },
+];
+
+// The keys the lookup buffer binds for itself, and the four with options of
+// their own.  DEFAULT is what the package does; a reader fills a box only to
+// change it, so the generated block stays as short as their departures from it.
+const LOOKUP_KEYS = [
+  ['diogenes-perseus-action', 'RET', 'follow a citation or look up the word at point'],
+  ['diogenes-perseus-action', 'C-c C-c', 'the same, on a chord'],
+  ['diogenes-lookup-in-dictionary', 'C-c C-o', 'look a word up, asking which dictionary'],
+  ['diogenes-lookup-next', 'C-c C-n', 'the next entry in the file'],
+  ['diogenes-lookup-previous', 'C-c C-p', 'the entry before'],
+  ['diogenes-lookup-open-tll-or-tgl', 't', 'the TLL in Latin, the TGL in Greek',
+   ['tll', 'tgl']],
+  ['diogenes-lookup-lewis', 'l', 'Lewis & Short, or the LSJ in Greek',
+   ['lewis', 'lsj']],
+  ['diogenes--quit', 'q', 'close the entry'],
+];
+
+const SINGLE_KEYS = [
+  ['diogenes-pdf-search-key', 'L', 'look a word up from inside a scanned dictionary'],
+  ['diogenes-tgl-index-key', 'i', "volume V's index, from a TGL volume"],
+  ['diogenes-old-visit-dictionary-key', 'C-c C-e', 'back to the page from an entry'],
+  ['diogenes-evil-normal-state-key', '<escape>', 'out of Emacs state, under evil'],
+];
+
 const BEHAVIOURS = {
   defer:  'whatever you have installed decides',
   reuse:  'one window, each entry replacing the last',
@@ -900,6 +1141,544 @@ el('copy').addEventListener('click', async () => {
   } catch { el('copied').textContent = 'select the text and copy it'; }
 });
 
+// ---------- the Configuration tab ----------
+el('c-dicts').innerHTML = DICTS.map(d => `
+  <div class="dictrow">
+    <div>
+      <div class="name">${d.name} <em>&mdash; ${d.lang}${d.shipped ? ', ships with Diogenes' : ''}</em></div>
+      ${d.fields.map(([v, label]) => `
+        <div class="field">
+          <span><code>${v}</code> &mdash; ${label}</span>
+          <input type="text" data-path="${v}" placeholder="/path/to/..."
+                 data-drop="1">
+        </div>`).join('') ||
+        '<p class="note" style="margin:0">No path: it is part of the installation.</p>'}
+    </div>
+    <div class="keycol">
+      <span>key</span>
+      <div class="keybox">
+        <input type="text" data-dictkey="${d.id}" placeholder="${d.key}"
+               data-context="lookup">
+        <button data-record="1" title="Press the keys instead of typing them">\u2328</button>
+      </div>
+      <div data-warnfor="${d.id}"></div>
+    </div>
+  </div>`).join('');
+
+el('c-keys').innerHTML =
+  LOOKUP_KEYS.map((k, i) => `
+    <div class="keyrow">
+      <div class="what"><code>${k[0]}</code><em>${k[2]}</em></div>
+      <div class="keybox">
+        <input type="text" data-lookupkey="${i}" placeholder="${k[1]}"
+               data-context="lookup">
+        <button data-record="1" title="Press the keys instead of typing them">\u2328</button>
+        <div data-warnfor="lk${i}"></div>
+      </div>
+    </div>`).join('') +
+  SINGLE_KEYS.map(k => `
+    <div class="keyrow">
+      <div class="what"><code>${k[0]}</code><em>${k[2]}</em></div>
+      <div class="keybox">
+        <input type="text" data-singlekey="${k[0]}" placeholder="${k[1]}"
+               data-context="${k[0] === 'diogenes-pdf-search-key' ||
+                               k[0] === 'diogenes-tgl-index-key' ? 'document'
+                               : k[0] === 'diogenes-evil-normal-state-key' ? 'lookup'
+                               : 'lookup'}">
+        <button data-record="1" title="Press the keys instead of typing them">\u2328</button>
+        <div data-warnfor="${k[0]}"></div>
+      </div>
+    </div>`).join('');
+
+el('c-distro').innerHTML = `
+  <div class="distro">
+    ${[['vanilla', 'Plain Emacs'], ['doom', 'Doom'], ['spacemacs', 'Spacemacs']]
+      .map(([v, label], i) => `
+      <label class="${i === 0 ? 'on' : ''}" data-distro="${v}">
+        <input type="radio" name="distro" value="${v}"${i === 0 ? ' checked' : ''}>
+        ${label}
+      </label>`).join('')}
+  </div>`;
+
+// Doom and Spacemacs default to evil; plain Emacs does not.  Changeable, since
+// a Doom without evil is a thing people run.
+document.addEventListener('change', e => {
+  if (e.target.name === 'distro') {
+    document.querySelectorAll('.distro label').forEach(l =>
+      l.classList.toggle('on', l.dataset.distro === e.target.value));
+    el('c-evil').checked = e.target.value !== 'vanilla';
+    renderConfig();
+  }
+});
+
+// The four builtins, each with a drawing of what it does.  A preset is
+// reached BY NAME, so the picker writes `diogenes-preset'; the builtins need
+// no directory, one of your own needs both.
+const PRESETS = [
+  { id: '', name: 'None',
+    blurb: 'Nothing loaded at startup; M-x diogenes-load-preset when you want one.',
+    mini: '<div class="mini"></div>' },
+  { id: 'defer', name: 'defer',
+    blurb: 'Whatever you have installed decides \u2014 window-purpose, a popup manager, plain Emacs.',
+    mini: '<div class="mini"><div class="mf"><div class="mw browser"></div></div></div>' },
+  { id: 'reuse', name: 'reuse',
+    blurb: 'One window for entries, each replacing the last.',
+    mini: '<div class="mini"><div class="mf"><div class="mw entry"></div></div></div>' },
+  { id: 'split', name: 'split',
+    blurb: 'An entry beside the text, and later entries share that window.',
+    mini: '<div class="mini"><div class="mf"><div class="mw browser"></div><div class="mw entry"></div></div></div>' },
+  { id: 'frames', name: 'frames',
+    blurb: 'Each kind in a frame of its own, entries gathered into the lookup frame.',
+    mini: '<div class="mini"><div class="mf"><div class="mw browser"></div></div>' +
+          '<div class="mf"><div class="mw entry"></div></div>' +
+          '<div class="mf"><div class="mw dict"></div></div></div>' },
+  { id: 'other', name: 'Other\u2026',
+    blurb: 'A preset of your own, by name. Make one on the Presets tab.',
+    mini: '<div class="mini"><div class="mf col"><div class="mw entry"></div><div class="mw dict"></div></div></div>' },
+];
+
+el('c-presets').innerHTML = '<div class="presets">' + PRESETS.map((pr, i) => `
+  <label class="presetrow${i === 0 ? ' on' : ''}" data-preset="${pr.id}">
+    <input type="radio" name="preset" value="${pr.id}"${i === 0 ? ' checked' : ''}>
+    ${pr.mini}
+    <div><b>${pr.name}</b><span>${pr.blurb}</span></div>
+  </label>`).join('') + '</div>';
+
+document.addEventListener('change', e => {
+  if (e.target.name === 'preset') {
+    document.querySelectorAll('.presetrow').forEach(r =>
+      r.classList.toggle('on', r.dataset.preset === e.target.value));
+    el('c-preset-other').hidden = e.target.value !== 'other';
+    renderConfig();
+  }
+});
+
+// A box left blank means the default, and `-' means bind nothing.  So three
+// states, and the generated block must distinguish them: absent, a key, nil.
+function keyValue(input) {
+  const v = input.value.trim();
+  if (!v) return undefined;          // default: say nothing
+  if (v === '-') return null;        // nil: bind nothing
+  return v;
+}
+
+function configText() {
+  const out = [];
+  const paths = [];
+  document.querySelectorAll('#c-dicts input[data-path]').forEach(i => {
+    const v = i.value.trim();
+    if (v) paths.push(`  (setq ${i.dataset.path} ${JSON.stringify(v)})`);
+  });
+  const dpath = el('c-path').value.trim();
+  const morph = el('c-morpheus').value.trim();
+
+  out.push('(use-package diogenes');
+  out.push('  :vc (:url "https://github.com/VictorSousa92/diogenes.el"');
+  out.push('       :branch "modular-customizable")');
+  out.push('  :init');
+  out.push(`  (setq diogenes-path ${JSON.stringify(dpath || "/path/to/diogenes")})`);
+  if (morph) out.push(`  (setq diogenes-morpheus-directory ${JSON.stringify(morph)})`);
+  if (paths.length) { out.push(''); out.push('  ;; The dictionaries you have.'); out.push(...paths); }
+
+  // Reading, only where it differs from the default.
+  const reading = [];
+  if (!el('c-allentries').checked)
+    reading.push('  (setq diogenes-lookup-show-all-entries nil)');
+  if (el('c-alwaysask').checked)
+    reading.push('  (setq diogenes-lookup-always-ask-dictionary t)');
+  if (reading.length) { out.push(''); out.push('  ;; Reading.'); out.push(...reading); }
+
+  // The dictionary letters, only those moved or unbound.
+  const dictKeys = [];
+  document.querySelectorAll('input[data-dictkey]').forEach(i => {
+    const v = keyValue(i);
+    if (v === undefined) return;
+    dictKeys.push(`        (${i.dataset.dictkey.padEnd(10)} . ${v === null ? 'nil' : JSON.stringify(v)})`);
+  });
+  if (dictKeys.length) {
+    out.push('');
+    out.push('  ;; Dictionary keys you have moved; the banner follows these.');
+    out.push("  (setq diogenes-lookup-dictionary-keys\n        '(" +
+             dictKeys.join('\n').trimStart() + '))');
+  }
+
+  // The lookup table is all-or-nothing: it is one option, so a change to one
+  // key means writing the others too, or they would be unbound.
+  const changed = LOOKUP_KEYS.some((k, i) => {
+    const input = document.querySelector(`input[data-lookupkey="${i}"]`);
+    return keyValue(input) !== undefined;
+  });
+  if (changed) {
+    const rows = LOOKUP_KEYS.map((k, i) => {
+      const v = keyValue(document.querySelector(`input[data-lookupkey="${i}"]`));
+      const key = v === undefined ? k[1] : v;
+      return `        (${k[0].padEnd(32)} . ${key === null ? 'nil' : JSON.stringify(key)})`;
+    });
+    out.push('');
+    out.push('  ;; The whole table: it is one option, so the keys you have not');
+    out.push('  ;; changed are written too rather than left unbound.');
+    out.push("  (setq diogenes-lookup-keys\n        '(" + rows.join('\n').trimStart() + '))');
+  }
+
+  const singles = [];
+  SINGLE_KEYS.forEach(k => {
+    const v = keyValue(document.querySelector(`input[data-singlekey="${k[0]}"]`));
+    if (v !== undefined)
+      singles.push(`  (setq ${k[0]} ${v === null ? 'nil' : JSON.stringify(v)})`);
+  });
+  if (singles.length) { out.push(''); out.push('  ;; And these keys.'); out.push(...singles); }
+
+  // A preset at startup, and its folder where one is needed.  Both in
+  // `:init', so the name is set before the package reads it.
+  const chosen = (document.querySelector('input[name=preset]:checked') || {}).value || '';
+  if (chosen === 'other') {
+    const name = el('c-preset-name').value.trim();
+    const dir = el('c-preset-dir').value.trim();
+    if (name) {
+      out.push('');
+      out.push('  ;; A preset of your own, loaded at startup.');
+      if (dir) out.push(`  (setq diogenes-preset-directory ${JSON.stringify(dir)})`);
+      else out.push('  ;; ...and set diogenes-preset-directory to where it lives.');
+      out.push(`  (setq diogenes-preset ${JSON.stringify(name)})`);
+    }
+  } else if (chosen) {
+    out.push('');
+    out.push('  ;; One of the four behaviours, as a preset. No folder needed.');
+    out.push(`  (setq diogenes-preset ${JSON.stringify(chosen)})`);
+  }
+
+  out.push('');
+  out.push('  :bind ("C-c d" . diogenes))');
+  return out.join('\n');
+}
+
+// ---------- what a key is called, and who else wants it ----------
+// A key typed rather than described: the box listens, and the chord pressed is
+// written the way Emacs writes it.  `C-o' is easier to press than to spell.
+const SPECIAL = {
+  Enter: 'RET', Tab: 'TAB', ' ': 'SPC', Escape: '<escape>',
+  Backspace: 'DEL', Delete: '<delete>', ArrowLeft: '<left>',
+  ArrowRight: '<right>', ArrowUp: '<up>', ArrowDown: '<down>',
+  Home: '<home>', End: '<end>', PageUp: '<prior>', PageDown: '<next>',
+  Insert: '<insert>',
+};
+
+function chordOf(ev) {
+  // A modifier on its own is not a chord.
+  if (['Control', 'Meta', 'Alt', 'Shift', 'OS'].includes(ev.key)) return null;
+  let base = SPECIAL[ev.key];
+  if (!base) {
+    if (ev.key.length === 1) base = ev.key;
+    else if (/^F\d+$/.test(ev.key)) base = '<' + ev.key.toLowerCase() + '>';
+    else base = '<' + ev.key.toLowerCase() + '>';
+  }
+  let out = '';
+  if (ev.ctrlKey) out += 'C-';
+  if (ev.altKey || ev.metaKey) out += 'M-';
+  // Shift is implicit in a capital or a shifted symbol; it is written only for
+  // a named key, where `S-<left>' is meaningful and `S-A' is not.
+  if (ev.shiftKey && base.startsWith('<')) out += 'S-';
+  return out + base;
+}
+
+// Who else wants a key.  Curated rather than exhaustive: the aim is to catch
+// the choices a reader would regret, not to model every binding.
+//
+// CONTEXT matters more than the distribution.  A Diogenes lookup buffer is in
+// evil's Emacs state, so a single letter is free there however much evil wants
+// it elsewhere; a scanned page is in normal state, where evil's keys do apply;
+// and a global binding must dodge whatever the distribution has taken.
+const CLASHES = {
+  emacs: [
+    [/^C-x/, 'a prefix in Emacs: `C-x\u2019 opens the whole file and buffer map'],
+    [/^C-h/, 'the help prefix'],
+    [/^C-g$/, 'quit, and never worth taking'],
+    [/^M-x$/, 'the command prompt'],
+    [/^C-c$/, 'a prefix, not a key'],
+    [/^C-[svwykaefbnpdlqzt]$/, 'an ordinary Emacs editing key, though harmless in a read-only buffer'],
+    [/^C-o$/, '`open-line\u2019, though harmless in a read-only buffer'],
+    [/^C-u$/, 'the prefix argument'],
+  ],
+  evilNormal: [
+    [/^[hjkl]$/, 'a motion in evil\u2019s normal state'],
+    [/^[ibcdopPGVvxXsSrRuU]$/, 'an evil command in normal state'],
+    [/^[wea0$^]$/, 'an evil motion in normal state'],
+    [/^g$/, 'a prefix in evil, and one Doom hangs a great deal from'],
+    [/^[/?nN*]$/, 'evil\u2019s search'],
+    [/^C-[oidufbev]$/, 'an evil scrolling or jump key in normal state'],
+  ],
+  doom: [
+    [/^SPC/, 'the leader in Doom'],
+    [/^,/, 'the local leader in Doom'],
+    [/^C-c$/, 'used by Doom for its own chords'],
+  ],
+  spacemacs: [
+    [/^SPC/, 'the leader in Spacemacs'],
+    [/^M-m/, 'the leader again, for terminals'],
+    [/^,/, 'the local leader in Spacemacs'],
+  ],
+};
+
+// Where a key lives decides which tables apply.
+function clashesFor(key, context) {
+  if (!key) return [];
+  const distro = (document.querySelector('input[name=distro]:checked') || {}).value
+                 || 'vanilla';
+  const evil = el('c-evil').checked;
+  const out = [];
+  const test = table => (CLASHES[table] || []).forEach(([re, why]) => {
+    if (re.test(key)) out.push(why);
+  });
+  test('emacs');
+  if (distro === 'doom') test('doom');
+  if (distro === 'spacemacs') test('spacemacs');
+  // Evil's own keys matter in a document buffer, which stays in normal state,
+  // and in a global binding -- not in a lookup buffer, which is Emacs state.
+  if (evil && context !== 'lookup') test('evilNormal');
+  return out;
+}
+
+function warnFor(key, context) {
+  const found = clashesFor(key, context);
+  if (!key) return '';
+  if (!found.length)
+    return '<span class="kwarn fine">Free, as far as this tool knows.</span>';
+  const soft = found.every(w => /harmless in a read-only buffer/.test(w));
+  return `<span class="kwarn ${soft && context === 'lookup' ? 'fine' : 'clash'}">` +
+         (soft && context === 'lookup' ? '' : '\u26a0 ') + found.join('; ') +
+         '.</span>';
+}
+
+// ---------- finding a path without typing it ----------
+// A browser is not allowed to tell a page where a chosen file lives: an
+// `<input type=file>' gives the name and hides the rest.  Two ways round it,
+// and the first is the good one.
+//
+// DRAGGING from a file manager sets `text/uri-list' to a real `file://' URI,
+// so the full path arrives.  Nautilus, Dolphin, Thunar and the Finder all do
+// this.  Nothing is uploaded and nothing is read -- the page is handed a
+// string.
+//
+// BROWSING can only give the path RELATIVE to the folder chosen, so it is
+// composed with the base folder typed once above.  Where that is empty the
+// relative path is offered with a note, which is better than a bare filename.
+function uriToPath(uri) {
+  try {
+    const u = decodeURI(uri.trim().split(/[\r\n]/)[0]);
+    return u.startsWith('file://') ? u.slice('file://'.length) : null;
+  } catch { return null; }
+}
+
+function installPathHelpers() {
+  document.querySelectorAll('#panel-config input[data-drop], #panel-config input[data-path]')
+    .forEach(input => {
+      if (input.dataset.wired) return;
+      input.dataset.wired = '1';
+      input.addEventListener('dragover', ev => {
+        ev.preventDefault();
+        input.classList.add('dropping');
+      });
+      input.addEventListener('dragleave', () => input.classList.remove('dropping'));
+      input.addEventListener('drop', ev => {
+        ev.preventDefault();
+        input.classList.remove('dropping');
+        const uris = ev.dataTransfer.getData('text/uri-list');
+        const plain = ev.dataTransfer.getData('text/plain');
+        const path = uriToPath(uris) || uriToPath(plain) ||
+                     (plain.trim().startsWith('/') ? plain.trim() : null);
+        if (path) { input.value = path; renderConfig(); }
+        else if (ev.dataTransfer.files.length) {
+          // A file dropped from an application rather than a file manager: the
+          // name is all there is, so say what is missing rather than filling
+          // the box with something that will not work.
+          input.value = '';
+          el('c-copied').textContent =
+            'That gave only the name \u2014 drag from your file manager, or type the path';
+          setTimeout(() => el('c-copied').textContent = '', 4000);
+        }
+      });
+    });
+
+}
+
+// Recording: the button puts its box in capture mode, every chord pressed is
+// appended, and pressing it again -- or leaving the box -- stops.  Appending
+// rather than replacing, so a sequence like `C-c C-o' can be pressed as one.
+function installKeyCapture() {
+  document.querySelectorAll('#panel-config button[data-record]').forEach(button => {
+    if (button.dataset.wired) return;
+    button.dataset.wired = '1';
+    const input = button.parentElement.querySelector('input');
+    if (!input) return;
+    const stop = () => {
+      button.classList.remove('recording');
+      input.classList.remove('capturing');
+      input.placeholder = input.dataset.was || input.placeholder;
+      renderConfig();
+    };
+    button.addEventListener('click', () => {
+      const on = button.classList.toggle('recording');
+      input.classList.toggle('capturing', on);
+      if (on) {
+        input.dataset.was = input.placeholder;
+        input.placeholder = 'press the keys\u2026';
+        input.value = '';
+        input.focus();
+      } else stop();
+    });
+    input.addEventListener('keydown', ev => {
+      if (!button.classList.contains('recording')) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const chord = chordOf(ev);
+      if (!chord) return;
+      input.value = input.value ? input.value + ' ' + chord : chord;
+      renderWarnings();
+    });
+    input.addEventListener('blur', () => {
+      if (button.classList.contains('recording')) stop();
+    });
+  });
+}
+
+// `field-sizing: content' is recent, so the width is also set by hand: a key
+// like `C-c C-o C-f' should be readable in its box rather than scrolling
+// inside it.
+function fitKeyBoxes() {
+  document.querySelectorAll('#panel-config .keybox input').forEach(input => {
+    const text = input.value || input.placeholder || '';
+    input.style.width = Math.max(4.5, text.length + 2.5) + 'ch';
+  });
+}
+
+// What each key EFFECTIVELY is: the box if filled, the default otherwise, and
+// nothing where the reader typed `-'.  Two keys are in conflict when they are
+// the same key in the same buffer -- so a dictionary letter and a lookup key
+// clash with each other, while `L' in a scan and `l' in an entry do not.
+function effectiveKeys() {
+  const out = [];
+  const readBox = (input, fallback) => {
+    if (!input) return fallback;
+    const v = input.value.trim();
+    if (!v) return fallback;
+    return v === '-' ? null : v;
+  };
+  DICTS.forEach(d => {
+    const box = document.querySelector(`input[data-dictkey="${d.id}"]`);
+    const key = readBox(box, d.key);
+    if (key) out.push({ key, where: 'lookup', slot: d.id, lang: d.lang,
+                        what: d.name + ' (' + d.lang + ')' });
+  });
+  LOOKUP_KEYS.forEach((k, i) => {
+    const key = readBox(document.querySelector(`input[data-lookupkey="${i}"]`), k[1]);
+    // OWNS names the dictionaries this command dispatches between: it is
+    // their binding, not a rival for it, so sharing a key with them is no
+    // conflict.
+    if (key) out.push({ key, where: 'lookup', slot: 'lk' + i, what: k[0],
+                        owns: k[3] || [] });
+  });
+  SINGLE_KEYS.forEach(k => {
+    const input = document.querySelector(`input[data-singlekey="${k[0]}"]`);
+    const key = readBox(input, k[1]);
+    const where = (input && input.dataset.context) || 'lookup';
+    if (key) out.push({ key, where, slot: k[0], what: k[0] });
+  });
+  return out;
+}
+
+// A REAL conflict, and nothing else.  Two dictionaries of different languages
+// sharing a key are not in conflict: the package binds a command that chooses
+// between them by the language of the entry being read, so `t' is the TLL in
+// Latin and the TGL in Greek, and Gaffiot and Bailly may both sit on `g'.
+//
+// What IS a conflict: two dictionaries of the SAME language on one key, since
+// there is nothing to choose them by; and a dictionary sharing a key with a
+// command that is not a dictionary, `q' or `RET' having no language to dispatch
+// on either.
+function internalClashes() {
+  const groups = {};
+  effectiveKeys().forEach(k => {
+    const id = k.where + ' ' + k.key;
+    (groups[id] = groups[id] || []).push(k);
+  });
+  const clashes = {};
+  Object.values(groups).forEach(group => {
+    if (group.length < 2) return;
+    const dicts = group.filter(g => g.lang);
+    const others = group.filter(g => !g.lang);
+    const related = (a, b) =>
+      (a.owns || []).includes(b.slot) || (b.owns || []).includes(a.slot);
+    const report = (g, against) => {
+      const real = against.filter(x => !related(g, x));
+      if (!real.length) return;
+      clashes[g.slot] = (clashes[g.slot] || []).concat(real.map(x => x.what));
+    };
+    // Dictionary against dictionary: only within a language.
+    dicts.forEach(g =>
+      report(g, dicts.filter(x => x !== g && x.lang === g.lang)));
+    // And anything against a non-dictionary command, which cannot dispatch.
+    if (others.length) {
+      group.forEach(g => report(g, others.filter(x => x !== g)));
+    }
+  });
+  return clashes;
+}
+
+function renderWarnings() {
+  const mine = internalClashes();
+  const show = (slot, input) => {
+    const box = document.querySelector(`[data-warnfor="${slot}"]`);
+    if (!box || !input) return;
+    const key = input.value.trim() === '-' ? '' : input.value.trim();
+    let html = '';
+    if (mine[slot] && mine[slot].length)
+      html += '<span class="kwarn clash">\u26a0 the same key as ' +
+              mine[slot].join(' and ') + '.</span>';
+    html += warnFor(key, input.dataset.context || 'lookup');
+    box.innerHTML = html;
+  };
+  DICTS.forEach(d =>
+    show(d.id, document.querySelector(`input[data-dictkey="${d.id}"]`)));
+  LOOKUP_KEYS.forEach((k, i) =>
+    show('lk' + i, document.querySelector(`input[data-lookupkey="${i}"]`)));
+  SINGLE_KEYS.forEach(k =>
+    show(k[0], document.querySelector(`input[data-singlekey="${k[0]}"]`)));
+}
+
+function renderConfig() {
+  el('c-out').textContent = configText();
+  installPathHelpers();
+  installKeyCapture();
+  renderWarnings();
+  fitKeyBoxes();
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === tab));
+    el('panel-config').hidden = tab.dataset.tab !== 'config';
+    el('panel-preset').hidden = tab.dataset.tab !== 'preset';
+    if (tab.dataset.tab === 'preset') render(); else renderConfig();
+  });
+});
+document.addEventListener('input', e => {
+  if (e.target.closest('#panel-config')) renderConfig();
+});
+el('c-copy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(configText());
+    el('c-copied').textContent = 'copied';
+    setTimeout(() => el('c-copied').textContent = '', 1600);
+  } catch { el('c-copied').textContent = 'select the text and copy it'; }
+});
+el('c-download').addEventListener('click', () => {
+  const blob = new Blob([configText()], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'diogenes-config.el'; a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+renderConfig();
 reset();
 render();
 </script>
