@@ -1672,6 +1672,19 @@ function takeMeTo(slot) {
   renderConfig();
 }
 
+// A prompt button needed clicking twice, and the reason is worth recording.
+// `mousedown' blurs whichever box is recording; its blur handler stops the
+// recording and re-renders, which rebuilds the warning HTML -- so the button
+// being clicked was destroyed before `click' could fire, and the second click
+// landed on the freshly built one.
+//
+// `preventDefault' on `mousedown' keeps the focus where it is, so nothing
+// blurs, nothing re-renders, and the first click arrives at the button it was
+// aimed at.
+document.addEventListener('mousedown', ev => {
+  if (ev.target.closest && ev.target.closest('button[data-goto]'))
+    ev.preventDefault();
+});
 document.addEventListener('click', ev => {
   const goto = ev.target.closest && ev.target.closest('button[data-goto]');
   if (goto) { ev.preventDefault(); takeMeTo(goto.dataset.goto); }
