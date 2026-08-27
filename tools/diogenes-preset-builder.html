@@ -329,6 +329,15 @@
      keyboard button records the keys you press.</p>
   <div id="c-keys"></div>
 
+  <h2>Frames</h2>
+  <div class="row">
+    <input type="checkbox" id="c-pixelwise">
+    <label for="c-pixelwise"><code>frame-resize-pixelwise</code>
+      <em>Wanted under a tiling window manager: without it a frame rounds its
+      size down to whole character cells and leaves part of its tile empty.
+      Harmless otherwise, and needed only if you use frames.</em></label>
+  </div>
+
   <h2>A preset at startup</h2>
   <p class="note">Optional. The four below need nothing else set; for one of
      your own, name it and say where the presets live. Make one on the
@@ -337,7 +346,7 @@
   <div id="c-preset-other" hidden>
     <div class="field">
       <span>Its name &mdash; the file without <code>.el</code></span>
-      <input type="text" id="c-preset-name" placeholder="my-2024">
+      <input type="text" id="c-preset-name" placeholder="my-preset">
     </div>
     <div class="field">
       <span><code>diogenes-preset-directory</code> &mdash; where your presets live</span>
@@ -417,12 +426,10 @@
     <label for="popupframes">Set <code>pop-up-frames</code> too
       <em>New buffers get frames generally, not only Diogenes ones.</em></label>
   </div>
-  <div class="row">
-    <input type="checkbox" id="pixelwise">
-    <label for="pixelwise"><code>frame-resize-pixelwise</code>
-      <em>Wanted under a tiling window manager, or a frame rounds down to whole
-      character cells and leaves part of its tile empty.</em></label>
-  </div>
+  <p class="note"><code>frame-resize-pixelwise</code> is on the
+     <b>Configuration</b> tab: it depends on your window manager rather than on
+     what you are reading, and setting it in both places would have a preset
+     quietly overriding your init file.</p>
 
   <h2>Reading</h2>
   <div class="row">
@@ -466,11 +473,13 @@
   </div>
   <div class="field">
     <span>Name &mdash; how <code>diogenes-preset</code> and <code>M-x diogenes-load-preset</code> refer to it</span>
-    <input type="text" id="presetname" value="my-2024">
+    <input type="text" id="presetname" value="my-preset">
   </div>
   <div class="field">
-    <span>Description &mdash; shown beside the name when choosing</span>
-    <input type="text" id="presetdesc" placeholder="how I read this year">
+    <span>Description &mdash; shown beside the name when choosing. Left empty
+      it says <em>my personal reading configurations</em>.</span>
+    <input type="text" id="presetdesc"
+           placeholder="my personal reading configurations">
   </div>
   <div class="row">
     <input type="checkbox" id="shadow">
@@ -1026,7 +1035,10 @@ function esc(s) { return JSON.stringify(s); }
 
 function preset() {
   const name = el('presetname').value.trim() || 'my-preset';
-  const desc = el('presetdesc').value.trim() || describe();
+  // What is shown when nothing is typed, rather than a summary of the settings
+  // -- a `Description' is for the reader to recognise their own preset by, and
+  // a list of behaviours is what the file itself already says.
+  const desc = el('presetdesc').value.trim() || 'my personal reading configurations';
   const u = uniform();
   const out = [];
   out.push(`;;; ${name}.el --- Diogenes preset  -*- lexical-binding: t -*-`);
@@ -1064,8 +1076,7 @@ function preset() {
   if (splitBits.length) { out.push(''); out.push(';; How a window is made.'); out.push(...splitBits); }
   const frameBits = [];
   if (el('popupframes').checked) frameBits.push("(setq pop-up-frames 'graphic-only)");
-  if (el('pixelwise').checked)
-    frameBits.push('(setq frame-resize-pixelwise t\n      window-resize-pixelwise t)');
+
   if (frameBits.length) { out.push(''); out.push(';; Frames.'); out.push(...frameBits); }
   out.push('');
   out.push(';; Reading.');
@@ -1331,6 +1342,14 @@ function configText() {
       singles.push(`  (setq ${k[0]} ${v === null ? 'nil' : JSON.stringify(v)})`);
   });
   if (singles.length) { out.push(''); out.push('  ;; And these keys.'); out.push(...singles); }
+
+  if (el('c-pixelwise').checked) {
+    out.push('');
+    out.push('  ;; So a frame fills its tile rather than rounding down to whole');
+    out.push('  ;; character cells.');
+    out.push('  (setq frame-resize-pixelwise t');
+    out.push('        window-resize-pixelwise t)');
+  }
 
   // A preset at startup, and its folder where one is needed.  Both in
   // `:init', so the name is set before the package reads it.
