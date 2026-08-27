@@ -19,6 +19,64 @@ scripts to communicate with Diogenes' Perl API and tries to cover it
 entirely.
 
 
+## Contents
+
+Sections above **Additional features** are from the upstream
+[nitardus/diogenes.el](https://github.com/nitardus/diogenes.el); everything
+below is added here.
+
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Transient interface](#transient-interface)
+- [Usage](#usage)
+  - [Searching the Corpora](#searching-the-corpora)
+  - [Browsing the Corpora](#browsing-the-corpora)
+  - [Parsing and Dictionary Lookup](#parsing-and-dictionary-lookup)
+  - [Utilities](#utilities)
+
+**Added in this fork**
+
+- [Additional features (Victor)](#additional-features-victor)
+  - [Install](#install)
+  - [Configuration](#configuration)
+  - [Looking a word up](#looking-a-word-up)
+    - [`C-c C-o` — any dictionary, by name](#c-c-c-o-any-dictionary-by-name)
+    - [In a lookup buffer](#in-a-lookup-buffer)
+  - [`C-c C-c` on words](#c-c-c-c-on-words)
+  - [Forgetting the keys](#forgetting-the-keys)
+  - [Which dictionaries appear](#which-dictionaries-appear)
+    - [Declaring one](#declaring-one)
+  - [The dictionaries themselves](#the-dictionaries-themselves)
+    - [Dictionaries as entries (XML)](#dictionaries-as-entries-xml)
+    - [Bailly](#bailly)
+    - [Georges](#georges)
+    - [Gaffiot](#gaffiot)
+    - [DGE](#dge)
+    - [Dictionaries as pages (scans)](#dictionaries-as-pages-scans)
+    - [Prebuilt indexes (Passow, TGL, Bailly)](#prebuilt-indexes-passow-tgl-bailly)
+    - [Choosing the PDF viewer](#choosing-the-pdf-viewer)
+    - [A caveat on OCR and bookmarks](#a-caveat-on-ocr-and-bookmarks)
+    - [Searching inside an open PDF](#searching-inside-an-open-pdf)
+    - [Volume V (special menu)](#volume-v-special-menu)
+  - [When an analysis is wrong](#when-an-analysis-is-wrong)
+    - [Spellings the file does not use](#spellings-the-file-does-not-use)
+    - [Forms with no analysis at all](#forms-with-no-analysis-at-all)
+    - [Forms the wordlists never saw](#forms-the-wordlists-never-saw)
+    - [Analyses that are simply wrong](#analyses-that-are-simply-wrong)
+  - [Changing the keys](#changing-the-keys)
+  - [Under evil (Doom, Spacemacs with evil)](#under-evil-doom-spacemacs-with-evil)
+  - [A frame with only a startup page in it](#a-frame-with-only-a-startup-page-in-it)
+  - [Window management](#window-management)
+    - [Four behaviours](#four-behaviours)
+    - [Choosing one at startup](#choosing-one-at-startup)
+    - [Setting a behaviour yourself](#setting-a-behaviour-yourself)
+    - [One behaviour per kind, and the rest in detail](#one-behaviour-per-kind-and-the-rest-in-detail)
+    - [What each module does now](#what-each-module-does-now)
+  - [Presets](#presets)
+    - [Building one in a browser](#building-one-in-a-browser)
+- [Appendix: other commands](#appendix-other-commands)
+- [Appendix: how TGL lookups stay on target](#appendix-how-tgl-lookups-stay-on-target)
+
 # Prerequisites
 
 This package has been developed on Linux and GNU Emacs 29. It works on
