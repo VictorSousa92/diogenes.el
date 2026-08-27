@@ -1089,6 +1089,31 @@ Those four names are also the four **built-in presets**, so
 between them is one command. A preset can hold much more than a behaviour, and
 one of your own replaces a builtin of the same name — see [Presets](#presets).
 
+### Choosing one at startup
+
+Name it in your configuration and it is loaded when Diogenes loads:
+
+```elisp
+(use-package diogenes
+  :init
+  ;; One of the four. No folder needed: they are presets in their own right.
+  (setq diogenes-preset "split"))
+```
+
+For a preset of your own, say where the presets live as well — a name is no use
+without it:
+
+```elisp
+(use-package diogenes
+  :init
+  (setq diogenes-preset-directory "~/.emacs.d/diogenes-presets/")
+  (setq diogenes-preset "reading"))
+```
+
+Both in `:init`, so the name is set before the package reads it. Leave
+`diogenes-preset` unset and nothing is loaded until you ask with
+`M-x diogenes-load-preset`.
+
 ### Setting a behaviour yourself
 
 If you want one of the four and do not expect to switch, say so directly:
