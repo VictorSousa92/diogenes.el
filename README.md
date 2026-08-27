@@ -705,7 +705,6 @@ parse on the first lookup of a session. To do it:
 More detail:
  
 - Even without building it by hand, the parse result is cached in memory for the session and on disk (keyed by the OCR files' modification times), so it is paid at most once per machine and redone only if you re-OCR a volume. Building it explicitly with the commands above just gets that cost out of the way before your first lookup rather than during it.
-- The `.eld` file is **portable**: commit it alongside the volumes and other users skip the parse entirely.
 - Rebuild after adding or re-OCRing a volume (the file records a signature and warns when stale).
 - `diogenes-passow-clear-cache` / `diogenes-tgl-clear-cache` / `diogenes-bailly-clear-cache` discard the caches to force a rebuild.
 - Bailly's index is optional and quick: with poppler's `pdftotext` the whole dictionary is read in one pass in a few seconds (with pdf-tools alone it goes page by page and takes longer). If the PDF's folder is not writable the table is saved under `diogenes-bailly-cache-directory` instead.
@@ -860,6 +859,18 @@ Where the file has no entry and you know the headword, name it:
 - Consulted before Morpheus, so an entry here suppresses whatever Morpheus would have said. That is worth knowing: Morpheus returns the morphology as well as the lemma, where this can only say *"valdius does not parse; showing validus"* and open the entry.
 - So it earns its keep for forms Morpheus does not have either — the comparative and superlative of the adverb `valde` are a real example, its stems carrying the adverb without its comparison — and for a form where you want a headword other than the one either source picks.
 - Keys are matched through the same spelling variants as everything else, so one entry answers for the u/v and i/j spellings alike.
+
+**Greek has the same table**, `diogenes-greek-extra-lemmata`:
+
+```elisp
+(setq diogenes-greek-extra-lemmata
+      '(("οὑτοσί" . "οὗτος")
+        ("ταὐτόν"  . "αὐτός")))
+```
+
+Deictic and crasis forms are what it is mostly for: the wordlists carry the
+plain word and not `οὑτοσί`. Keys are compared as they stand and again stripped
+of their accents, so an entry written unaccented answers for the accented form.
 - On a machine with no Morpheus built, this is the only fallback there is.
 
 ### Forms the wordlists never saw
@@ -914,6 +925,20 @@ well as the morphology, and that matters more: a wrong lemma sends `o`, `t`,
 entry those keys open follows it.
 
 - `:info STRING` replaces the morphology of every analysis of that form; `:info ((OLD . NEW) …)` replaces only the ones reading OLD, for a form with several analyses of which one is wrong.
+- `:lemma STRING` replaces the headword, and the entry the dictionary keys open follows it — found by name among the dictionary's keys, so the spelling wants to be one the dictionary is keyed under. Where it cannot be found the morphology is still shown, with the caveat that the headword is a guess.
+
+**Greek has the same table**, `diogenes-greek-analysis-corrections`, taking the
+same keys:
+
+```elisp
+(setq diogenes-greek-analysis-corrections
+      '(("ᾖ" :info "pres subj act 3rd sg")))
+```
+
+The Greek data is wrong more often than the Latin rather than less — Morpheus
+knows less of it, and the LSJ keys some headwords differently from the form
+Morpheus gives — so if you have worked out what a form actually is, this is
+where to record it.
 - `:lemma STRING` replaces the headword. The entry the dictionary keys open follows it, found by name among the dictionary's keys — so the spelling wants to be one Lewis & Short is keyed under. Where it cannot be found the morphology is still shown, with the caveat that the headword is a guess.
 - `:add ((LEMMA . INFO) …)` adds analyses rather than replacing. `LEMMA` nil means the lemma the file already names — use this to record a missing reading while keeping the file's; a string is a headword, whose entry is then shown alongside.
 - Keys are the form as the file files it, and are matched through the same spelling variants as everything else, so one entry answers for `experire` and `experīre` alike.
@@ -1037,11 +1062,9 @@ None of the three is Spacemacs- or Doom-specific in what it does.
 which is how most people meet it, but anyone may load it — and so is
 persp-mode, whose buffer claiming is in the core for the same reason.
 
-### Where the buffers go, in one word
+### Four behaviours
 
-```elisp
-(setq diogenes-window-behaviour 'split)
-```
+There are four ways the windows can behave, and each has a name:
 
 | | |
 | --- | --- |
@@ -1061,7 +1084,32 @@ and without that fallback `split` would quietly become `reuse`.
 frame at all is `pop-up-frames`, which stays yours, since it governs the whole
 of Emacs.
 
-### Or in detail
+Those four names are also the four **built-in presets**, so
+`M-x diogenes-load-preset` offers them with nothing configured and switching
+between them is one command. A preset can hold much more than a behaviour, and
+one of your own replaces a builtin of the same name — see [Presets](#presets).
+
+### Setting a behaviour yourself
+
+If you want one of the four and do not expect to switch, say so directly:
+
+```elisp
+(setq diogenes-window-behaviour 'split)
+```
+
+That is the same thing the builtin preset does, and shorter. Two differences
+worth knowing:
+
+- A preset is loaded **after** your init file, so if you set both, the preset
+  wins. Use one or the other.
+- `diogenes-preset "split"` means *whatever `split` names*, so writing a
+  `split.el` of your own replaces it. The variable always means the behaviour.
+
+`M-x diogenes-list-presets` shows nothing loaded when you set the variable
+directly. That is correct rather than a fault: you have set a behaviour, not
+loaded a preset.
+
+### One behaviour per kind, and the rest in detail
 
 `diogenes-window-behaviour` also takes an **alist**, so the three kinds need
 not agree:
