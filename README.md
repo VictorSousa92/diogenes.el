@@ -40,7 +40,7 @@ below is added here.
   - [Install](#install)
   - [Configuration](#configuration)
   - [Looking a word up](#looking-a-word-up)
-    - [`C-c C-o` — any dictionary, by name](#c-c-c-o-any-dictionary-by-name)
+    - [`C-c C-o` — any dictionary, by name](#c-c-c-o--any-dictionary-by-name)
     - [In a lookup buffer](#in-a-lookup-buffer)
   - [`C-c C-c` on words](#c-c-c-c-on-words)
   - [Forgetting the keys](#forgetting-the-keys)
@@ -342,6 +342,12 @@ package is already there, so without it every start-up fails. Update with
 
 ## Configuration
 
+[**Open the configuration builder**](https://htmlpreview.github.io/?https://raw.githubusercontent.com/VictorSousa92/diogenes.el/modular-customizable/tools/diogenes-preset-builder.html#configuration)
+to fill this in by hand-holding rather than by hand: it asks what you run, takes
+your dictionary paths by drag-and-drop, records the keys you press, warns about
+a key something else already wants, and writes the block below with only what
+differs from the defaults. Or write it yourself:
+
 Settings go in `:init`, which runs before the package loads; anything that
 names something the package itself defines goes in `:config`, which runs
 after. Delete the dictionaries you do not have — an unset one is invisible
@@ -402,10 +408,17 @@ rather than broken.
   (setq diogenes-old-pdf-viewer 'auto)
 
   ;; Presets, both optional.  The folder is where presets of your own live;
-  ;; without one, `M-x diogenes-load-preset' offers the four builtins.  The
-  ;; second names a preset to load at startup, by file name.
+  ;; leave it unset and the four builtins are still offered.
+  ;;
+  ;;   "defer"   whatever you have installed decides -- the default
+  ;;   "reuse"   one window for entries, each replacing the last
+  ;;   "split"   an entry beside the text, later entries sharing it
+  ;;   "frames"  each kind in a frame of its own, entries gathered
+  ;;
+  ;; A builtin needs no folder.  For one of your own, name the file without
+  ;; its extension and set the folder as well.
   (setq diogenes-preset-directory "~/.emacs.d/diogenes-presets/")
-  (setq diogenes-preset "my-2024")
+  (setq diogenes-preset "my-preset")
 
   :config
   ;; Optional, if you use flyspell: it has nothing useful to say about Greek
@@ -1355,7 +1368,7 @@ the machine with the small screen. Those differ in a dozen variables at once.
 A preset is an ordinary Lisp file that sets them:
 
 ```elisp
-;;; my-2024.el --- Diogenes preset  -*- lexical-binding: t -*-
+;;; my-preset.el --- Diogenes preset  -*- lexical-binding: t -*-
 ;; Description: entries beside the text, scans in their own frame
 (setq diogenes-window-behaviour '((lookup . split) (dictionary . frames)))
 (setq diogenes-split-direction 'right)
@@ -1377,7 +1390,7 @@ what your file says.
 | `diogenes-preset` | a preset to load at startup, by name |
 
 `diogenes-preset` takes a name, not a behaviour: `(setq diogenes-preset
-"my-2024")` loads that file, where `(setq diogenes-window-behaviour 'my-2024)`
+"my-preset")` loads that file, where `(setq diogenes-window-behaviour 'my-preset)`
 would be a display rule that does not exist. Set both
 `diogenes-preset-directory` and `diogenes-preset` in `:init`, so the name is
 there before the package reads it.
@@ -1390,7 +1403,7 @@ particular about it and nothing else.
 
 ### Building one in a browser
 
-[**Open the preset builder**](https://htmlpreview.github.io/?https://github.com/VictorSousa92/diogenes.el/blob/modular-customizable/tools/diogenes-preset-builder.html)
+[**Open the preset builder**](https://htmlpreview.github.io/?https://raw.githubusercontent.com/VictorSousa92/diogenes.el/modular-customizable/tools/diogenes-preset-builder.html#presets)
 — or fetch [`tools/diogenes-preset-builder.html`](tools/diogenes-preset-builder.html)
 and open it locally, which is the same thing without the intermediary:
 
@@ -1409,11 +1422,15 @@ says which rule decided each step — a `C-c C-c` chain staying put, a lone
 startup window being taken, a second entry joining the first rather than
 splitting again, `q` returning to the entry.
 
+The tool has two tabs, and the `#` at the end of a link chooses which opens:
+`#presets` for this one, `#configuration` for the other. Without a fragment it
+opens on Configuration.
+
 GitHub serves a `.html` in a repository as text rather than as a page, so the
 plain repository link shows the source; the first link goes through
 htmlpreview, which fetches the file and renders it. To be rid of the
 intermediary, enable GitHub Pages for the repository and the builder is at
-`https://victorsousa92.github.io/diogenes.el/tools/diogenes-preset-builder.html`.
+`https://victorsousa92.github.io/diogenes.el/tools/diogenes-preset-builder.html#presets`.
 
 # Appendix: other commands
 
