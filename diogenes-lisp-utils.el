@@ -346,6 +346,113 @@ column; `diogenes-companion-direction\=' says otherwise."
       (when (window-live-p new)
         (window--display-buffer buffer new 'window alist)))))
 
+(defun diogenes--focus-role (role what)
+  "Raise and select the window or frame holding a buffer of role ROLE.
+WHAT names the kind, for the message when there is none."
+  (let ((window (diogenes--window-of-role role)))
+    (if (not window)
+        (message "No %s window open" what)
+      (let ((frame (window-frame window)))
+        (unless (eq frame (selected-frame))
+          (select-frame-set-input-focus frame))
+        (select-window window)))))
+
+;;;###autoload
+(defun diogenes-focus-lookup ()
+  "Go to the entry -- raising its frame if it is in one."
+  (interactive)
+  (diogenes--focus-role 'lookup "lookup"))
+
+;;;###autoload
+(defun diogenes-focus-browser ()
+  "Go to the corpus browser -- raising its frame if it is in one."
+  (interactive)
+  (diogenes--focus-role 'browser "browser"))
+
+;;;###autoload
+(defun diogenes-focus-dictionary ()
+  "Go to the scanned dictionary -- raising its frame if it is in one."
+  (interactive)
+  (diogenes--focus-role 'dictionary "dictionary"))
+
+;;;###autoload
+(defun diogenes-focus-morphology ()
+  "Go to the analysis -- raising its frame if it is in one."
+  (interactive)
+  (diogenes--focus-role 'morphology "analysis"))
+
+(defcustom diogenes-focus-keys
+  '((diogenes-focus-browser    . "C-c C-b")
+    (diogenes-focus-lookup     . "C-c C-l")
+    (diogenes-focus-morphology . "C-c C-a")
+    (diogenes-focus-dictionary . "C-c C-s"))
+  "Keys for going from one Diogenes window to another, as (COMMAND . KEY).
+Bound in the Diogenes buffers themselves -- an entry, a passage, an analysis, a
+scanned page -- since going from one to another is something one does while in
+one of them.  Nil for a key binds nothing.
+
+`C-c\=' and a letter is reserved for the user by the Emacs conventions, and
+`C-c C-<letter>\=' belongs to the major mode; these are major-mode maps, so
+these are ours to take.  Under evil the read-only buffers are in Emacs state,
+so the chords work there without further arrangement.
+
+`C-c C-s\=' for the SCANNED page, which wants explaining twice over.  Not
+`C-c C-d\=': KDE Plasma claims Ctrl-D for its own window management and the
+sequence never arrives at Emacs.  And not `C-c C-e\=' either, which
+`diogenes-purpose\=' used for this and which is
+`diogenes-old-visit-dictionary-key\=' -- that OPENS a page where this GOES to one
+already open, two different wishes that should not share a key.
+
+`diogenes-purpose\=' bound `C-c C-b\=' and `C-c C-l\=' to commands of its own before
+these existed.  It no longer does: the keys are the same and the commands are
+in the core, so they work whether purpose is loaded or not.
+
+These matter most when the kinds are in FRAMES, where there is no window to move
+to with `C-x o\=' -- but they work within a frame as well, which is why they are
+bound whatever `diogenes-window-behaviour\=' says.
+
+Set to nil to bind none of them.  The commands remain, and the `diogenes\='
+menu offers them under `w\='."
+  :type '(choice (const :tag "Bind none" nil)
+                 (alist :key-type function
+                        :value-type (choice key-sequence
+                                            (const :tag "Unbound" nil))))
+  :group 'diogenes)
+
+(defvar diogenes--focus-maps
+  '(diogenes-lookup-mode-map
+    diogenes-analysis-mode-map
+    diogenes-browser-mode-map
+    diogenes-search-mode-map
+    diogenes-select-forms-mode-map
+    diogenes-corpus-mode-map
+    pdf-view-mode-map
+    doc-view-mode-map
+    reader-mode-map)
+  "The maps the focus keys are bound in.
+Every buffer one might be reading FROM, including the document viewers: a
+scanned page is where one is most likely to want the entry back.")
+
+;;;###autoload
+(defun diogenes-install-focus-keys ()
+  "Bind `diogenes-focus-keys\=' in the Diogenes buffers.
+Called for its effect at load, and again after changing the option.  A key the
+option no longer names is left alone rather than hunted down: unbinding by hand
+is `keymap-unset\=', and guessing at what a reader may have bound themselves is
+worse than leaving one key too many."
+  (interactive)
+  (dolist (map-symbol diogenes--focus-maps)
+    (when (boundp map-symbol)
+      (let ((map (symbol-value map-symbol)))
+        (dolist (cell diogenes-focus-keys)
+          (when (and (cdr cell) (keymapp map))
+            (condition-case nil
+                (keymap-set map (cdr cell) (car cell))
+              ;; A viewer may have made its map something `keymap-set' will not
+              ;; take; that is its business, and one map refusing is no reason
+              ;; to leave the others unbound.
+              (error nil))))))))
+
 (defun diogenes-display-in-role-frame (buffer alist)
   "Show BUFFER in the frame its kind already occupies, if there is one.
 A `display-buffer\=' action function.  `display-buffer-reuse-window\=' cannot

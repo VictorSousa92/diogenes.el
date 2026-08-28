@@ -157,34 +157,24 @@ are the mode hooks that claimed a buffer for the workspace."
 
 (defun diogenes-doom--focus (role what)
   "Raise and select the frame holding a buffer of role ROLE.
-WHAT names the kind, for the message when there is none."
-  (let ((window (diogenes-doom--window-of-role role)))
-    (if (not window)
-        (message "No %s frame open" what)
-      (let ((frame (window-frame window)))
-        (select-frame-set-input-focus frame)
-        (select-window window)))))
+WHAT names the kind, for the message when there is none.
+
+Kept for anyone who bound it: the work is `diogenes--focus-role\=' in the core
+now, nothing about going from one window to another being particular to Doom."
+  (diogenes--focus-role role what))
 
 ;;;###autoload
-(defun diogenes-doom-focus-lookup-frame ()
-  "Raise the frame showing a dictionary entry or an analysis."
-  (interactive)
-  (diogenes-doom--focus 'lookup "lookup"))
+(defalias 'diogenes-doom-focus-lookup-frame #'diogenes-focus-lookup
+  "Renamed: `diogenes-focus-lookup\=', and available in any Emacs.")
 
 ;;;###autoload
-(defun diogenes-doom-focus-browser-frame ()
-  "Raise the frame showing the corpus browser."
-  (interactive)
-  (diogenes-doom--focus 'browser "browser"))
+(defalias 'diogenes-doom-focus-browser-frame #'diogenes-focus-browser
+  "Renamed: `diogenes-focus-browser\=', and available in any Emacs.")
 
 ;;;###autoload
-(defun diogenes-doom-focus-dictionary-frame ()
-  "Raise the frame showing a dictionary PDF.
-Only finds one if `diogenes-doom-dictionary-regexps' names it."
-  (interactive)
-  (diogenes-doom--focus 'dictionary "dictionary"))
+(defalias 'diogenes-doom-focus-dictionary-frame #'diogenes-focus-dictionary
+  "Renamed: `diogenes-focus-dictionary\=', and available in any Emacs.")
 
-;;;###autoload
 (defun diogenes-doom-delete-frames ()
   "Close every frame whose buffer is a Diogenes buffer.
 The way back from a screenful of entries.  A frame showing anything else as

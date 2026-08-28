@@ -1355,6 +1355,54 @@ as often as it mended a broken one."
         (at "virumque")
         (should-not (diogenes-browser--word-at-point-joined))))))
 
+(ert-deftest diogenes-test-focus-keys-are-everyones ()
+  "Going from one Diogenes window to another is bound in any Emacs.
+The commands were in `diogenes-doom.el' and bound nowhere, so they were
+`M-x'-only and, by their names, looked like Doom's business.  Nothing about
+raising a window is particular to a distribution."
+  ;; In the core, and one per kind.
+  (dolist (command '(diogenes-focus-browser diogenes-focus-lookup
+                     diogenes-focus-dictionary diogenes-focus-morphology))
+    (should (fboundp command))
+    (should (commandp command)))
+  ;; The old names still answer, so nobody's binding breaks.
+  (dolist (old '(diogenes-doom-focus-lookup-frame
+                 diogenes-doom-focus-browser-frame
+                 diogenes-doom-focus-dictionary-frame))
+    (should (fboundp old)))
+  ;; Every key in the table names a command that exists, and no key collides
+  ;; with a dictionary letter -- these are chords, so they cannot, but the
+  ;; assertion is what keeps that true if someone shortens one.
+  (dolist (cell diogenes-focus-keys)
+    (should (fboundp (car cell)))
+    (when (cdr cell)
+      ;; `C-c C-<letter>' -- the major mode's by convention, which these maps
+      ;; are.
+      (should (string-match-p "\\`C-c C-[a-z]\\'" (cdr cell)))))
+  ;; And no focus key is a key the lookup buffer already uses for something
+  ;; else.  `C-c C-e' was the tempting one for the scanned page and is
+  ;; `diogenes-old-visit-dictionary-key', which OPENS a page where this goes to
+  ;; one already open -- two wishes, and they should not share a key.
+  (let ((theirs (delq nil (mapcar #'cdr diogenes-lookup-keys)))
+        (visit (and (boundp 'diogenes-old-visit-dictionary-key)
+                    diogenes-old-visit-dictionary-key)))
+    (dolist (cell diogenes-focus-keys)
+      (when (cdr cell)
+        (should-not (member (cdr cell) theirs))
+        (when visit (should-not (equal (cdr cell) visit))))))
+  ;; `C-c C-d' is deliberately unused: KDE Plasma takes Ctrl-D for its own
+  ;; window management and the sequence never reaches Emacs.
+  (should-not (member "C-c C-d" (mapcar #'cdr diogenes-focus-keys)))
+  ;; And installing them binds where a reader would press them: in a lookup
+  ;; buffer, and in a scanned page, which is where one most wants the entry
+  ;; back.
+  (when (boundp 'diogenes-lookup-mode-map)
+    (diogenes-install-focus-keys)
+    (dolist (cell diogenes-focus-keys)
+      (when (cdr cell)
+        (should (eq (lookup-key diogenes-lookup-mode-map (kbd (cdr cell)))
+                    (car cell)))))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

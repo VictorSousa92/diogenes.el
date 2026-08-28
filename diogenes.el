@@ -98,6 +98,15 @@
 ;; Presets: a directory of files, each a set of settings, switched between with
 ;; `M-x diogenes-load-preset'.  Does nothing until there is a preset to load.
 (require 'diogenes-presets)
+
+;; The focus keys, once the maps they go in exist.  Each mode's file may load
+;; at any time -- a viewer's not until a scan is opened -- so the installer is
+;; run after each rather than once and hopefully late enough.
+(dolist (feature '(diogenes-perseus diogenes-browser diogenes-search
+                   diogenes-corpora diogenes-forms pdf-view doc-view reader))
+  (with-eval-after-load feature
+    (when (fboundp 'diogenes-install-focus-keys)
+      (diogenes-install-focus-keys))))
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)
 ;(require 'diogenes-window)
@@ -607,7 +616,12 @@ user interface."
     ("dc" "Dump from the Christian Inscriptions" diogenes-dump-chr)
     ("dm" "Dump from the Miscellaneous PHI Texts" diogenes-dump-misc)]]
   ["CUSTOM CORPORA"
-   ("c" "Manage custom search corpora" diogenes-manage-user-corpora)])
+   ("c" "Manage custom search corpora" diogenes-manage-user-corpora)]
+  ["GOING BETWEEN THEM"
+   ("wb" "Go to the text" diogenes-focus-browser)
+   ("wl" "Go to the entry" diogenes-focus-lookup)
+   ("wa" "Go to the analysis" diogenes-focus-morphology)
+   ("wd" "Go to the scanned page" diogenes-focus-dictionary)])
 
 (provide 'diogenes)
 

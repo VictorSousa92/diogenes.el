@@ -353,17 +353,13 @@ and is writable."
                   (diogenes-browser . diogenes-browser-mode-map)))
     (let ((feature (car spec))
           (map (cdr spec)))
-      (with-eval-after-load feature
-        (when (boundp map)
-          ;; `C-c C-e', not the `C-c C-d' the mnemonic wants: KDE Plasma
-          ;; claims Ctrl-D for window management and the sequence never
-          ;; arrives.
-          (keymap-set (symbol-value map) "C-c C-e"
-                      #'diogenes-purpose-focus-dictionary-window)
-          (keymap-set (symbol-value map) "C-c C-l"
-                      #'diogenes-purpose-focus-lookup-window)
-          (keymap-set (symbol-value map) "C-c C-b"
-                      #'diogenes-purpose-focus-browser-window))))))
+      ;; The KEYS are no longer bound here.  `diogenes-focus-keys' binds
+      ;; `C-c C-b', `C-c C-l', `C-c C-a' and `C-c C-s' in the core, to commands
+      ;; that raise a window or a frame whichever this module is doing -- so a
+      ;; reader has the same four keys with purpose and without it, which is
+      ;; what they should have had from the start.  The commands below remain
+      ;; for anyone who bound them.
+      (ignore feature map))))
 
 (defun diogenes-purpose--uninstall-focus ()
   "Undo `diogenes-purpose--install-focus'."
