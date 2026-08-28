@@ -1929,11 +1929,22 @@ function warnFor(key, context) {
 function normalisePath(raw) {
   if (!raw) return null;
   let s = String(raw).trim();
-  // Explorer quotes; so does a shell drag on some desktops.
-  s = s.replace(/^["']+/, '').replace(/["']+$/, '');
+  // Quotes of every kind that a `copy as path' produces: Explorer's double,
+  // the Finder's single, and the curly pair that macOS and several editors
+  // substitute for straight ones.
+  s = s.replace(/^["'\u2018\u2019\u201c\u201d`]+/, '')
+       .replace(/["'\u2018\u2019\u201c\u201d`]+$/, '');
   if (!s) return null;
+  // A BACKSLASH-ESCAPED SPACE is a shell's quoting, not a separator: dragging
+  // into a Terminal gives `/Users/x/Diogenes\ Data', and turning that
+  // backslash into a slash made `Diogenes/ Data' -- a path that does not exist,
+  // produced silently.  Unescape those before anything else touches a
+  // backslash.
+  s = s.replace(/\\([ ()'\u0022&])/g, '$1');
+  // What remains is a Windows separator.  Forward slashes work everywhere Emacs
+  // runs, and spare an Emacs string a line of doubled backslashes.
   s = s.replace(/\\/g, '/');
-  // `///C:/...' from a URI: the slash before a drive letter is not the path.
+  // `/C:/...' from a URI: the slash before a drive letter is not the path.
   s = s.replace(/^\/([A-Za-z]:)/, '$1');
   return s;
 }
