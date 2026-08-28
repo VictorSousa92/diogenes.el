@@ -17,13 +17,13 @@
 ;; This module fixes that the purpose-native way, by giving the Diogenes
 ;; buffers purposes of their OWN, keyed on their major mode:
 ;;
-;;   * lookup / analysis buffers -> purpose `diogenes-lookup'
-;;   * the corpus browser         -> purpose `diogenes-browser'
+;;   * dictionary entries        -> purpose `diogenes-lookup'
+;;   * analyses and form lists   -> purpose `diogenes-morphology'
+;;   * the corpus browser        -> purpose `diogenes-browser'
 ;;
-;; With distinct purposes, purpose keeps each family in its own window: all
-;; lookups share one `diogenes-lookup' window, and the browser keeps its own
-;; `diogenes-browser' window, so a lookup no longer lands on top of the
-;; browser.  This needs no change to Diogenes.
+;; With distinct purposes, purpose keeps each family in its own window: entries
+;; share one, analyses another, and the browser keeps its own, so none of the
+;; three lands on top of another.  This needs no change to Diogenes.
 ;;
 ;; Dictionary PDFs are intentionally NOT purposed here.  purpose.el (at
 ;; least this Spacemacs version) offers no per-buffer purpose setter and
@@ -66,20 +66,27 @@
 
 (defcustom diogenes-purpose-mode-purposes
   '((diogenes-lookup-mode   . diogenes-lookup)
-    (diogenes-analysis-mode . diogenes-lookup)
+    (diogenes-analysis-mode . diogenes-morphology)
     (diogenes-browser-mode  . diogenes-browser))
   "Alist mapping Diogenes major modes to window-purposes.
-Lookups and morphological analyses share the `diogenes-lookup'
-purpose so they reuse one window; the corpus browser gets its own
-`diogenes-browser' purpose so a lookup never displaces it.  Each
-entry is (MAJOR-MODE . PURPOSE)."
+Three families, each keeping its own window: entries, morphological analyses,
+and the corpus browser.  Each entry is (MAJOR-MODE . PURPOSE).
+
+The analyses had `diogenes-lookup' with the entries, so an analysis replaced
+the entry a reader had just looked up -- which is the entry they wanted the
+analysis beside.  An entry is what a dictionary says about a word and an
+analysis is what the morphology says about a form; they are consulted
+together."
   :type '(alist :key-type symbol :value-type symbol)
   :group 'diogenes)
 
 (defcustom diogenes-purpose-regexp-purposes
   '(("\\`\\*diogenes-lookup" . diogenes-lookup)
-    ("\\`\\*Diogenes Analysis" . diogenes-lookup)
-    ("\\`\\*Diogenes Forms" . diogenes-lookup)
+    ;; A purpose of their own, for the same reason they are a display kind of
+    ;; their own: an analysis and an entry are consulted together, so purpose
+    ;; must not file them in one window.
+    ("\\`\\*Diogenes Analysis" . diogenes-morphology)
+    ("\\`\\*Diogenes Forms" . diogenes-morphology)
     ("\\`\\*diogenes-browser" . diogenes-browser))
   "Buffer-name regexps and the window-purpose each names.
 The MODE table below says the same thing and cannot be relied on, which is

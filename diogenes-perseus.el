@@ -3452,8 +3452,11 @@ headword, exactly as the application does."
 
 (defun diogenes--add-parse-entry ()
   "Get or create an Diogenes Analysis buffer, and begin a new entry."
+  ;; `morphology' and not `lookup': an analysis is not an entry, and displaying
+  ;; it as one made it replace whatever entry the reader was consulting -- which
+  ;; is the entry they wanted the analysis alongside.
   (diogenes--display-buffer (get-buffer-create "*Diogenes Analysis*")
-			    :kind 'lookup)
+			    :kind 'morphology)
   (goto-char (point-max))
   (unless (eq major-mode #'diogenes-analysis-mode)
     (diogenes-analysis-mode))
@@ -3627,7 +3630,7 @@ if nil, query interactively for their values"
   (let ((results (diogenes--get-all-forms lemma lang)))
     (unless results (error "No result for %s in %s" lemma lang))
     (diogenes--display-buffer (get-buffer-create "*Diogenes Forms*")
-			      :kind 'lookup)
+			      :kind 'morphology)
     (diogenes-analysis-mode)
     (goto-char (point-max))
     (save-excursion
@@ -3648,7 +3651,7 @@ if nil, query interactively for their values"
    (let ((results (diogenes--query-all-lemmata query lang filter ignore-case no-diacritics)))
      (unless results (error "No results for lemma %s!" query))
      (diogenes--display-buffer (get-buffer-create "*Diogenes Forms*")
-			      :kind 'lookup)
+			      :kind 'morphology)
      (diogenes-analysis-mode)
      (goto-char (point-max))
      (insert (propertize (format "Results for %s:\n" query)

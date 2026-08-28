@@ -198,7 +198,8 @@ cannot have leaves part of its tile empty."
   :group 'diogenes)
 
 (defcustom diogenes-role-regexps
-  '(("\\`\\*\\(?:diogenes-lookup\\|Diogenes Analysis\\|Diogenes Forms\\)" . lookup)
+  '(("\\`\\*diogenes-lookup" . lookup)
+    ("\\`\\*Diogenes \\(?:Analysis\\|Forms\\)" . morphology)
     ("\\`\\*diogenes-browser" . browser)
     ("\\`\\*diogenes-search" . search))
   "Buffer names and the kind of frame each belongs in.
@@ -230,8 +231,12 @@ Consulted after `diogenes-role-regexps\=', for a buffer already in its mode
 -- which a document buffer is, `find-file\=' having set it before display.")
 
 (defun diogenes--buffer-role (buffer)
-  "Which frame BUFFER belongs in: `lookup\=', `browser\=', `dictionary\=' or nil.
-By name first and by major mode second: see `diogenes-role-regexps\='."
+  "Which frame BUFFER belongs in, or nil.
+One of `lookup\=', `morphology\=', `browser\=', `dictionary\=' or `search\='.
+By name first and by major mode second: see `diogenes-role-regexps\='.
+
+BUFFER may be a buffer or a name, but it has to EXIST: a name for a buffer that
+has not been created answers nil."
   (when-let* ((buffer (get-buffer buffer))
               (name (buffer-name buffer)))
     (or (cdr (cl-find-if (lambda (rule) (string-match-p (car rule) name))
@@ -314,7 +319,8 @@ things and there is no reason they should agree:
     ;; the text stays where it is, entries share a window beside it,
     ;; and a scan gets a frame of its own
     (setq diogenes-window-behaviour
-          \='((browser . defer) (lookup . split) (dictionary . frames)))
+          \='((browser . defer) (lookup . split)
+            (dictionary . frames) (morphology . split)))
 
 A kind the alist does not mention falls back to `defer\='.  `frames\=' for any
 kind switches the gathering on for all of them, the gathering being about
@@ -450,6 +456,9 @@ entry needs somewhere new."
 
 (defun diogenes--behaviour-for (kind)
   "What `diogenes-window-behaviour\=' says about KIND.
+The kinds are `browser\=', `lookup\=', `dictionary\=' and `morphology\=' -- a
+passage, an entry, a scanned page, and an analysis or list of forms.
+
 A word applies to every kind; an alist answers per kind, and a kind it does
 not mention gets `defer\='."
   (if (and (consp diogenes-window-behaviour)
@@ -511,10 +520,24 @@ the other two."
         ('lookup diogenes-lookup-display-action)
         ('browser diogenes-browser-display-action)
         ('dictionary diogenes-dictionary-display-action)
+        ('morphology diogenes-morphology-display-action)
         (_ nil))
       ;; `defer' yields nil, there being nothing for it to be: it means that
       ;; no action of ours is passed at all.
       (diogenes--behaviour-action (diogenes--behaviour-for kind) kind)))
+
+(defcustom diogenes-morphology-display-action nil
+  "Where an analysis or a list of forms appears, or nil for the shorthand.
+A `display-buffer\=' action, as `diogenes-lookup-display-action\=' is.
+
+These buffers -- `*Diogenes Analysis*\=' and `*Diogenes Forms*\=' -- used to be
+displayed as lookups, and so replaced whatever entry one was reading.  They are
+a different thing: an entry is what a dictionary says about a word, and an
+analysis is what the morphology says about a form, and a reader consulting one
+about the other wants both on the screen at once."
+  :type '(choice (const :tag "Follow diogenes-window-behaviour" nil)
+                 (sexp :tag "A display-buffer action"))
+  :group 'diogenes)
 
 (defcustom diogenes-claim-buffers t
   "Whether a Diogenes buffer is claimed by the perspective it appears in.

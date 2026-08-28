@@ -491,7 +491,7 @@ buffer being killed, which it was not."
     (should (buffer-live-p buffer))))
 
 (ert-deftest diogenes-test-purpose-regexps-cover-numbered-buffers ()
-  "Every lookup buffer a lookup can make is classified by name.
+  "Every buffer a lookup or an analysis can make is classified by name.
 Regression: window-purpose classifies by MAJOR MODE, and a lookup buffer has
 none yet when it is displayed -- so purpose filed entries under `general' and
 showed them in the window the reader was reading in.  Names work where modes
@@ -502,14 +502,21 @@ An earlier test here asserted that a macro bound `purpose-action-function'
 to `ignore'.  No such variable exists, so it passed while checking nothing --
 which is the second time in this suite's short life, and the reason this one
 asserts against real buffer names instead of a mechanism."
-  (let ((names '("*diogenes-lookup*" "*diogenes-lookup<2>*"
-                 "*diogenes-lookup<17>*" "*Diogenes Analysis*"
-                 "*Diogenes Forms*")))
-    (dolist (name names)
-      (should (eq 'diogenes-lookup
-                  (cdr (cl-find-if (lambda (rule)
-                                     (string-match-p (car rule) name))
-                                   diogenes-purpose-regexp-purposes))))))
+  (let ((purpose-of
+         (lambda (name)
+           (cdr (cl-find-if (lambda (rule) (string-match-p (car rule) name))
+                            diogenes-purpose-regexp-purposes)))))
+    ;; Entries, including the numbered buffers each new one gets.
+    (dolist (name '("*diogenes-lookup*" "*diogenes-lookup<2>*"
+                    "*diogenes-lookup<17>*"))
+      (should (eq 'diogenes-lookup (funcall purpose-of name))))
+    ;; The analyses have a purpose of their OWN: they used to share
+    ;; `diogenes-lookup' with the entries, so an analysis replaced the entry it
+    ;; was consulted about.  This test asserted that sharing, and failed when it
+    ;; ended -- which is the test doing its job.
+    (dolist (name '("*Diogenes Analysis*" "*Diogenes Forms*"
+                    "*Diogenes Analysis<2>*"))
+      (should (eq 'diogenes-morphology (funcall purpose-of name)))))
   (should (eq 'diogenes-browser
               (cdr (cl-find-if (lambda (rule)
                                  (string-match-p (car rule) "*diogenes-browser*"))
@@ -1112,6 +1119,41 @@ guess at what is meant, and neither buffer gives anything to guess from."
     ;; point: the point is that a plain buffer answers and a page image does
     ;; not.
     (should (diogenes-pdf-search--default-word))))
+
+(ert-deftest diogenes-test-morphology-is-not-a-lookup ()
+  "An analysis is displayed as its own kind, not as an entry.
+`*Diogenes Analysis*' and `*Diogenes Forms*' were displayed with `:kind
+\'lookup', so an analysis replaced the entry the reader had just looked up --
+the entry they wanted it beside.  An entry is what a dictionary says about a
+word; an analysis is what the morphology says about a form; the two are
+consulted together."
+  ;; Its own role, so the gathering gives it its own frame.  The buffers have
+  ;; to EXIST: `diogenes--buffer-role' takes a buffer or a name and calls
+  ;; `get-buffer' on it, so a name alone answers nil.
+  (dolist (case '(("*Diogenes Analysis*" . morphology)
+                  ("*Diogenes Forms*"    . morphology)
+                  ("*diogenes-lookup*"   . lookup)
+                  ("*diogenes-browser*"  . browser)))
+    (let ((buffer (get-buffer-create (car case))))
+      (unwind-protect
+          (should (eq (diogenes--buffer-role buffer) (cdr case)))
+        (kill-buffer buffer))))
+  ;; Its own action, and its own place in the behaviour alist.
+  (should (boundp 'diogenes-morphology-display-action))
+  (let ((diogenes-morphology-display-action '(display-buffer-same-window))
+        (diogenes-lookup-display-action nil))
+    (should (equal (diogenes--display-action 'morphology)
+                   '(display-buffer-same-window))))
+  (let ((diogenes-window-behaviour '((lookup . reuse) (morphology . split)))
+        (diogenes-morphology-display-action nil))
+    (should (eq (diogenes--behaviour-for 'morphology) 'split))
+    (should (eq (diogenes--behaviour-for 'lookup) 'reuse)))
+  ;; Under window-purpose too, where they shared `diogenes-lookup'.
+  (when (boundp 'diogenes-purpose-mode-purposes)
+    (should (eq (cdr (assq 'diogenes-analysis-mode diogenes-purpose-mode-purposes))
+                'diogenes-morphology))
+    (should (eq (cdr (assq 'diogenes-lookup-mode diogenes-purpose-mode-purposes))
+                'diogenes-lookup))))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
