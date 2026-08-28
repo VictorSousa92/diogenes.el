@@ -183,7 +183,7 @@
      shape, so capping the width is all that is needed and the frames stay the
      shape of a screen. */
   .frames { display: flex; flex-direction: column; gap: .6rem;
-            width: 75%; min-width: 18rem; margin-inline: auto; }
+            width: 65%; min-width: 16rem; margin-inline: auto; }
   /* ON ITS SIDE, the same screen stood on its end: the width it now has is the
      height it had, and the height it now has is the width it had.  Both
      measurements are kept and exchanged, which is what turning a monitor does
@@ -1184,8 +1184,11 @@ function render() {
       // The landscape frame's HEIGHT becomes the rotated frame's WIDTH; the
       // inverted ratio then gives back the landscape frame's width as the new
       // height.  Nothing is scaled, only turned.
+      // 0.65 to match the width the landscape frames take: the rotated width is
+      // the landscape HEIGHT, so the fraction has to be the same one or the
+      // rotation would change the scale as well as the orientation.
       frames.style.setProperty('--framew',
-                               Math.round(pane * 0.75 / base) + 'px');
+                               Math.round(pane * 0.65 / base) + 'px');
     } else {
       frames.style.removeProperty('--framew');
     }
