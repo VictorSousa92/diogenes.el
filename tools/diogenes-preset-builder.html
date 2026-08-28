@@ -440,6 +440,7 @@
   </div>
   <p class="note">Only what differs from the default is written, so the block
      says what is particular about your installation and nothing else.</p>
+  <p class="note" id="c-wherenote"></p>
 </section>
 </main>
 
@@ -1392,10 +1393,38 @@ function configText() {
   const dpath = el('c-path').value.trim();
   const morph = el('c-morpheus').value.trim();
 
-  out.push('(use-package diogenes');
-  out.push('  :vc (:url "https://github.com/VictorSousa92/diogenes.el"');
-  out.push('       :branch "modular-customizable")');
-  out.push('  :init');
+  // HOW a package is installed differs by distribution, and writing
+  // `use-package''s `:vc' for all three was wrong for two of them: Doom
+  // installs through straight from `packages.el', where `:vc' is an
+  // unrecognised keyword and an error; Spacemacs has its own list.  Only a
+  // plain Emacs uses `:vc', and only from version 30.
+  const distro = (document.querySelector('input[name=distro]:checked') || {}).value
+                 || 'vanilla';
+  if (distro === 'doom') {
+    out.push(';; ---- in ~/.config/doom/packages.el ----');
+    out.push('(package! diogenes');
+    out.push('  :recipe (:host github');
+    out.push('           :repo "VictorSousa92/diogenes.el"');
+    out.push('           :branch "modular-customizable"))');
+    out.push('');
+    out.push(';; ---- in ~/.config/doom/config.el ----');
+    out.push('(use-package! diogenes');
+    out.push('  :init');
+  } else if (distro === 'spacemacs') {
+    out.push(';; ---- in dotspacemacs/layers, under dotspacemacs-additional-packages ----');
+    out.push(';;   (diogenes :location (recipe :fetcher github');
+    out.push(';;                              :repo "VictorSousa92/diogenes.el"');
+    out.push(';;                              :branch "modular-customizable"))');
+    out.push('');
+    out.push(';; ---- in dotspacemacs/user-config ----');
+    out.push('(use-package diogenes');
+    out.push('  :init');
+  } else {
+    out.push('(use-package diogenes');
+    out.push('  :vc (:url "https://github.com/VictorSousa92/diogenes.el"');
+    out.push('       :branch "modular-customizable")   ; Emacs 30 and later');
+    out.push('  :init');
+  }
   out.push(`  (setq diogenes-path ${JSON.stringify(dpath || "/path/to/diogenes")})`);
   if (morph) out.push(`  (setq diogenes-morpheus-directory ${JSON.stringify(morph)})`);
   if (paths.length) { out.push(''); out.push('  ;; The dictionaries you have.'); out.push(...paths); }
@@ -2106,8 +2135,29 @@ function renderWarnings() {
     show(k[0], document.querySelector(`input[data-singlekey="${k[0]}"]`)));
 }
 
+function renderWhereNote() {
+  const distro = (document.querySelector('input[name=distro]:checked') || {}).value
+                 || 'vanilla';
+  const note = el('c-wherenote');
+  if (!note) return;
+  note.innerHTML =
+    distro === 'doom'
+      ? 'Doom installs packages from <code>packages.el</code> and configures ' +
+        'them in <code>config.el</code>, so the block is in two parts and each ' +
+        'says which file it belongs to. <code>doom sync -u</code> after editing ' +
+        '<code>packages.el</code>.'
+      : distro === 'spacemacs'
+      ? 'Spacemacs installs from <code>dotspacemacs-additional-packages</code> ' +
+        'and configures in <code>dotspacemacs/user-config</code>, so the recipe ' +
+        'is shown commented for you to paste into the list.'
+      : '<code>:vc</code> needs Emacs 30 or later. On an earlier Emacs, install ' +
+        'with <code>package-vc-install</code> or clone the repository and use ' +
+        '<code>:load-path</code>.';
+}
+
 function renderConfig() {
   el('c-out').textContent = configText();
+  renderWhereNote();
   installPathHelpers();
   installKeyCapture();
   renderWarnings();

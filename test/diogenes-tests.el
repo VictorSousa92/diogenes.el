@@ -1075,6 +1075,44 @@ some headwords differently from the form Morpheus gives."
   (let ((diogenes-greek-extra-lemmata nil))
     (should-not (diogenes--extra-lemma "οὑτοσί" "greek"))))
 
+(ert-deftest diogenes-test-no-default-from-a-buffer-that-is-not-a-text ()
+  "A lookup takes no default from a startup screen or a page image.
+`thing-at-point' has no opinion about where it is, so the prompt offered
+`Welcome' in a dashboard and `%PDF' in a scanned dictionary -- the first four
+bytes of the file -- and a reader pressing RET looked that up.  A default is a
+guess at what is meant, and neither buffer gives anything to guess from."
+  ;; Every startup buffer, by the names the distributions actually use --
+  ;; `rename-buffer' with UNIQUE would append <2> and defeat the test, so the
+  ;; names are used as they are and the buffers killed after.
+  (dolist (name '("*spacemacs*" "*doom*" "*doom-dashboard*" "*dashboard*"
+                  "*GNU Emacs*" "*About GNU Emacs*"))
+    (let ((buffer (get-buffer-create name)))
+      (unwind-protect
+          (with-current-buffer buffer
+            (erase-buffer)
+            (insert "Welcome to Emacs")
+            (goto-char 3)
+            (should-not (diogenes--word-at-point-for-lookup)))
+        (kill-buffer buffer))))
+  ;; An ordinary buffer still answers, the guess being a good one there.
+  (with-temp-buffer
+    (rename-buffer " *diogenes-test-plain*" t)
+    (insert "arma virumque")
+    (goto-char 3)
+    (should (equal (diogenes--word-at-point-for-lookup) "arma")))
+  ;; And the PDF path offers nothing rather than the file's bytes.
+  (with-temp-buffer
+    (insert "%PDF-1.7")
+    (goto-char 2)
+    (let ((major-mode 'pdf-view-mode))
+      (should-not (diogenes-pdf-search--default-word)))
+    ;; ...while a plain buffer still offers what is at point.  WHAT exactly
+    ;; depends on the syntax table -- in `fundamental-mode' `%' is a word
+    ;; constituent, so this returns `%PDF' and not `PDF' -- which is not the
+    ;; point: the point is that a plain buffer answers and a page image does
+    ;; not.
+    (should (diogenes-pdf-search--default-word))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

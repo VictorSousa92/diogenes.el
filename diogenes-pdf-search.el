@@ -322,15 +322,27 @@ logic, so results agree with that dictionary's link/opener command."
 
 (defun diogenes-pdf-search--default-word ()
   "Return a sensible default word for the prompt, or nil.
-Prefers the PDF's active text selection (pdf-tools lets you select
-text with the mouse), then the word at point in a plain buffer."
-  (or (and (derived-mode-p 'pdf-view-mode)
-           (fboundp 'pdf-view-active-region-p)
-           (pdf-view-active-region-p)
-           (fboundp 'pdf-view-active-region-text)
-           (let ((txt (car (pdf-view-active-region-text))))
-             (and txt (string-trim txt))))
-      (thing-at-point 'word t)))
+The PDF's own text selection, where there is one: pdf-tools lets one select
+text with the mouse, and that is a word the reader has pointed at.
+
+And NOTHING otherwise, in a document buffer.  `thing-at-point\=' there reads the
+buffer's text, which is the bytes of the file -- so the prompt offered `%PDF\=',
+the first four of them, and a reader pressing RET looked that up.  A default is
+a guess at what is meant, and there is nothing in a page image to guess from.
+
+In a plain buffer -- the command is not confined to scans -- the word at point
+is the sensible guess and is used."
+  (cond
+   ((and (derived-mode-p 'pdf-view-mode)
+         (fboundp 'pdf-view-active-region-p)
+         (pdf-view-active-region-p)
+         (fboundp 'pdf-view-active-region-text))
+    (let ((txt (car (pdf-view-active-region-text))))
+      (and txt (string-trim txt))))
+   ((or (derived-mode-p 'pdf-view-mode 'doc-view-mode)
+        (and (fboundp 'reader-mode) (derived-mode-p 'reader-mode)))
+    nil)
+   (t (thing-at-point 'word t))))
 
 ;;;; --------------------------------------------------------------------
 ;;;; THE COMMAND

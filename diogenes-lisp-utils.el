@@ -815,14 +815,23 @@ take a file, a directory of files, or a list of either."
    (t (diogenes--path-set-p value))))
 
 (defcustom diogenes-home-buffer-names
-  '("*spacemacs*" "*doom*" "*dashboard*" "*GNU Emacs*" "*About GNU Emacs*")
+  '("*spacemacs*" "*doom*" "*doom-dashboard*" "*dashboard*"
+    "*GNU Emacs*" "*About GNU Emacs*")
   "Buffer names treated as a startup or home page.
 A frame showing one of these and nothing else is a frame with nothing in
 it: splitting it, or opening another frame beside it, wastes the screen
 where reusing the window is what a reader wants.  Every distribution has
-its own -- `*spacemacs*\=', Doom\='s `*doom*\=', the dashboard package\='s
-`*dashboard*\=', and Emacs\='s own splash -- and the name is looked for at
-the moment of display, so nothing here depends on which is installed."
+its own -- `*spacemacs*\=', Doom\='s `*doom*\=' (and `*doom-dashboard*\=', which
+some configurations use instead), the dashboard package\='s `*dashboard*\=', and
+Emacs\='s own splash -- and the name is looked for at the moment of display, so
+nothing here depends on which is installed.
+
+These names have a second use, in
+`diogenes--word-at-point-for-lookup\=': a word at point in a startup page is not
+a word to look up, a dashboard being prose about Emacs.  `*scratch*\=' is
+deliberately NOT here -- it would be reasonable for that second purpose and
+wrong for this one, since a frame showing scratch is a frame the reader may be
+using."
   :type '(repeat string)
   :group 'diogenes)
 

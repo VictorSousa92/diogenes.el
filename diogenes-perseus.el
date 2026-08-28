@@ -1429,12 +1429,27 @@ is what a lookup buffer records."
          (string= (file-truename diogenes--lookup-file)
                   (file-truename (diogenes--dict-file diogenes--lookup-lang))))))
 
+(defun diogenes--word-at-point-for-lookup ()
+  "The word at point, where a word at point could be a word to look up.
+Nil in a buffer whose text is not a text: a startup screen, whose words are
+English prose about Emacs, and a document viewer, whose buffer holds the bytes
+of a PDF and answers `%PDF\='.
+
+`thing-at-point\=' has no opinion about where it is, so a lookup offered
+`Welcome\=' or `%PDF\=' as its default -- and a reader who pressed RET at the
+prompt got a lookup of that.  A default is a guess at what the reader means,
+and in those buffers there is nothing to guess from."
+  (unless (or (diogenes--home-buffer-p (buffer-name))
+              (derived-mode-p 'pdf-view-mode 'doc-view-mode)
+              (and (fboundp 'reader-mode) (derived-mode-p 'reader-mode)))
+    (thing-at-point 'word t)))
+
 (defun diogenes--lookup-current-headword ()
   "Return the headword of the entry point is in, for the lookup commands."
   (or (diogenes--lookup-headword-at-point)
       (get-text-property (point) 'orth)
       (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
-      (thing-at-point 'word t)
+      (diogenes--word-at-point-for-lookup)
       (user-error "No headword found at point")))
 
 (defun diogenes--language-at-point (&optional pos)
@@ -1473,7 +1488,7 @@ about this, so it is taken first."
 			    diogenes--lookup-lang)
 		       (and (boundp 'diogenes--browser-language)
 			    diogenes--browser-language)))
-	 (word (thing-at-point 'word t)))
+	 (word (diogenes--word-at-point-for-lookup)))
     (cond
      ;; Greek letters mean Greek, tagged or not.
      ((and word (string-match-p "\\cg" word)) "greek")
@@ -1591,7 +1606,7 @@ what was chosen -- so the minibuffer says what it is about to do."
 	   (if dictionary
 	       (format "Look up in %s: " (plist-get dictionary :name))
 	     prompt)
-	   (thing-at-point 'word t))
+	   (diogenes--word-at-point-for-lookup))
 	  dictionary)))
 
 (defun diogenes--read-dictionary (lang &optional prompt)
@@ -1681,7 +1696,7 @@ load diogenes-bailly, -gaffiot, -georges or -pape" lang)))
 	  ;; `dico' read as beta code is δ-ι-ξ-ο, which is how a Greek lookup
 	  ;; came to answer with `δίξεστον'.  `C-c C-c' takes the word at point
 	  ;; and this must agree with it.
-	  (default (or (thing-at-point 'word t)
+	  (default (or (diogenes--word-at-point-for-lookup)
 		       (ignore-errors (diogenes--lookup-current-headword))
 		       "")))
      (list (if (or current-prefix-arg (string-empty-p default))
@@ -3689,7 +3704,7 @@ if nil, query interactively for their values"
       (forms (diogenes--show-all-forms (get-text-property char 'lemma)
 				       (get-text-property char 'lang)))
       (t (let* ((lang (diogenes--language-at-point char))
-		(word (thing-at-point 'word t)))
+		(word (diogenes--word-at-point-for-lookup)))
 	   (pcase lang
 	     ((or "greek" "latin")
 	      ;; Looking up a word opens its dictionary entry.  When we are
@@ -3703,7 +3718,7 @@ if nil, query interactively for their values"
 		     (and (derived-mode-p 'diogenes-lookup-mode)
 			  (or (= (count-windows) 1)
 			      (y-or-n-p "Open the result in this same window? ")))))
-		(diogenes--parse-and-lookup (or word (thing-at-point 'word)) lang)))
+		(diogenes--parse-and-lookup (or word (diogenes--word-at-point-for-lookup)) lang)))
 	     (_ (message "C-c C-c cannot do anything useful here!")))))))))
 
 (defun diogenes-lookup-open-tll-or-tgl ()
