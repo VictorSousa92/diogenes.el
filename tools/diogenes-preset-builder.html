@@ -197,15 +197,30 @@
   .screenrow label { color: var(--quiet); }
   .screenrow select { width: auto; flex: 0 1 22rem; }
   .screenrow .note { margin: 0; }
+  /* `above' and `left' are `below' and `right' with the new window on the
+     other side of the divider, so the box is reversed rather than reordered --
+     the scene stays in the order things happened. */
   .windows.col { flex-direction: column; }
+  .windows.col.flip { flex-direction: column-reverse; }
   .windows.rowdir { flex-direction: row; }
+  .windows.rowdir.flip { flex-direction: row-reverse; }
   .win {
-    flex: 1; padding: .45rem .55rem; font-size: .83rem;
-    display: flex; flex-direction: column; justify-content: center; min-height: 44px;
+    /* `min-height: 44px' made three windows need 132px, and the frame -- whose
+       height comes from its aspect ratio -- grew to fit them instead of the
+       windows sharing it.  A window has to be allowed to be small: the frame
+       stands for a screen, and dividing it is the whole point. */
+    flex: 1 1 0; min-height: 0; min-width: 0; overflow: hidden;
+    padding: .4rem .5rem; font-size: .8rem;
+    display: flex; flex-direction: column; justify-content: center;
     border-top: 1px solid var(--rule);
   }
   .windows.rowdir .win { border-top: 0; border-left: 1px solid var(--rule); }
   .win:first-child { border-top: 0; border-left: 0; }
+  /* Reversed, the divider belongs on the other edge of each window. */
+  .windows.col.flip .win { border-top: 0; border-bottom: 1px solid var(--rule); }
+  .windows.col.flip .win:first-child { border-bottom: 0; }
+  .windows.rowdir.flip .win { border-left: 0; border-right: 1px solid var(--rule); }
+  .windows.rowdir.flip .win:first-child { border-right: 0; }
   .win b { display: block; font-size: .69rem; letter-spacing: .05em; text-transform: uppercase; }
   .win { overflow-wrap: anywhere; }
   .win.entry { background: #fbeeea; } .win.entry b { color: var(--entry); }
@@ -725,6 +740,8 @@ const uniform = () => {
 };
 const framesFor = k => kind[k] === 'frames' || el('popupframes').checked;
 const horizontal = () => ['right', 'left'].includes(el('direction').value);
+// `above' and `left' put the new window before the old one.
+const flipped = () => ['above', 'left'].includes(el('direction').value);
 
 // ---------- proportions ----------
 // What has a size is a WINDOW, not a kind.  Where a kind reuses another's
@@ -795,16 +812,22 @@ function installGrips() {
   const boxes = [...document.querySelectorAll('.frame .windows')];
   const bs = boundaries();
   boxes.forEach(box => {
-    const wins = [...box.querySelectorAll('.win')];
     const sideways = horizontal();
-    for (let i = 0; i + 1 < wins.length && i < bs.length; i++) {
+    // In VISUAL order, which is not the DOM order when the box is reversed:
+    // `above' and `left' draw the newer window first, so a divider placed from
+    // DOM order would land on the wrong edge and dragging it would move the
+    // wrong way.
+    const wins = [...box.querySelectorAll('.win')].sort((a, b) =>
+      sideways ? a.offsetLeft - b.offsetLeft : a.offsetTop - b.offsetTop);
+    const order = flipped() ? [...bs].reverse() : bs;
+    for (let i = 0; i + 1 < wins.length && i < order.length; i++) {
       const grip = document.createElement('div');
       grip.className = 'grip';
       const before = wins[i];
       const pos = sideways ? before.offsetLeft + before.offsetWidth
                            : before.offsetTop + before.offsetHeight;
       grip.style[sideways ? 'left' : 'top'] = pos + 'px';
-      grip.dataset.owner = bs[i].owner;
+      grip.dataset.owner = order[i].owner;
       box.appendChild(grip);
       grip.addEventListener('pointerdown', ev => {
         ev.preventDefault();
@@ -813,8 +836,12 @@ function installGrips() {
         const move = m => {
           const frac = sideways ? (m.clientX - rect.left) / rect.width
                                 : (m.clientY - rect.top) / rect.height;
-          // The size is the window AFTER the boundary: what the pointer leaves.
-          const share = Math.min(0.85, Math.max(0.15, 1 - frac));
+          // The size belongs to the window the split CREATES, which lies after
+          // the boundary in scene order -- so it is what the pointer leaves
+          // behind, or what the pointer covers where the box is reversed and
+          // that window is the one before the divider on screen.
+          const raw = flipped() ? frac : 1 - frac;
+          const share = Math.min(0.85, Math.max(0.15, raw));
           sizes[grip.dataset.owner] = Math.round(share * 100) / 100;
           render();
         };
@@ -1059,7 +1086,7 @@ function render() {
   el('frames').innerHTML = scene.map(frame => `
     <div class="frame${frame.isFresh ? ' fresh' : ''}">
       <div class="bar">${frame.name}</div>
-      <div class="windows ${horizontal() ? 'rowdir' : 'col'}">
+      <div class="windows ${horizontal() ? 'rowdir' : 'col'}${flipped() ? ' flip' : ''}">
         <div class="zones">
           <div class="zone above" data-dir="above">above</div>
           <div class="zone left" data-dir="left">left</div>
