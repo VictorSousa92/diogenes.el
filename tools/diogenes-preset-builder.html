@@ -647,6 +647,7 @@
       <button data-step="lookup">Look a word up<kbd>C-c C-c</kbd></button>
       <button data-step="again">Another word<kbd>C-c C-c</kbd></button>
       <button data-step="chain">A word inside the entry<kbd>C-c C-c</kbd></button>
+      <button data-step="analyse">Analyse the word<kbd>ml a</kbd></button>
       <button data-step="dict">Open the OLD<kbd>o</kbd></button>
       <button data-step="dict2">And the TLL<kbd>t</kbd></button>
       <button data-step="quit">Close the page<kbd>q</kbd></button>
@@ -995,10 +996,18 @@ function soleHome() {
 function put(win, k, label) { win.kind = k; win.label = label; fresh = win; }
 function nameOf(k) {
   return k === 'entry' ? 'lookup window' : k === 'browser' ? 'text window'
-       : 'dictionary window';
+       : k === 'morphology' ? 'analysis window' : 'dictionary window';
 }
-function kindOf(k) { return k === 'entry' ? 'lookup' : k === 'browser' ? 'browser' : 'dictionary'; }
+function kindOf(k) {
+  return k === 'entry' ? 'lookup' : k === 'browser' ? 'browser'
+       : k === 'morphology' ? 'morphology' : 'dictionary';
+}
 function say(html) { el('said').innerHTML = html; }
+
+// The companion pair, read in both directions: an analysis divides the entry's
+// window, and an entry divides the analysis's where no entry is showing.  See
+// `diogenes--companion-role'.
+const COMPANION = { morphology: 'entry', entry: 'morphology' };
 
 function place(k, label, opts = {}) {
   const behaviour = kind[kindOf(k)];
@@ -1011,6 +1020,21 @@ function place(k, label, opts = {}) {
         'whatever any of this says. Pressing the key <em>inside</em> an entry is asking ' +
         'to stay put, and the entry you came from is alive behind it.');
     }
+  }
+  // A companion already on the screen takes the split, wherever the reader is.
+  // Checked before the home window, since a companion is a better place than a
+  // startup page: the two are read against each other.
+  const companion = COMPANION[k] && findWin(COMPANION[k]);
+  if (behaviour === 'split' && companion && !companion.win.nested) {
+    companion.win.nested = true;
+    companion.win.nestedLabel = label;
+    companion.win.nestedKind = k;
+    fresh = companion.win;
+    return say(k === 'entry'
+      ? 'An analysis was on the screen and no entry, so the entry divides the ' +
+        '<em>analysis\u2019s</em> window \u2014 the same rule read the other way. The two ' +
+        'belong together, and whichever arrives second joins the first.'
+      : 'The analysis divides the entry\u2019s window, downward.');
   }
   const home = soleHome();
   if (home) {
@@ -1084,6 +1108,39 @@ const STEPS = {
   lookup: () => place('entry', 'arte \u2014 ars, artis, f.'),
   again:  () => place('entry', 'siderum \u2014 sidus, eris, n.'),
   chain:  () => place('entry', 'caelum \u2014 caelum, i, n.', { chain: true }),
+  analyse: () => {
+    const behaviour = kind.morphology;
+    const entry = findWin('entry');
+    if (behaviour === 'reuse' && entry) {
+      put(entry.win, 'morphology', 'siderum: neut gen pl');
+      return say('<code>reuse</code> puts the analysis in the entry\u2019s own window. ' +
+        'The analysis is what you asked for, and the entry is a keypress away.');
+    }
+    if (behaviour === 'split' && entry) {
+      // `diogenes-display-beside-companion': the ENTRY's window is divided,
+      // downward, wherever the command was given from.
+      entry.win.nested = true;
+      entry.win.nestedLabel = 'siderum: neut gen pl';
+      fresh = entry.win;
+      return say('The analysis divides the <em>entry\u2019s</em> window, downward \u2014 not ' +
+        'the window you pressed the key in. Ask for one while reading a passage and ' +
+        'it still appears under the entry it analyses, which is what it is about. ' +
+        'The frame gains no third column.');
+    }
+    // NO ENTRY to be beside: a window of its own, by the ordinary rules.  This
+    // is the fallback in `diogenes-display-beside-companion', which answers nil
+    // when it finds no companion window.
+    const before = scene.reduce((n, f) => n + f.wins.length, 0);
+    const result = place('morphology', 'siderum: neut gen pl');
+    if (!entry) {
+      const after = scene.reduce((n, f) => n + f.wins.length, 0);
+      return say('There is no entry on the screen for the analysis to be beside, so ' +
+        'it takes a window ' + (after > before ? 'of its own' : 'by the ordinary rules') +
+        '. An entry looked up <em>afterwards</em> will divide this window, the ' +
+        'two belonging together whichever arrives first.');
+    }
+    return result;
+  },
   dict:   () => place('dict', 'Oxford Latin Dictionary, p. 196'),
   dict2:  () => place('dict', 'Thesaurus Linguae Latinae, fasc. III'),
   quit:   () => {
@@ -1122,6 +1179,7 @@ function updateSteps() {
     lookup: true,
     again:  has('entry'),
     chain:  has('entry'),
+    analyse: true,
     dict:   has('entry'),
     dict2:  has('dict'),
     quit:   has('dict'),
@@ -1179,8 +1237,9 @@ function render() {
                ${w.kind === 'home' ? '' : 'draggable="true"'}
                data-kind="${w.kind}">
             ${w.nested
-              ? `<div class="half"><b>entry</b>${w.label || ''}</div>
-                 <div class="half morph"><b>analysis</b>${w.nestedLabel || ''}</div>`
+              ? `<div class="half"><b>${w.kind === 'morphology' ? 'analysis' :
+                                        w.kind === 'entry' ? 'entry' : w.kind}</b>${w.label || ''}</div>
+                 <div class="half morph"><b>${w.nestedKind === 'entry' ? 'entry' : 'analysis'}</b>${w.nestedLabel || ''}</div>`
               : `${w.kind === 'home' ? '' :
                    `<b>${w.kind === 'entry' ? 'entry' :
                          w.kind === 'browser' ? 'text' :

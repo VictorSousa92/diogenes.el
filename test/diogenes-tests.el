@@ -565,8 +565,11 @@ which is what a fault upstream of every measurement looks like."
   (dolist (behaviour '(reuse split frames))
     (let ((diogenes-window-behaviour behaviour)
           (diogenes-lookup-display-action nil))
+      ;; With the KIND, since `diogenes--display-action' passes it: `lookup'
+      ;; has a companion now, so the action built for it differs from the one
+      ;; built for no kind in particular.
       (should (equal (diogenes--display-action 'lookup)
-                     (diogenes--behaviour-action behaviour)))))
+                     (diogenes--behaviour-action behaviour 'lookup)))))
   ;; An action named for one kind leaves the others on the shorthand.
   (let ((diogenes-window-behaviour 'split)
         (diogenes-lookup-display-action '((display-buffer-same-window)))
@@ -574,7 +577,7 @@ which is what a fault upstream of every measurement looks like."
     (should (equal (diogenes--display-action 'lookup)
                    '((display-buffer-same-window))))
     (should (equal (diogenes--display-action 'browser)
-                   (diogenes--behaviour-action 'split)))))
+                   (diogenes--behaviour-action 'split 'browser)))))
 
 (ert-deftest diogenes-test-frames-preset-gathers ()
   "`frames' turns the gathering on without `pop-up-frames' being set.
@@ -622,9 +625,9 @@ and a scan gets a frame is a perfectly ordinary arrangement."
         (diogenes-dictionary-display-action nil))
     (should-not (diogenes--display-action 'browser))
     (should (equal (diogenes--display-action 'lookup)
-                   (diogenes--behaviour-action 'split)))
+                   (diogenes--behaviour-action 'split 'lookup)))
     (should (equal (diogenes--display-action 'dictionary)
-                   (diogenes--behaviour-action 'frames)))
+                   (diogenes--behaviour-action 'frames 'dictionary)))
     ;; A kind the alist does not mention gets `defer'.
     (should (eq (diogenes--behaviour-for 'search) 'defer))
     ;; And `frames' for any one kind gathers for all of them.
@@ -1165,6 +1168,11 @@ selected one.
 With no entry on the screen there is nothing to be beside, and the function
 answers nil so the ordinary splitting takes its turn."
   (should (eq (cdr (assq 'morphology diogenes-companion-roles)) 'lookup))
+  ;; SYMMETRIC: one pair answers for both arrangements.
+  (should (eq (diogenes--companion-role 'morphology) 'lookup))
+  (should (eq (diogenes--companion-role 'lookup) 'morphology))
+  (should-not (diogenes--companion-role 'browser))
+  (should-not (diogenes--companion-role 'dictionary))
   ;; Every behaviour builds for every kind, and for no kind at all.  Five tests
   ;; failed at once from one wrong arity here -- `diogenes--split-functions'
   ;; called with an argument it does not take -- and this is the assertion that
@@ -1172,13 +1180,26 @@ answers nil so the ordinary splitting takes its turn."
   (dolist (behaviour '(defer reuse split frames))
     (dolist (k '(nil lookup browser dictionary morphology))
       (should (listp (diogenes--behaviour-action behaviour k)))))
+  ;; And the KIND makes a difference where the kind has a companion, which is
+  ;; why the tests comparing these must pass one: an action built for `lookup'
+  ;; is not the action built for no kind in particular.
+  (let ((diogenes-split-direction nil) (diogenes-split-size nil))
+    (should-not (equal (diogenes--behaviour-action 'split 'lookup)
+                       (diogenes--behaviour-action 'split)))
+    (should (equal (diogenes--behaviour-action 'split 'browser)
+                   (diogenes--behaviour-action 'split))))
   ;; The action is in the `split' arrangement for morphology, and not for the
   ;; kinds that have no companion.
   (let ((diogenes-split-direction nil) (diogenes-split-size nil))
     (let ((for-morph (car (diogenes--behaviour-action 'split 'morphology)))
           (for-lookup (car (diogenes--behaviour-action 'split 'lookup))))
       (should (memq 'diogenes-display-beside-companion for-morph))
-      (should-not (memq 'diogenes-display-beside-companion for-lookup))
+      ;; Entries get it too, for the case where an analysis is showing and no
+      ;; entry is: the entry divides the analysis's window.
+      (should (memq 'diogenes-display-beside-companion for-lookup))
+      ;; And a kind with no companion does not.
+      (should-not (memq 'diogenes-display-beside-companion
+                        (car (diogenes--behaviour-action 'split 'browser))))
       ;; And the role frame still leads, so a second analysis joins the first.
       (should (eq (car for-morph) 'diogenes-display-in-role-frame))))
   ;; Nothing of that role on screen: nil, so the next action gets its turn.
@@ -1191,6 +1212,24 @@ answers nil so the ordinary splitting takes its turn."
       (kill-buffer buffer)
       (when (get-buffer "*diogenes-tests-plain*")
         (kill-buffer "*diogenes-tests-plain*"))))
+  ;; An entry, with an analysis showing and no entry: the analysis's window is
+  ;; the one divided, which is the same rule read the other way.
+  (let ((analysis (get-buffer-create "*Diogenes Analysis*"))
+        (entry (get-buffer-create "*diogenes-lookup*"))
+        (elsewhere (get-buffer-create "*diogenes-tests-elsewhere*")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer elsewhere)
+          (let ((analysis-window (split-window)))
+            (set-window-buffer analysis-window analysis)
+            (select-window (get-buffer-window elsewhere))
+            (let ((used (diogenes-display-beside-companion entry nil)))
+              (should (window-live-p used))
+              (should (eq (window-buffer used) entry))
+              (should-not (eq used (get-buffer-window elsewhere))))))
+      (dolist (b (list analysis entry elsewhere))
+        (when (buffer-live-p b) (kill-buffer b)))))
   ;; With an entry showing, it splits THAT window, wherever point is.
   (let ((entry (get-buffer-create "*diogenes-lookup*"))
         (analysis (get-buffer-create "*Diogenes Analysis*"))

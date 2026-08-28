@@ -263,7 +263,12 @@ already showing a buffer of ROLE, wherever the reader happens to be.
 has to be the ENTRY\='s window and not the selected one: `ml\=' may be pressed
 while reading a passage in the browser, and splitting the browser would put the
 analysis beside the text rather than beside the word it analyses.  With no entry
-on the screen there is nothing to be beside, and the ordinary rules apply."
+on the screen there is nothing to be beside, and the ordinary rules apply.
+
+Read in BOTH directions.  One pair answers for two arrangements: an analysis
+divides the entry\='s window, and -- where an analysis is on the screen and no
+entry is -- an entry divides the analysis\='s.  Whichever of the two arrives
+second joins the first, which is what belonging together means."
   :type '(alist :key-type symbol :value-type symbol)
   :group 'diogenes)
 
@@ -277,6 +282,17 @@ third column."
                  (const :tag "To the right" right) (const :tag "To the left" left))
   :group 'diogenes)
 
+(defun diogenes--companion-role (kind)
+  "The role KIND belongs beside, from `diogenes-companion-roles\=', or nil.
+Read in BOTH directions, the relation being between the two and not from one to
+the other: an entry and its analysis belong together, so whichever arrives
+second joins the first.  With an analysis on the screen and no entry, an entry
+divides the analysis\='s window, exactly as an analysis divides an entry\='s.
+
+So one pair, `(morphology . lookup)\=', answers for both."
+  (or (cdr (assq kind diogenes-companion-roles))
+      (car (rassq kind diogenes-companion-roles))))
+
 (defun diogenes-display-beside-companion (buffer alist)
   "Show BUFFER by splitting the window of the role it belongs beside.
 A `display-buffer\=' action function, consulting
@@ -287,7 +303,7 @@ open behaves like anything else.
 The split goes downward by default, an entry and its analysis reading as one
 column; `diogenes-companion-direction\=' says otherwise."
   (when-let* ((kind (diogenes--buffer-role buffer))
-              (beside (cdr (assq kind diogenes-companion-roles)))
+              (beside (diogenes--companion-role kind))
               (window (diogenes--window-of-role beside)))
     ;; Not `split-window-sensibly\=': the thresholds would refuse a window that
     ;; is merely half a frame, which is what an entry\='s window usually is.
@@ -493,7 +509,10 @@ entry needs somewhere new."
                 ;; after the role frame -- a second analysis joins the first --
                 ;; and before the ordinary splitting, which is what happens
                 ;; when there is no entry on the screen to be beside.
-                (when (and kind (assq kind diogenes-companion-roles))
+                ;; Either member of a companion pair, the relation being
+                ;; symmetric: an analysis divides the entry's window, and an
+                ;; entry divides the analysis's where there is no entry yet.
+                (when (and kind (diogenes--companion-role kind))
                   (list 'diogenes-display-beside-companion))
                 ;; No KIND: this function has none to take -- the per-kind
                 ;; SPLIT DIRECTION was reverted deliberately, and only the
