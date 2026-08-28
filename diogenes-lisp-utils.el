@@ -259,17 +259,41 @@ has not been created answers nil."
 An alist of (KIND . ROLE): a buffer of KIND is displayed by splitting a window
 already showing a buffer of ROLE, wherever the reader happens to be.
 
-`morphology\=' is beside `lookup\=' because an analysis is about an entry.  And it
-has to be the ENTRY\='s window and not the selected one: `ml\=' may be pressed
+`morphology\=' is beside `lookup\=' because the two are the same sort of
+consultation and belong in one column.  NOT because an analysis is of the entry
+showing there: one may analyse a form while another word\='s entry is open, and
+the pairing says where they go rather than what they are about.
+
+And it is the LOOKUP window rather than the selected one: `ml\=' may be pressed
 while reading a passage in the browser, and splitting the browser would put the
-analysis beside the text rather than beside the word it analyses.  With no entry
-on the screen there is nothing to be beside, and the ordinary rules apply.
+analysis in the middle of the text.  With no lookup window on the screen there
+is nothing to be beside, and the ordinary rules apply.
 
 Read in BOTH directions.  One pair answers for two arrangements: an analysis
 divides the entry\='s window, and -- where an analysis is on the screen and no
 entry is -- an entry divides the analysis\='s.  Whichever of the two arrives
-second joins the first, which is what belonging together means."
-  :type '(alist :key-type symbol :value-type symbol)
+second joins the first, which is what belonging together means.
+
+The value may also be `selected\=', which is not a role: it means the window the
+command was given from, whatever is in it.
+
+    (setq diogenes-companion-roles \='((morphology . selected)))
+
+That is the arrangement for a reader who wants an analysis under whatever they
+are looking at rather than beside the entry -- and it is deliberately not the
+default, since `ml\=' from a passage would then divide the passage.  Being
+`selected\=' rather than a role, it is not read in reverse: an entry is not put
+beside `selected\=' by it.
+
+Other roles work as well: `(morphology . browser)\=' puts an analysis beside the
+text, and `(morphology . dictionary)\=' beside a scanned page.  Set it to nil and
+an analysis takes a window by the ordinary rules."
+  :type '(alist :key-type symbol
+                :value-type (choice (const :tag "The entry" lookup)
+                                    (const :tag "The text" browser)
+                                    (const :tag "A scanned page" dictionary)
+                                    (const :tag "An analysis" morphology)
+                                    (const :tag "Whichever window I am in" selected)))
   :group 'diogenes)
 
 (defcustom diogenes-companion-direction 'below
@@ -291,7 +315,12 @@ divides the analysis\='s window, exactly as an analysis divides an entry\='s.
 
 So one pair, `(morphology . lookup)\=', answers for both."
   (or (cdr (assq kind diogenes-companion-roles))
-      (car (rassq kind diogenes-companion-roles))))
+      ;; Reversed only for a real ROLE.  `(morphology . selected)' says where an
+      ;; analysis goes and nothing about where an entry goes, so reading it
+      ;; backwards -- and concluding that an entry belongs beside `morphology' --
+      ;; would be inventing an instruction the reader did not give.
+      (let ((pair (rassq kind diogenes-companion-roles)))
+        (and pair (not (eq (cdr pair) 'selected)) (car pair)))))
 
 (defun diogenes-display-beside-companion (buffer alist)
   "Show BUFFER by splitting the window of the role it belongs beside.
@@ -304,7 +333,12 @@ The split goes downward by default, an entry and its analysis reading as one
 column; `diogenes-companion-direction\=' says otherwise."
   (when-let* ((kind (diogenes--buffer-role buffer))
               (beside (diogenes--companion-role kind))
-              (window (diogenes--window-of-role beside)))
+              ;; `selected' is not a role but the window in hand: a reader who
+              ;; wants an analysis under whatever they are reading, rather than
+              ;; in the lookup window's column.
+              (window (if (eq beside 'selected)
+                          (selected-window)
+                        (diogenes--window-of-role beside))))
     ;; Not `split-window-sensibly\=': the thresholds would refuse a window that
     ;; is merely half a frame, which is what an entry\='s window usually is.
     (let ((new (ignore-errors
@@ -504,8 +538,8 @@ entry needs somewhere new."
     ('split `(,(append
                 (list 'diogenes-display-in-role-frame)
                 ;; A kind with a COMPANION is shown beside that companion
-                ;; rather than beside the reader: an analysis belongs under the
-                ;; entry it analyses, wherever `ml' was pressed from.  Tried
+                ;; rather than beside the reader: an analysis belongs in the
+                ;; lookup window's column, wherever `ml' was pressed from.  Tried
                 ;; after the role frame -- a second analysis joins the first --
                 ;; and before the ordinary splitting, which is what happens
                 ;; when there is no entry on the screen to be beside.

@@ -1161,7 +1161,9 @@ consulted together."
 (ert-deftest diogenes-test-analysis-splits-the-entry-not-the-reader ()
   "An analysis is shown beside the ENTRY, wherever it was asked for.
 Pressing `ml' while reading a passage should not split the browser: the
-analysis belongs under the word\='s entry, not beside the text.  So the action
+analysis belongs in the lookup window's column, not in the middle of the text --
+and not because it is an analysis OF the entry showing there, which it need not
+be, but because the two are the same sort of consultation.  So the action
 looks for a window showing a buffer of the companion role rather than using the
 selected one.
 
@@ -1173,6 +1175,36 @@ answers nil so the ordinary splitting takes its turn."
   (should (eq (diogenes--companion-role 'lookup) 'morphology))
   (should-not (diogenes--companion-role 'browser))
   (should-not (diogenes--companion-role 'dictionary))
+  ;; `selected' means the window in hand, and is not a role -- so it is not read
+  ;; in reverse: saying where an ANALYSIS goes says nothing about where an entry
+  ;; goes, and concluding otherwise would invent an instruction.
+  (let ((diogenes-companion-roles '((morphology . selected))))
+    (should (eq (diogenes--companion-role 'morphology) 'selected))
+    (should-not (diogenes--companion-role 'lookup)))
+  ;; Another role works as a companion as well.
+  (let ((diogenes-companion-roles '((morphology . browser))))
+    (should (eq (diogenes--companion-role 'morphology) 'browser))
+    (should (eq (diogenes--companion-role 'browser) 'morphology)))
+  ;; And with `selected', the window divided is the one point is in -- which is
+  ;; the whole difference from the default.
+  (let* ((diogenes-companion-roles '((morphology . selected)))
+         (analysis (get-buffer-create "*Diogenes Analysis*"))
+         (entry (get-buffer-create "*diogenes-lookup*"))
+         (here (get-buffer-create "*diogenes-tests-here*")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer here)
+          (let ((entry-window (split-window)))
+            (set-window-buffer entry-window entry)
+            (select-window (get-buffer-window here))
+            (let* ((mine (selected-window))
+                   (used (diogenes-display-beside-companion analysis nil)))
+              (should (window-live-p used))
+              ;; A split of MY window, not of the entry's.
+              (should (eq (window-parent used) (window-parent mine))))))
+      (dolist (b (list analysis entry here))
+        (when (buffer-live-p b) (kill-buffer b)))))
   ;; Every behaviour builds for every kind, and for no kind at all.  Five tests
   ;; failed at once from one wrong arity here -- `diogenes--split-functions'
   ;; called with an argument it does not take -- and this is the assertion that

@@ -507,6 +507,28 @@
   <div class="kinds" id="kinds"></div>
   <p class="note" id="mixednote"></p>
 
+  <h2>Analyses</h2>
+  <div class="field">
+    <span>Which window an analysis divides, when it is set to <em>split</em></span>
+    <select id="companion">
+      <option value="lookup">The open lookup window &mdash; wherever you pressed the key</option>
+      <option value="selected">Whichever window you are in</option>
+      <option value="browser">The text</option>
+      <option value="dictionary">A scanned page</option>
+      <option value="">Nothing in particular &mdash; a window of its own</option>
+    </select>
+  </div>
+  <div class="field">
+    <span>And which way it divides that window</span>
+    <select id="companiondir">
+      <option value="below">Below &mdash; the two read as one column</option>
+      <option value="above">Above</option>
+      <option value="right">To the right</option>
+      <option value="left">To the left</option>
+    </select>
+  </div>
+  <p class="note" id="companionnote"></p>
+
   <h2>Scanned pages</h2>
   <div class="field">
     <span>Where a printed dictionary’s page goes</span>
@@ -863,6 +885,29 @@ function boundaries() {
   return out;
 }
 
+function renderCompanionNote() {
+  const note = el('companionnote');
+  if (!note) return;
+  const beside = el('companion').value;
+  note.innerHTML =
+    beside === 'lookup'
+      ? 'The default: the analysis appears under whatever lookup window is open, ' +
+        'even when <code>ml</code> was pressed while reading a passage. Not ' +
+        'necessarily an analysis <em>of</em> the entry showing there &mdash; you ' +
+        'may analyse one word while another\u2019s entry is open &mdash; but the two ' +
+        'belong in the same column, being the same sort of consultation. The ' +
+        'relation reads both ways: with an analysis showing and no lookup window, ' +
+        'an entry divides the analysis\u2019s.'
+      : beside === 'selected'
+      ? 'Whatever you are looking at is divided. Simple, but <code>ml</code> from ' +
+        'a passage will divide the passage rather than putting the analysis in the ' +
+        'lookup window\u2019s column.'
+      : beside === ''
+      ? 'An analysis takes a window by the ordinary rules, like any other kind.'
+      : 'An analysis appears beside the ' + (beside === 'browser' ? 'text' : 'scanned page') +
+        ', wherever the command was given from.';
+}
+
 function renderProportions() {
   const bs = boundaries();
   const box = el('proportions');
@@ -1007,7 +1052,18 @@ function say(html) { el('said').innerHTML = html; }
 // The companion pair, read in both directions: an analysis divides the entry's
 // window, and an entry divides the analysis's where no entry is showing.  See
 // `diogenes--companion-role'.
-const COMPANION = { morphology: 'entry', entry: 'morphology' };
+function companionOf(k) {
+  const chosen = el('companion') ? el('companion').value : 'lookup';
+  if (!chosen) return null;                    // a window of its own
+  if (chosen === 'selected') return 'selected';
+  // The scene's own words for the roles.
+  const asWin = { lookup: 'entry', browser: 'browser', dictionary: 'dict',
+                  morphology: 'morphology' };
+  if (k === 'morphology') return asWin[chosen] || null;
+  // Read in reverse only for a real role, as `diogenes--companion-role' does.
+  if (asWin[chosen] === k) return 'morphology';
+  return null;
+}
 
 function place(k, label, opts = {}) {
   const behaviour = kind[kindOf(k)];
@@ -1024,7 +1080,12 @@ function place(k, label, opts = {}) {
   // A companion already on the screen takes the split, wherever the reader is.
   // Checked before the home window, since a companion is a better place than a
   // startup page: the two are read against each other.
-  const companion = COMPANION[k] && findWin(COMPANION[k]);
+  const wanted = companionOf(k);
+  // `selected' divides the window in hand, which in the simulation is whatever
+  // the last step touched -- the closest thing it has to point.
+  const companion = wanted === 'selected'
+    ? (fresh ? { win: fresh } : null)
+    : (wanted ? findWin(wanted) : null);
   if (behaviour === 'split' && companion && !companion.win.nested) {
     companion.win.nested = true;
     companion.win.nestedLabel = label;
@@ -1122,10 +1183,10 @@ const STEPS = {
       entry.win.nested = true;
       entry.win.nestedLabel = 'siderum: neut gen pl';
       fresh = entry.win;
-      return say('The analysis divides the <em>entry\u2019s</em> window, downward \u2014 not ' +
+      return say('The analysis divides the <em>lookup</em> window, downward \u2014 not ' +
         'the window you pressed the key in. Ask for one while reading a passage and ' +
-        'it still appears under the entry it analyses, which is what it is about. ' +
-        'The frame gains no third column.');
+        'it still appears there, entries and analyses being the same sort of ' +
+        'consultation and belonging in one column. The frame gains no third column.');
     }
     // NO ENTRY to be beside: a window of its own, by the ordinary rules.  This
     // is the fallback in `diogenes-display-beside-companion', which answers nil
@@ -1298,6 +1359,7 @@ function render() {
   }
   whereTo();
   updateSteps();
+  renderCompanionNote();
   renderProportions();
   installGrips();
   installDrags();
@@ -1328,14 +1390,26 @@ function preset() {
     out.push("        (dictionary . " + kind.dictionary + ")");
     out.push("        (morphology . " + kind.morphology + ")))");
     if (kind.morphology === 'split') {
+      const beside = el('companion').value;
+      const dir = el('companiondir').value;
       out.push("");
-      out.push(";; `split' for an analysis divides the window the ENTRY is in,");
-      out.push(";; downward, wherever `ml' was pressed from -- so an analysis");
-      out.push(";; asked for while reading a passage still appears under the");
-      out.push(";; entry it analyses.  These are the defaults; they are here so");
-      out.push(";; that changing them is a matter of editing a line.");
-      out.push("(setq diogenes-companion-roles '((morphology . lookup)))");
-      out.push("(setq diogenes-companion-direction 'below)");
+      if (beside === 'selected') {
+        out.push(";; An analysis divides whichever window you are in.");
+        out.push("(setq diogenes-companion-roles '((morphology . selected)))");
+      } else if (beside === '') {
+        out.push(";; An analysis takes a window by the ordinary rules rather");
+        out.push(";; than dividing another.");
+        out.push("(setq diogenes-companion-roles nil)");
+      } else {
+        out.push(";; An analysis divides the window " +
+                 (beside === 'lookup' ? "the ENTRY is in" :
+                  beside === 'browser' ? "the TEXT is in" :
+                  "a SCANNED PAGE is in") + ",");
+        out.push(";; wherever the command was given from -- so one asked for");
+        out.push(";; while reading elsewhere still appears where it belongs.");
+        out.push("(setq diogenes-companion-roles '((morphology . " + beside + ")))");
+      }
+      if (beside !== '') out.push("(setq diogenes-companion-direction '" + dir + ")");
     }
   }
   if (el('scanplace').value === 'own') {
