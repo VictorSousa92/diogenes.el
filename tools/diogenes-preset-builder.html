@@ -2204,7 +2204,8 @@ function showTab(which) {
 }
 
 function tabFromHash() {
-  const h = (location.hash || '').replace('#', '').toLowerCase();
+  let h = '';
+  try { h = (location.hash || '').replace('#', '').toLowerCase(); } catch (e) { h = ''; }
   if (['preset', 'presets'].includes(h)) return 'preset';
   if (['config', 'configuration'].includes(h)) return 'config';
   return null;
@@ -2215,10 +2216,18 @@ document.querySelectorAll('.tab').forEach(tab => {
     const which = tab.dataset.tab;
     showTab(which);
     // `replaceState' rather than assigning to `location.hash', which would
-    // scroll the page to an element of that name if one existed.
-    history.replaceState(null, '',
-      location.pathname + location.search +
-      '#' + (which === 'preset' ? 'presets' : 'configuration'));
+    // scroll the page to an element of that name if one existed.  And guarded,
+    // because a document with no URL of its own to write against -- an
+    // `about:srcdoc' preview, a sandboxed iframe -- refuses it with a
+    // SecurityError, and an exception here would stop the tab from switching
+    // at all.  The URL is a convenience; the switch is not.
+    try {
+      history.replaceState(null, '',
+        location.pathname + location.search +
+        '#' + (which === 'preset' ? 'presets' : 'configuration'));
+    } catch (e) {
+      /* no addressable URL; the tab still changed, which is what matters */
+    }
   });
 });
 window.addEventListener('hashchange', () => {
