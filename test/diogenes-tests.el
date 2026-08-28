@@ -1155,6 +1155,62 @@ consulted together."
     (should (eq (cdr (assq 'diogenes-lookup-mode diogenes-purpose-mode-purposes))
                 'diogenes-lookup))))
 
+(ert-deftest diogenes-test-analysis-splits-the-entry-not-the-reader ()
+  "An analysis is shown beside the ENTRY, wherever it was asked for.
+Pressing `ml' while reading a passage should not split the browser: the
+analysis belongs under the word\='s entry, not beside the text.  So the action
+looks for a window showing a buffer of the companion role rather than using the
+selected one.
+
+With no entry on the screen there is nothing to be beside, and the function
+answers nil so the ordinary splitting takes its turn."
+  (should (eq (cdr (assq 'morphology diogenes-companion-roles)) 'lookup))
+  ;; Every behaviour builds for every kind, and for no kind at all.  Five tests
+  ;; failed at once from one wrong arity here -- `diogenes--split-functions'
+  ;; called with an argument it does not take -- and this is the assertion that
+  ;; names it directly rather than through whatever else happened to call it.
+  (dolist (behaviour '(defer reuse split frames))
+    (dolist (k '(nil lookup browser dictionary morphology))
+      (should (listp (diogenes--behaviour-action behaviour k)))))
+  ;; The action is in the `split' arrangement for morphology, and not for the
+  ;; kinds that have no companion.
+  (let ((diogenes-split-direction nil) (diogenes-split-size nil))
+    (let ((for-morph (car (diogenes--behaviour-action 'split 'morphology)))
+          (for-lookup (car (diogenes--behaviour-action 'split 'lookup))))
+      (should (memq 'diogenes-display-beside-companion for-morph))
+      (should-not (memq 'diogenes-display-beside-companion for-lookup))
+      ;; And the role frame still leads, so a second analysis joins the first.
+      (should (eq (car for-morph) 'diogenes-display-in-role-frame))))
+  ;; Nothing of that role on screen: nil, so the next action gets its turn.
+  (let ((buffer (get-buffer-create "*Diogenes Analysis*")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer (get-buffer-create "*diogenes-tests-plain*"))
+          (should-not (diogenes-display-beside-companion buffer nil)))
+      (kill-buffer buffer)
+      (when (get-buffer "*diogenes-tests-plain*")
+        (kill-buffer "*diogenes-tests-plain*"))))
+  ;; With an entry showing, it splits THAT window, wherever point is.
+  (let ((entry (get-buffer-create "*diogenes-lookup*"))
+        (analysis (get-buffer-create "*Diogenes Analysis*"))
+        (elsewhere (get-buffer-create "*diogenes-tests-elsewhere*")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer elsewhere)
+          (let ((entry-window (split-window)))
+            (set-window-buffer entry-window entry)
+            ;; Point is in ELSEWHERE, not in the entry.
+            (select-window (get-buffer-window elsewhere))
+            (let ((used (diogenes-display-beside-companion analysis nil)))
+              (should (window-live-p used))
+              (should (eq (window-buffer used) analysis))
+              ;; The new window came from the entry's, not from ours.
+              (should-not (eq used (get-buffer-window elsewhere))))))
+      (dolist (b (list entry analysis elsewhere))
+        (when (buffer-live-p b) (kill-buffer b))))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

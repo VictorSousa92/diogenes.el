@@ -253,6 +253,49 @@ has not been created answers nil."
           (when (eq role (diogenes--buffer-role (window-buffer window)))
             (throw 'found window)))))))
 
+(defcustom diogenes-companion-roles
+  '((morphology . lookup))
+  "Which role a kind should be shown beside, rather than beside the reader.
+An alist of (KIND . ROLE): a buffer of KIND is displayed by splitting a window
+already showing a buffer of ROLE, wherever the reader happens to be.
+
+`morphology\=' is beside `lookup\=' because an analysis is about an entry.  And it
+has to be the ENTRY\='s window and not the selected one: `ml\=' may be pressed
+while reading a passage in the browser, and splitting the browser would put the
+analysis beside the text rather than beside the word it analyses.  With no entry
+on the screen there is nothing to be beside, and the ordinary rules apply."
+  :type '(alist :key-type symbol :value-type symbol)
+  :group 'diogenes)
+
+(defcustom diogenes-companion-direction 'below
+  "Which way the companion window is divided; see
+`diogenes-display-beside-companion\='.
+`below\=' puts the analysis under the entry, which is what reading one against
+the other wants: they share the column the entry had, and the frame gains no
+third column."
+  :type '(choice (const :tag "Below" below) (const :tag "Above" above)
+                 (const :tag "To the right" right) (const :tag "To the left" left))
+  :group 'diogenes)
+
+(defun diogenes-display-beside-companion (buffer alist)
+  "Show BUFFER by splitting the window of the role it belongs beside.
+A `display-buffer\=' action function, consulting
+`diogenes-companion-roles\='.  Returns nil where there is no such window --
+so the actions after it get their turn, and a first analysis with no entry
+open behaves like anything else.
+
+The split goes downward by default, an entry and its analysis reading as one
+column; `diogenes-companion-direction\=' says otherwise."
+  (when-let* ((kind (diogenes--buffer-role buffer))
+              (beside (cdr (assq kind diogenes-companion-roles)))
+              (window (diogenes--window-of-role beside)))
+    ;; Not `split-window-sensibly\=': the thresholds would refuse a window that
+    ;; is merely half a frame, which is what an entry\='s window usually is.
+    (let ((new (ignore-errors
+                 (split-window window nil diogenes-companion-direction))))
+      (when (window-live-p new)
+        (window--display-buffer buffer new 'window alist)))))
+
 (defun diogenes-display-in-role-frame (buffer alist)
   "Show BUFFER in the frame its kind already occupies, if there is one.
 A `display-buffer\=' action function.  `display-buffer-reuse-window\=' cannot
@@ -442,8 +485,20 @@ entry needs somewhere new."
   (pcase behaviour
     ('reuse `((diogenes-display-in-role-frame display-buffer-same-window)
               (inhibit-same-window . nil)))
-    ('split `(,(cons 'diogenes-display-in-role-frame
-                     (diogenes--split-functions))
+    ('split `(,(append
+                (list 'diogenes-display-in-role-frame)
+                ;; A kind with a COMPANION is shown beside that companion
+                ;; rather than beside the reader: an analysis belongs under the
+                ;; entry it analyses, wherever `ml' was pressed from.  Tried
+                ;; after the role frame -- a second analysis joins the first --
+                ;; and before the ordinary splitting, which is what happens
+                ;; when there is no entry on the screen to be beside.
+                (when (and kind (assq kind diogenes-companion-roles))
+                  (list 'diogenes-display-beside-companion))
+                ;; No KIND: this function has none to take -- the per-kind
+                ;; SPLIT DIRECTION was reverted deliberately, and only the
+                ;; size is answerable per kind.
+                (diogenes--split-functions))
               ,@(diogenes--split-alist kind)))
     ('frames `((diogenes-display-in-role-frame
                 display-buffer-pop-up-frame

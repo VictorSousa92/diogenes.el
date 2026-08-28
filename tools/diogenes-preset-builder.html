@@ -249,6 +249,14 @@
   .windows.rowdir.flip .win { border-left: 0; border-right: 1px solid var(--rule); }
   .windows.rowdir.flip .win:first-child { border-right: 0; }
   .win b { display: block; font-size: .69rem; letter-spacing: .05em; text-transform: uppercase; }
+  /* An analysis divides the entry's own window, downward: drawn as a band
+     inside it rather than as a column of the frame, which is what
+     `diogenes-display-beside-companion' actually does. */
+  .win.nested { padding: 0; }
+  .win.nested > .half { flex: 1; padding: .35rem .5rem; overflow: hidden;
+                        display: flex; flex-direction: column; justify-content: center; }
+  .win.nested > .half + .half { border-top: 1px solid var(--rule); }
+  .win.nested > .half.morph { background: #eef1ea; }
   .win { overflow-wrap: anywhere; }
   .win.entry { background: #fbeeea; } .win.entry b { color: var(--entry); }
   .win.browser { background: #eaf1f6; } .win.browser b { color: var(--browser); }
@@ -747,11 +755,13 @@ const BEHAVIOURS = {
 };
 const KINDS = [
   ['browser', 'Texts', 'passages from the corpora'],
-  ['lookup', 'Entries', 'dictionary entries and analyses'],
+  ['lookup', 'Entries', 'dictionary entries'],
   ['dictionary', 'Scans', 'pages of the printed dictionaries'],
+  ['morphology', 'Analyses', 'what ml and mg produce \u2014 an analysis, or a list of forms'],
 ];
 
-let kind = { lookup: 'defer', browser: 'defer', dictionary: 'defer' };
+let kind = { lookup: 'defer', browser: 'defer', dictionary: 'defer',
+             morphology: 'defer' };
 let scene = [], fresh = null;
 
 const el = id => document.getElementById(id);
@@ -791,6 +801,14 @@ const flipped = () => ['above', 'left'].includes(el('direction').value);
 // two groups of kinds whose label names the groups.
 let sizes = { lookup: 0.5, browser: 0.5, dictionary: 0.5 };
 
+// An analysis shares the entry's column: `split' for `morphology' divides the
+// window the ENTRY is in, downward, rather than making a third column -- see
+// `diogenes-display-beside-companion'.  So it is not a boundary of the frame's
+// own but one inside the entry's group, and the diagram draws it that way.
+function analysisSharesTheEntry() {
+  return kind.morphology === 'split' || kind.morphology === 'reuse';
+}
+
 function groupsFor() {
   const scanReplaces = el('scanplace').value === 'replace';
   const groups = [{ kinds: ['browser'], label: 'text' }];
@@ -805,6 +823,27 @@ function groupsFor() {
     const host = groups[groups.length - 1];
     host.kinds.push('dictionary');
     host.label += '+dictionary';
+  }
+  // ANALYSES divide the entry's own window rather than the frame, so they are
+  // not a group of the frame's: `split' puts one under the entry, sharing its
+  // column, and `reuse' puts one in the entry's window outright.  A group of
+  // its own would have drawn a third column, which is what the package no
+  // longer does.
+  const entryGroup = groups.find(g => g.kinds.includes('lookup'));
+  if (kind.morphology === 'split' && entryGroup) {
+    entryGroup.nested = 'morphology';
+    entryGroup.label += ' / analysis';
+  } else if (kind.morphology === 'reuse' && entryGroup) {
+    entryGroup.kinds.push('morphology');
+    entryGroup.label += '+analysis';
+  } else if (kind.morphology === 'split' && !entryGroup &&
+             kind.lookup !== 'frames') {
+    // No entry in this frame and none in a frame of its own: nothing to be
+    // beside, so the analysis takes a window here, which is what
+    // `diogenes-display-beside-companion' falls back to.  Where the ENTRIES are
+    // in frames the analysis follows them into that frame instead, and is not a
+    // boundary of this one.
+    groups.push({ kinds: ['morphology'], label: 'analysis' });
   }
   // A kind with a frame of its own is no boundary in this frame.
   return groups.filter(g => !g.kinds.every(k => kind[k] === 'frames'));
@@ -1135,13 +1174,18 @@ function render() {
           <div class="zone below" data-dir="below">below</div>
         </div>
         ${frame.wins.map((w, wi, all) => `
-          <div class="win ${w.kind}${w === fresh ? ' fresh' : ''}"
+          <div class="win ${w.kind}${w === fresh ? ' fresh' : ''}${w.nested ? ' nested' : ''}"
                style="flex: ${shares(all.length)[wi].toFixed(4)} 1 0"
                ${w.kind === 'home' ? '' : 'draggable="true"'}
                data-kind="${w.kind}">
-            ${w.kind === 'home' ? '' :
-              `<b>${w.kind === 'entry' ? 'entry' : w.kind === 'browser' ? 'text' : 'dictionary'}</b>`}
-            ${w.label || ''}
+            ${w.nested
+              ? `<div class="half"><b>entry</b>${w.label || ''}</div>
+                 <div class="half morph"><b>analysis</b>${w.nestedLabel || ''}</div>`
+              : `${w.kind === 'home' ? '' :
+                   `<b>${w.kind === 'entry' ? 'entry' :
+                         w.kind === 'browser' ? 'text' :
+                         w.kind === 'morphology' ? 'analysis' : 'dictionary'}</b>`}
+                 ${w.label || ''}`}
           </div>`).join('')}
       </div>
     </div>`).join('');
@@ -1222,7 +1266,18 @@ function preset() {
     out.push("(setq diogenes-window-behaviour");
     out.push("      '((lookup     . " + kind.lookup + ")");
     out.push("        (browser    . " + kind.browser + ")");
-    out.push("        (dictionary . " + kind.dictionary + ")))");
+    out.push("        (dictionary . " + kind.dictionary + ")");
+    out.push("        (morphology . " + kind.morphology + ")))");
+    if (kind.morphology === 'split') {
+      out.push("");
+      out.push(";; `split' for an analysis divides the window the ENTRY is in,");
+      out.push(";; downward, wherever `ml' was pressed from -- so an analysis");
+      out.push(";; asked for while reading a passage still appears under the");
+      out.push(";; entry it analyses.  These are the defaults; they are here so");
+      out.push(";; that changing them is a matter of editing a line.");
+      out.push("(setq diogenes-companion-roles '((morphology . lookup)))");
+      out.push("(setq diogenes-companion-direction 'below)");
+    }
   }
   if (el('scanplace').value === 'own') {
     out.push('');
