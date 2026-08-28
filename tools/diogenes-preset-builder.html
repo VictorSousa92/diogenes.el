@@ -184,6 +184,29 @@
      shape of a screen. */
   .frames { display: flex; flex-direction: column; gap: .6rem;
             width: 75%; min-width: 18rem; margin-inline: auto; }
+  /* ON ITS SIDE, the same screen stood on its end: the width it now has is the
+     height it had, and the height it now has is the width it had.  Both
+     measurements are kept and exchanged, which is what turning a monitor does
+     -- where filling the pane's width and letting the new ratio decide the
+     height would have made a 16:9 frame over a thousand pixels tall, and
+     capping the height instead would have shrunk it rather than turning it. */
+  /* `min-width: 0' matters: the 18rem floor above would have overridden a
+     rotated ultrawide, which is about 13rem across, and stretched it back into
+     a shape no monitor has. */
+  .frames.onside { width: var(--framew, 16rem); min-width: 0;
+                   align-items: stretch; margin-inline: 0; flex: 0 0 auto; }
+  /* Stood on its end a frame is tall, and the buttons under it went off the
+     bottom of the window -- a control one cannot see is a control one has not
+     got.  So they move BESIDE it: the drawing to the left, everything that was
+     under it to the right, which is room a tall narrow frame has left over. */
+  .board.onside { display: flex; gap: 1.1rem; align-items: flex-start; }
+  .board.onside .sidepanel { flex: 1 1 0; min-width: 12rem; }
+  .board.onside .steps { flex-direction: column; align-items: stretch; }
+  .board.onside .steps button { text-align: left; }
+  .screenrow .sidelabel {
+    display: flex; align-items: center; gap: .3rem; font-size: .84rem;
+    cursor: pointer; white-space: nowrap;
+  }
   .frame {
     flex: 0 0 auto; min-width: 0; border: 2px solid var(--ink); border-radius: 3px;
     background: #fdfcfa; overflow: hidden;
@@ -601,11 +624,16 @@
         <option value="1.5">3:2 &mdash; Surface, some ThinkPads</option>
         <option value="1.333">4:3</option>
         <option value="2.333">21:9 &mdash; ultrawide</option>
-        <option value="0.75">3:4 &mdash; a monitor turned on its side</option>
+
       </select>
+      <label class="sidelabel">
+        <input type="checkbox" id="c-onside"> turned on its side
+      </label>
       <span class="note">Drawn to shape, so a split looks as it will look.</span>
     </div>
+    <div class="board" id="board">
     <div class="frames" id="frames"></div>
+    <div class="sidepanel">
     <div class="steps">
       <button data-step="browse">Browse a text<kbd>b l</kbd></button>
       <button data-step="lookup">Look a word up<kbd>C-c C-c</kbd></button>
@@ -623,6 +651,8 @@
       <span class="key entry"></span>entry
       <span class="key dict"></span>dictionary page
     </p>
+    </div>
+    </div>
   </div>
 
   <h2>The preset</h2>
@@ -1135,7 +1165,31 @@ function render() {
   // The frames are drawn to the shape of a screen, so that a split of 40%
   // looks like 40% of what the reader will actually see.  A property of the
   // drawing and not of the preset: nothing about it is written to the file.
-  el('frames').style.setProperty('--screen', el('ratio').value);
+  // The shape, and whether the screen is stood on its end.  Rotating inverts
+  // the ratio and fixes the height to what it was before, so the drawing turns
+  // rather than growing: a 16:9 frame at three quarters of the pane is about
+  // 300 pixels tall, and the same ratio inverted at the same WIDTH would be
+  // over a thousand.
+  {
+    const base = Number(el('ratio').value) || 1.778;
+    const onSide = el('c-onside') && el('c-onside').checked;
+    const frames = el('frames');
+    frames.classList.toggle('onside', !!onSide);
+    // The board holds the frame and the buttons; rotated, it lays them out
+    // side by side instead of one above the other.
+    if (el('board')) el('board').classList.toggle('onside', !!onSide);
+    frames.style.setProperty('--screen', onSide ? (1 / base) : base);
+    if (onSide) {
+      const pane = (frames.parentElement && frames.parentElement.clientWidth) || 640;
+      // The landscape frame's HEIGHT becomes the rotated frame's WIDTH; the
+      // inverted ratio then gives back the landscape frame's width as the new
+      // height.  Nothing is scaled, only turned.
+      frames.style.setProperty('--framew',
+                               Math.round(pane * 0.75 / base) + 'px');
+    } else {
+      frames.style.removeProperty('--framew');
+    }
+  }
   whereTo();
   updateSteps();
   renderProportions();
