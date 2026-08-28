@@ -377,7 +377,11 @@
      bindings.</p>
   <p class="note"><b>Drag a file or folder</b> from your file manager onto any
      box below and the whole path appears. Nothing is uploaded &mdash; a file
-     manager hands the page the path as text. Typing works too.</p>
+     manager hands the page the path as text. Typing works too, and a path
+     pasted in works as well.</p>
+  <p class="note">Dragging needs the page open in a browser: save this file and
+     open it, or use the GitHub Pages link. A preview inside another page never
+     receives the file, so the boxes will not respond there.</p>
   <div id="c-dicts"></div>
 
   <h2>Reading</h2>
@@ -1918,10 +1922,16 @@ function installPathHelpers() {
     .forEach(input => {
       if (input.dataset.wired) return;
       input.dataset.wired = '1';
-      input.addEventListener('dragover', ev => {
-        ev.preventDefault();
-        input.classList.add('dropping');
-      });
+      // `dragenter' as well as `dragover': some browsers decide whether a drop
+      // is allowed at the first of those, and refuse it thereafter whatever
+      // `dragover' says.
+      ['dragenter', 'dragover'].forEach(kind =>
+        input.addEventListener(kind, ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+          input.classList.add('dropping');
+        }));
       input.addEventListener('dragleave', () => input.classList.remove('dropping'));
       input.addEventListener('drop', ev => {
         ev.preventDefault();
@@ -1931,7 +1941,7 @@ function installPathHelpers() {
         const path = uriToPath(uris) || uriToPath(plain) ||
                      (plain.trim().startsWith('/') ? plain.trim() : null);
         if (path) { input.value = path; renderConfig(); }
-        else if (ev.dataTransfer.files.length) {
+        else if (ev.dataTransfer.files && ev.dataTransfer.files.length) {
           // A file dropped from an application rather than a file manager: the
           // name is all there is, so say what is missing rather than filling
           // the box with something that will not work.
@@ -2210,6 +2220,19 @@ function tabFromHash() {
   if (['config', 'configuration'].includes(h)) return 'config';
   return null;
 }
+
+// A file dropped anywhere but on a box would otherwise make the browser open
+// it, losing whatever has been filled in.  Prevented, with a word about where
+// the drop was meant to go.
+['dragover', 'drop'].forEach(kind =>
+  document.addEventListener(kind, ev => {
+    if (ev.target.closest && ev.target.closest('input')) return;
+    ev.preventDefault();
+    if (kind === 'drop' && el('c-copied')) {
+      el('c-copied').textContent = 'Drop it on one of the path boxes';
+      setTimeout(() => el('c-copied').textContent = '', 3000);
+    }
+  }));
 
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
