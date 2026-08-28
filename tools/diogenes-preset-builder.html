@@ -179,7 +179,11 @@
   /* One frame is one screen's worth, so frames stack rather than sharing a
      row: side by side each would be drawn narrower than the screen it stands
      for, and the shape is the point of drawing it. */
-  .frames { display: flex; flex-direction: column; gap: .75rem; }
+  /* Three quarters of the pane's width.  The height follows from the screen
+     shape, so capping the width is all that is needed and the frames stay the
+     shape of a screen. */
+  .frames { display: flex; flex-direction: column; gap: .6rem;
+            width: 75%; min-width: 18rem; }
   .frame {
     flex: 0 0 auto; min-width: 0; border: 2px solid var(--ink); border-radius: 3px;
     background: #fdfcfa; overflow: hidden;
@@ -189,7 +193,7 @@
     font: 600 .66rem/1.8 ui-monospace, Menlo, monospace; text-align: center;
     background: var(--ink); color: var(--paper); letter-spacing: .04em;
   }
-  .windows { display: flex; aspect-ratio: var(--screen, 1.778); min-height: 5rem; }
+  .windows { display: flex; aspect-ratio: var(--screen, 1.778); min-height: 4rem; }
   .screenrow {
     display: flex; align-items: baseline; gap: .5rem; margin: 0 0 .8rem;
     font-size: .84rem; flex-wrap: wrap;
