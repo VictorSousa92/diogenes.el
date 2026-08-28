@@ -344,9 +344,9 @@ package is already there, so without it every start-up fails. Update with
 
 [**Open the configuration builder**](https://htmlpreview.github.io/?https://raw.githubusercontent.com/VictorSousa92/diogenes.el/modular-customizable/tools/diogenes-preset-builder.html#configuration)
 to fill this in by hand-holding rather than by hand: it asks what you run, takes
-your dictionary paths by drag-and-drop, records the keys you press, warns about
-a key something else already wants, and writes the block below with only what
-differs from the defaults. Or write it yourself:
+a dictionary path pasted from your file manager, records the keys you press,
+warns about a key something else already wants, and writes the block below with
+only what differs from the defaults. Or write it yourself:
 
 Settings go in `:init`, which runs before the package loads; anything that
 names something the package itself defines goes in `:config`, which runs
