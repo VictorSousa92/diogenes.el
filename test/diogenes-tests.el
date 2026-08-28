@@ -1282,6 +1282,79 @@ answers nil so the ordinary splitting takes its turn."
       (dolist (b (list entry analysis elsewhere))
         (when (buffer-live-p b) (kill-buffer b))))))
 
+(ert-deftest diogenes-test-a-word-broken-across-lines ()
+  "A divided word is joined where the BUFFER says it is divided, and not else.
+`C-c C-c\=' on either half looked up that half -- `praeci\=' and `pitur\=' rather
+than `praecipitur\='.  Two kinds of evidence count: a hyphen at the end of the
+line, and the record `C-c C--\=' leaves when it removes one.  A line merely
+ending mid-phrase is not evidence, and guessing there would join two good words
+as often as it mended a broken one."
+  (with-temp-buffer
+    ;; A hyphen is a word constituent in some syntax tables and not others, so
+    ;; `thing-at-point' may hand back `prae' or `prae-' for the same text.  The
+    ;; function trims a trailing hyphen for that reason, and this test does not
+    ;; set a syntax table, so it passes under whichever the buffer has.
+    (let ((major-mode 'diogenes-browser-mode)
+          (diogenes-browser-join-broken-words t))
+      (cl-flet ((at (word)
+                  (goto-char (point-min))
+                  (search-forward word)
+                  (goto-char (match-beginning 0))))
+        ;; A HYPHEN, with a citation on the next line: joined, and the numbers
+        ;; are not part of the word.
+        (erase-buffer)
+        (insert "quod prae-\n")
+        (let ((cit (point)))
+          (insert "1.2.3         ")
+          (put-text-property cit (point) 'cit '(1 2 3)))
+        (insert "cipitur inde\n")
+        (at "prae")
+        (should (equal (list :hyphen (diogenes-browser--word-at-point-joined))
+                       '(:hyphen "praecipitur")))
+
+        ;; NO HYPHEN and no record: nothing to go on, so the half stands.  This
+        ;; is the case an earlier draft guessed at.
+        (erase-buffer)
+        (insert "quod prae\ncipitur inde\n")
+        (at "prae")
+        (should-not (diogenes-browser--word-at-point-joined))
+
+        ;; A hyphen REMOVED, point on the first half: the line remembers.
+        (erase-buffer)
+        (let ((line-a (point)))
+          (insert "quod prae\n")
+          (put-text-property line-a (point) 'hyphen-start "prae"))
+        (let ((line-b (point)))
+          (insert "cipitur inde\n")
+          (put-text-property line-b (point) 'hyphen-end "cipitur"))
+        (at "prae")
+        ;; Labelled, because ERT names the test and not the form: two
+        ;; assertions expecting the same string are told apart in the report
+        ;; only by what they carry with them.  This one cost half an hour.
+        (should (equal (list :record (diogenes-browser--word-at-point-joined))
+                       '(:record "praecipitur")))
+
+        ;; A word ALREADY joined in the text: nothing to do, and saying so is
+        ;; how this is told apart from a word never divided.
+        (erase-buffer)
+        (let ((line-a (point)))
+          (insert "quod praecipitur\n")
+          (put-text-property line-a (point) 'hyphen-start "prae"))
+        (at "praecipitur")
+        (should-not (diogenes-browser--word-at-point-joined))
+
+        ;; A capital on the next line, which was the old heuristic's undoing.
+        (erase-buffer)
+        (insert "dixit haec\nRoma capta est\n")
+        (at "haec")
+        (should-not (diogenes-browser--word-at-point-joined))
+
+        ;; And a word in the middle of a line.
+        (erase-buffer)
+        (insert "arma virumque cano\n")
+        (at "virumque")
+        (should-not (diogenes-browser--word-at-point-joined))))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

@@ -116,6 +116,96 @@ Takes no prefix argument, as `diogenes-browser-forward' takes none."
 	       (when-let* ((citation (get-text-property (point) 'cit)))
 		 (insert (diogenes--browser-format-citation citation)))))))))
 
+(defcustom diogenes-browser-join-broken-words t
+  "Whether a word broken across two lines is joined before it is looked up.
+A text may divide a word at the end of a line, and `C-c C-c\=' on either half
+looked up that half -- `praeci\=' and `pitur\=' rather than `praecipitur\=', neither
+of which any dictionary has.
+
+Only where the buffer SAYS the word is divided: a hyphen at the end of the line,
+or the record `C-c C--\=' leaves behind when it removes one.  A line merely
+ending in the middle of a phrase is not evidence, and guessing there would join
+two ordinary words as often as it mended a broken one.
+
+The halves are joined for the lookup only; the buffer is not touched.
+`C-c C--\=' (`diogenes-browser-remove-hyphenation\=') is still there for joining
+them in the text itself."
+  :type 'boolean
+  :group 'diogenes)
+
+(defun diogenes-browser--word-at-point-joined ()
+  "The word at point, joined with its other half where the text divided it.
+Returns nil where there is nothing to join, so a caller falls back on the
+ordinary word at point.
+
+TWO KINDS OF EVIDENCE, and nothing else counts.
+
+A HYPHEN at the end of the line, which is the text saying so outright.
+
+Or the record `diogenes-browser-remove-hyphenation\=' leaves when it removes one:
+it puts `hyphen-start\=' on the line that held the first half and `hyphen-end\=' on
+the line that held the second, with the halves as their values.  So a buffer
+whose hyphens have been removed still knows where they were, and a word already
+joined in the text needs nothing done to it -- the property is how we can tell
+that case from a word that was never divided at all.
+
+A line that merely ends in the middle of a phrase is NOT evidence.  An earlier
+draft guessed there, on the grounds that the next line began lower-case, and
+would have joined two perfectly good words in verse as often as it mended a
+broken one.  Where a text divides a word and prints no hyphen, this returns nil
+and the reader gets the half -- which is what they got before, and honest."
+  (save-excursion
+    (let ((bounds (bounds-of-thing-at-point 'word)))
+      (when bounds
+        (let* ((start (car bounds))
+               (end (cdr bounds))
+               (word (buffer-substring-no-properties start end)))
+          (goto-char end)
+          ;; The word may or may not include the hyphen, depending on the
+          ;; buffer's syntax table -- `thing-at-point' asks that table, and a
+          ;; hyphen is a word constituent in some modes and not others.  So the
+          ;; word is trimmed of a trailing hyphen and point put before it, and
+          ;; the tests below need not care which happened.
+          (when (string-suffix-p "-" word)
+            (setq word (substring word 0 -1))
+            (goto-char (1- end)))
+          (cond
+           ;; A hyphen at the end of the line.
+           ((looking-at-p "-[ \t]*$")
+            (diogenes-browser--second-half word))
+           ;; Or a line whose hyphen was REMOVED, with point on the first half:
+           ;; `diogenes-browser-remove-hyphenation' recorded that half as the
+           ;; value of `hyphen-start', so the two agreeing is the evidence.
+           ;;
+           ;; Agreeing MATTERS.  That property is put on the whole line, so it
+           ;; is there whether the word is still divided or has been joined --
+           ;; and an earlier draft, taking its mere presence for `already
+           ;; joined, do nothing', answered nil for a word that was still in
+           ;; halves.  A word already joined reads `praecipitur' where the
+           ;; property records `prae', they do not agree, and this falls through
+           ;; to nil of itself: no clause is needed for it.
+           ((and (equal (get-text-property (line-beginning-position)
+                                           'hyphen-start)
+                        word)
+                 (looking-at-p "[ \t]*$"))
+            (diogenes-browser--second-half word))
+           (t nil)))))))
+
+(defun diogenes-browser--second-half (first-half)
+  "FIRST-HALF joined to the first word of the next line, or nil.
+The citation is skipped: it is a text property, `cit\=', so whatever the reader
+has chosen to show or hide, the line numbers are never taken for part of the
+word."
+  (save-excursion
+    (forward-line 1)
+    (while (and (not (eobp)) (get-text-property (point) 'cit))
+      (goto-char (or (next-single-property-change (point) 'cit)
+                     (line-end-position))))
+    (skip-chars-forward " \t")
+    (when-let* ((tail (bounds-of-thing-at-point 'word)))
+      (concat first-half
+              (buffer-substring-no-properties (car tail) (cdr tail))))))
+
 (defun diogenes-browser-remove-hyphenation (&optional mark-with-vertical-bar)
   "Join all hyphenated words in the current Diogenes Browser Buffer."
   (interactive "P")

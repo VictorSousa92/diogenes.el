@@ -21,6 +21,8 @@
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
+(declare-function diogenes-browser--word-at-point-joined "diogenes-browser" ())
+(defvar diogenes-browser-join-broken-words)
 (declare-function diogenes--browse-work "diogenes-browser" (options passage))
 (declare-function diogenes--perseus-path "diogenes-perl-interface" (&rest parts))
 (declare-function diogenes--dict-file "diogenes-perl-interface" (lang))
@@ -1442,7 +1444,16 @@ and in those buffers there is nothing to guess from."
   (unless (or (diogenes--home-buffer-p (buffer-name))
               (derived-mode-p 'pdf-view-mode 'doc-view-mode)
               (and (fboundp 'reader-mode) (derived-mode-p 'reader-mode)))
-    (thing-at-point 'word t)))
+    (or
+     ;; A word the text broke across two lines is one word, and looking up
+     ;; either half finds nothing: no dictionary has `praeci' or `pitur'.  The
+     ;; browser can tell, the citation being a text property it knows to skip,
+     ;; so it is asked first.
+     (and (derived-mode-p 'diogenes-browser-mode)
+          (bound-and-true-p diogenes-browser-join-broken-words)
+          (fboundp 'diogenes-browser--word-at-point-joined)
+          (diogenes-browser--word-at-point-joined))
+     (thing-at-point 'word t))))
 
 (defun diogenes--lookup-current-headword ()
   "Return the headword of the entry point is in, for the lookup commands."
