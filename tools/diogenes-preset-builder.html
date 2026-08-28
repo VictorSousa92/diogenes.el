@@ -375,13 +375,16 @@
      <code>C-h k</code> and the key, and Emacs names whatever holds it. What
      this tool knows is a curated list and cannot include your own packages or
      bindings.</p>
-  <p class="note"><b>Drag a file or folder</b> from your file manager onto any
-     box below and the whole path appears. Nothing is uploaded &mdash; a file
-     manager hands the page the path as text. Typing works too, and a path
-     pasted in works as well.</p>
-  <p class="note">Dragging needs the page open in a browser: save this file and
-     open it, or use the GitHub Pages link. A preview inside another page never
-     receives the file, so the boxes will not respond there.</p>
+  <p class="note"><b>Copy a file in your file manager and paste it into a box</b>
+     &mdash; the clipboard carries the whole path and the box takes it, on
+     Windows, macOS and Linux alike. Typing works too. Dragging works in some
+     browsers: most now withhold the path of a dropped file, the same rule that
+     hides it in a file chooser, and the box says so when that happens. Nothing
+     is uploaded anywhere.</p>
+  <p class="note">On Windows, <em>Copy as path</em> in Explorer's right-click
+     menu (hold Shift) gives what these boxes want. Backslashes are turned into
+     forward slashes, which Emacs accepts and which keeps the generated
+     configuration readable.</p>
   <div id="c-dicts"></div>
 
   <h2>Reading</h2>
@@ -1418,11 +1421,15 @@ function configText() {
   const out = [];
   const paths = [];
   document.querySelectorAll('#c-dicts input[data-path]').forEach(i => {
-    const v = i.value.trim();
+    // Normalised on the way out as well as on the way in: a reader who TYPES a
+    // Windows path types backslashes, and a backslash in an Emacs string is an
+    // escape -- `"C:\dir"' is `C:dir' with a tab in it, or worse.  Forward
+    // slashes work on every platform Emacs runs on.
+    const v = normalisePath(i.value) || i.value.trim();
     if (v) paths.push(`  (setq ${i.dataset.path} ${JSON.stringify(v)})`);
   });
-  const dpath = el('c-path').value.trim();
-  const morph = el('c-morpheus').value.trim();
+  const dpath = (normalisePath(el('c-path').value) || '');
+  const morph = (normalisePath(el('c-morpheus').value) || '');
 
   // HOW a package is installed differs by distribution, and writing
   // `use-package''s `:vc' for all three was wrong for two of them: Doom
@@ -1535,7 +1542,7 @@ function configText() {
   const chosen = (document.querySelector('input[name=preset]:checked') || {}).value || '';
   if (chosen === 'other') {
     const name = el('c-preset-name').value.trim();
-    const dir = el('c-preset-dir').value.trim();
+    const dir = (normalisePath(el('c-preset-dir').value) || '');
     if (name) {
       out.push('');
       out.push('  ;; A preset of your own, loaded at startup.');
@@ -1910,12 +1917,56 @@ function warnFor(key, context) {
 // BROWSING can only give the path RELATIVE to the folder chosen, so it is
 // composed with the base folder typed once above.  Where that is empty the
 // relative path is offered with a note, which is better than a bare filename.
-function uriToPath(uri) {
+// A path from a clipboard or a drop, on any of the three platforms.
+//
+// WINDOWS is the awkward one.  A file URI there is `file:///C:/dir/x.pdf', with
+// a slash before the drive letter that is not part of the path; a UNC share is
+// `file://server/share/x'.  Explorer's `Copy as path' gives no URI at all but a
+// QUOTED backslash path, `"C:\dir\x.pdf"'.  And a backslash inside an Emacs
+// string is an escape, so a path is written with forward slashes -- which Emacs
+// accepts on Windows and which spares the reader a line full of doubled
+// backslashes.
+function normalisePath(raw) {
+  if (!raw) return null;
+  let s = String(raw).trim();
+  // Explorer quotes; so does a shell drag on some desktops.
+  s = s.replace(/^["']+/, '').replace(/["']+$/, '');
+  if (!s) return null;
+  s = s.replace(/\\/g, '/');
+  // `///C:/...' from a URI: the slash before a drive letter is not the path.
+  s = s.replace(/^\/([A-Za-z]:)/, '$1');
+  return s;
+}
+
+function looksLikePath(s) {
+  if (!s) return false;
+  const p = normalisePath(s);
+  return !!p && (p.startsWith('/') || p.startsWith('~') ||
+                 /^[A-Za-z]:\//.test(p) || p.startsWith('//'));
+}
+
+function uriToPath(text) {
+  if (!text) return null;
   try {
-    const u = decodeURI(uri.trim().split(/[\r\n]/)[0]);
-    return u.startsWith('file://') ? u.slice('file://'.length) : null;
+    // The first line that IS a URI, not simply the first line.  A file manager
+    // may put its own word in front -- GNOME's copied-files format begins with
+    // `copy' or `cut' on a line of its own -- a drag may carry several files, of
+    // which the first is the one meant, and `#' lines are comments in the
+    // `text/uri-list' format.
+    for (const line of String(text).split(/[\r\n]+/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      if (/^file:\/\//i.test(trimmed)) {
+        // `file://host/path' keeps the host as a UNC share; `file:///path' has
+        // an empty host and the path begins at the third slash.
+        const rest = decodeURI(trimmed).replace(/^file:\/\//i, '');
+        return normalisePath(rest.startsWith('/') ? rest : '//' + rest);
+      }
+    }
+    return null;
   } catch { return null; }
 }
+
 
 function installPathHelpers() {
   document.querySelectorAll('#panel-config input[data-drop], #panel-config input[data-path]')
@@ -1933,22 +1984,44 @@ function installPathHelpers() {
           input.classList.add('dropping');
         }));
       input.addEventListener('dragleave', () => input.classList.remove('dropping'));
+      // PASTING is the route that works everywhere.  Copy the file in your
+      // file manager and the clipboard holds a `file://' URI; browsers hand
+      // that over, where they withhold the path of a DROPPED file.
+      input.addEventListener('paste', ev => {
+        const text = (ev.clipboardData || window.clipboardData).getData('text');
+        const path = uriToPath(text) ||
+                     (looksLikePath(text) ? normalisePath(text) : null);
+        if (path) {
+          ev.preventDefault();
+          input.value = path;
+          renderConfig();
+        }
+        // Anything else -- a plain path, most likely -- is left to paste
+        // itself, which does the right thing already.
+      });
       input.addEventListener('drop', ev => {
         ev.preventDefault();
         input.classList.remove('dropping');
         const uris = ev.dataTransfer.getData('text/uri-list');
         const plain = ev.dataTransfer.getData('text/plain');
         const path = uriToPath(uris) || uriToPath(plain) ||
-                     (plain.trim().startsWith('/') ? plain.trim() : null);
+                     (looksLikePath(plain) ? normalisePath(plain) : null);
         if (path) { input.value = path; renderConfig(); }
         else if (ev.dataTransfer.files && ev.dataTransfer.files.length) {
           // A file dropped from an application rather than a file manager: the
           // name is all there is, so say what is missing rather than filling
           // the box with something that will not work.
-          input.value = '';
-          el('c-copied').textContent =
-            'That gave only the name \u2014 drag from your file manager, or type the path';
-          setTimeout(() => el('c-copied').textContent = '', 4000);
+          // The browser withheld the path and gave only the file: Chrome and
+          // recent Firefox strip `text/uri-list' for local files, the same
+          // privacy rule that hides the path in a file chooser.  Nothing here
+          // can recover it, so say what does work rather than blaming the
+          // reader's aim.
+          const name = ev.dataTransfer.files[0].name;
+          el('c-copied').innerHTML =
+            'Your browser will not reveal where <b>' + name + '</b> lives. ' +
+            'Copy the file in your file manager and paste here instead, or type ' +
+            'the path.';
+          setTimeout(() => el('c-copied').textContent = '', 7000);
         }
       });
     });
