@@ -391,12 +391,133 @@ passes through.")
   "The work number this browser buffer is reading; see
 `diogenes--browser-corpus\='.")
 
+(defvar-local diogenes--browser-labels nil
+  "What the levels of this work's citations are called, outermost first.
+`(\"book\" \"verse\")\=', `(\"Bekker page\" \"line\")\=', `(\"Stephanus page\"
+\"section\" \"line\")\=' -- Diogenes's own data says, per work, and a citation is a
+list in exactly that order.
+
+Recorded once when the buffer is made rather than asked for each time it is
+wanted: `diogenes--get-work-labels\=' is a call into Perl, which is cheap once and
+not cheap per reference.
+
+This is what makes a citation renderable.  `(1053a 15)\=' is conventionally
+written `1053a15\=' and `(4 208)\=' is written `4.208\=', and the difference is not
+the author but the LEVEL: a page and a line run together, numbered levels take a
+stop between them.  Without the labels there is no way to tell which is which,
+and rendering would have to know a convention per author -- an open set, where
+the levels are a handful.")
+
 (defvar-local diogenes--browser-passage nil
   "The passage this browser buffer was opened at, if one was given.
 Where the reader answered `no\=' to `Specify passage?\=' this is nil and the
 buffer began at the start of the work.  It is where it BEGAN, not where it now
 is: paging moves the buffer and does not update this, the position being the
 Perl process's to know.")
+
+(defcustom diogenes-citation-run-on-labels
+  '("page" "pg" "column" "folio")
+  "Levels that run into the level after them, with no stop between.
+Aristotle is cited `1053a15\=' and Plato `246a4\=', the page and what follows
+written as one; a book and a verse are cited `4.208\=', with a stop.  The
+difference is the LEVEL and not the author, which is why this is a list of
+labels: Diogenes names the levels of every work -- `(\"book\" \"verse\")\=',
+`(\"Stephanus page\" \"section\" \"line\")\=' -- so one rule per label covers every
+author who uses it.
+
+`pg\=' is there because the corpora abbreviate: the scan finds `pg\=' 341 times
+beside `page\=' 1785, and `ln\=', `vol\=', `sect\=' and `chap\=' likewise beside their
+full forms.  Only the paginated ones need listing, the rest taking stops anyway.
+
+Matched as SUBSTRINGS of a label, so `page\=' covers `Stephanus page\=',
+`Bekker page\=', `Jebb page\=' and the twenty-odd other editors' pages the two
+corpora use -- including any this list has never heard of, which a list of whole
+labels could not do.
+
+This affects DISPLAY only.  What a link records is
+`diogenes-citation-to-key\=', which puts a stop between every level whatever
+their labels, because that is reversible and a run-on citation is not: `1053a15\='
+cannot be split back into a page and a line without already knowing which is
+which.  So a pattern missing from this list costs a reader `1053a.15\=' where they
+would write `1053a15\=', and costs nothing that has to work."
+  :type '(repeat string)
+  :group 'diogenes)
+
+(defun diogenes--citation-runs-on-p (label)
+  "Whether LABEL runs into the level after it, with no stop between.
+Matched as SUBSTRINGS, case-insensitively, and both parts of that were learnt
+from the data rather than guessed.
+
+Substrings, because every editor's page is its own level.  A pass over all 2194
+authors of the TLG and the PHI turns up `page\=' itself 1785 times and then
+`Stephanus page\=', `Bekker page\=', `Jebb page\=', `Harduin page\=', `Morel page\=',
+`Olearius page\=', `Aubert page\=', `Thevenot page\=', `Wescher page\=', `Spengel
+page\=', `Dietz page\=', `Usener page\=', `Dindorf page\=', `Kallierges page\=',
+`Hermann page\=', `Klein page\=', `Walz page\=', `MPG page\=', `codex page\=',
+`Dindorf-Stephanus page\=', `page+column\=', `Bekker page+line\=' -- and there will
+be editors neither of us has met.  A LIST of labels would have to name each; the
+pattern `page\=' catches them all.
+
+Case-insensitively, because the corpora do not agree: the TLG capitalises --
+`Book\=', `Line\=', `Fragment\=', `Ode\=' -- and the PHI does not.  And trimmed,
+because at least one work carries a label with a leading space."
+  (when label
+    (let ((clean (string-trim (downcase label))))
+      (and (cl-some (lambda (pattern)
+                      (string-match-p (regexp-quote (downcase pattern)) clean))
+                    diogenes-citation-run-on-labels)
+           t))))
+
+(defun diogenes-citation-to-string (citation &optional labels)
+  "CITATION written as a reader would write it.
+LABELS names its levels, outermost first, as `diogenes--browser-labels\=' holds
+them; without them every level takes a stop, which is right for most and wrong
+for the pages.
+
+    (4 208)      with (\"book\" \"verse\")                  -> 4.208
+    (1053a 15)   with (\"Bekker page\" \"line\")             -> 1053a15
+    (246a 4 2)   with (\"Stephanus page\" \"section\" \"line\") -> 246a4.2
+    (25)         with (\"verse\")                          -> 25
+
+The elements may be numbers or symbols -- `1053a\=' is a symbol -- so each is
+printed rather than formatted as a number."
+  (let ((parts nil))
+    (cl-loop for element in citation
+             for index from 0
+             for label = (nth index labels)
+             do (push (format "%s" element) parts)
+             ;; A stop BEFORE the next element, unless this level runs on.
+             when (and (nth (1+ index) citation)
+                       (not (diogenes--citation-runs-on-p label)))
+             do (push "." parts))
+    (apply #'concat (nreverse parts))))
+
+(defun diogenes-citation-to-key (citation)
+  "CITATION as a string that can be turned back into CITATION.
+A stop between every level, whatever the levels are called:
+
+    (1053a 15)     -> \"1053a.15\"
+    (10 20 2 1)    -> \"10.20.2.1\"
+    (25)           -> \"25\"
+
+REVERSIBLE, which is the whole point and the reason it ignores the conventions
+that `diogenes-citation-to-string\=' honours.  `1053a15\=' is how a reader writes
+Aristotle and cannot be read back: nothing in the string says where the page
+ends and the line begins, and knowing would mean knowing the work\='s levels
+before parsing the citation that identifies the work.  `1053a.15\=' says.
+
+So: this for anything that must be read again -- a link, a stored reference, an
+argument to a command -- and the other for anything a person reads."
+  (mapconcat (lambda (element) (format "%s" element)) citation "."))
+
+(defun diogenes-citation-from-key (key)
+  "KEY, as `diogenes-citation-to-key\=' wrote it, back to a citation.
+The elements come back as strings.  Diogenes gives some as numbers and some as
+symbols -- `1053a\=' is a symbol -- and it takes strings where it takes a passage
+at all, `diogenes--select-passage\=' collecting them with `read-string\='; so
+strings are what a caller wants and no attempt is made to guess which were
+numbers."
+  (and key (split-string key "\\." t)))
 
 (defun diogenes-browser-citation-at (&optional position)
   "The citation of the line at POSITION, or at point.
@@ -434,12 +555,31 @@ The corpus, author and work are what `diogenes-browse-tlg\=' and its siblings
 take, so a reference is enough to open the work again; `:from\=' says where in it.
 Nil in a buffer that is not a browser, there being nothing to refer to."
   (when (derived-mode-p 'diogenes-browser-mode)
-    (let ((interval (diogenes-browser-citation-interval)))
+    (let* ((interval (diogenes-browser-citation-interval))
+           (from (car interval))
+           (to (cdr interval))
+           (labels diogenes--browser-labels))
       (list :corpus diogenes--browser-corpus
             :author diogenes--browser-author
             :work diogenes--browser-work
-            :from (car interval)
-            :to (cdr interval)))))
+            :labels labels
+            :from from
+            :to to
+            ;; TWO renderings, for two jobs.  `:text' is for a reader and
+            ;; follows the conventions: `1053a15'.  `:key' is for anything that
+            ;; must read it back and puts a stop between every level:
+            ;; `1053a.15'.  Neither can do the other's work -- the conventional
+            ;; form is not reversible, and the reversible form is not what
+            ;; anyone writes in a note.
+            :text (when from
+                    (concat (diogenes-citation-to-string from labels)
+                            (when to
+                              (concat "-" (diogenes-citation-to-string
+                                           to labels)))))
+            :key (when from
+                   (concat (diogenes-citation-to-key from)
+                           (when to
+                             (concat "-" (diogenes-citation-to-key to)))))))))
 
 (defun diogenes--browse-work (options passage)
   "Function that browses a work from the Diogenes Databases.
@@ -463,6 +603,14 @@ number of the author and the number of the work."
     (setq diogenes--browser-author (car passage))
     (setq diogenes--browser-work (cadr passage))
     (setq diogenes--browser-passage (cddr passage))
+    ;; And what the levels are called, which is what lets a citation be
+    ;; written the way a reader would write it.  Guarded: a work whose labels
+    ;; Perl will not give is still browsable, and a reference from it renders
+    ;; plainly rather than not at all.
+    (setq diogenes--browser-labels
+          (ignore-errors
+            (diogenes--get-work-labels (list :type (plist-get options :type))
+                                       (list (car passage) (cadr passage)))))
     (current-buffer)))
 
 (defun diogenes--browse-database (type &optional author work)
