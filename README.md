@@ -659,9 +659,9 @@ Georges entry opens Georges', and the prefix in either looks another word up in
 the XML. Where the print is not configured, the letter says so and names the
 option to set.
 
-**And the prefix means one thing throughout: *ask me which word*.** It never
-switches between a dictionary's XML and its print — pressing the letter again
-inside that dictionary's own entry is what does that. For a print-only
+**And the prefix means one thing throughout: look a word up in that dictionary,
+asking which word.** It never reaches the printed page — pressing the letter
+again inside that dictionary's own entry is what does that. For a print-only
 dictionary — the OLD, Montanari, the CGL, the BDAG, Passow, the TGL — the letter
 opens the scan and the prefix asks which word to open it at. `C-u L` inside a
 scan is the one exception that does more.
