@@ -653,6 +653,19 @@ and `P` opens it.
 - With only `diogenes-bailly-pdf-file` set and no XML built, `B` opens the printed page instead, and Bailly behaves like the OLD.
 - Pressed a second time from inside a Bailly entry, `B` opens that word's page in the print. That is the only route to the PDF; `C-u B` [`SPC u B`] looks another word up in the XML.
 
+**Gaffiot and Georges work the same way**, being the other two with both an XML
+and a print: `g` inside a Gaffiot entry opens Gaffiot's page, `G` inside a
+Georges entry opens Georges', and the prefix in either looks another word up in
+the XML. Where the print is not configured, the letter says so and names the
+option to set.
+
+**And the prefix means one thing throughout: *ask me which word*.** It never
+switches between a dictionary's XML and its print — pressing the letter again
+inside that dictionary's own entry is what does that. For a print-only
+dictionary — the OLD, Montanari, the CGL, the BDAG, Passow, the TGL — the letter
+opens the scan and the prefix asks which word to open it at. `C-u L` inside a
+scan is the one exception that does more.
+
 ### Georges
 
 - Complete, and `G` works the same way: the entry, then the printed page from inside it.
