@@ -1306,7 +1306,7 @@ as often as it mended a broken one."
         (insert "quod prae-\n")
         (let ((cit (point)))
           (insert "1.2.3         ")
-          (put-text-property cit (point) 'cit '(1 2 3)))
+          (put-text-property cit (point) 'diogenes-citation t))
         (insert "cipitur inde\n")
         (at "prae")
         (should (equal (list :hyphen (diogenes-browser--word-at-point-joined))
