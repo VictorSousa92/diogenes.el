@@ -419,8 +419,7 @@ of the TGL, an index reference such as `t.3 c.746\'")
     ;; dictionary, the XML where there is one.  Bare, the letter does that too
     ;; -- except inside that dictionary's own entry, where it reaches the print.
     (diogenes-lookup-bailly "C-u <letter>"
-                            "look a word up in that dictionary -- the XML where \
-it has one")
+                            "look a word up in that dictionary")
     (diogenes-lookup-bailly "B, g, G"
                             "inside that dictionary's own entry, the printed page")
     (diogenes-browser-forward "C-c C-n" "the next page of the passage")
@@ -439,11 +438,12 @@ distribution has taken `C-u\=' for scrolling the argument is on the leader --
 `SPC u\=' under Doom and Spacemacs -- and `M-1\=' serves anywhere; the commands
 ask only whether they were given an argument, not how.
 
-WHAT THE PREFIX MEANS is the same for every dictionary letter: `ask me which
-word\='.  It does NOT switch between a dictionary's XML and its print.  What does
-that is pressing the letter again INSIDE that dictionary's own entry -- `g\=' in a
-Gaffiot entry opens Gaffiot's printed page, and `C-u g\=' there looks another word
-up in the XML instead.  Bailly, Gaffiot and Georges are the three with both.
+WHAT THE PREFIX MEANS is the same for every dictionary letter: look a word up in
+that dictionary, asking which word.  It does NOT reach the printed page.  What
+does that is pressing the letter again INSIDE that dictionary's own entry -- `g\='
+in a Gaffiot entry opens Gaffiot's page, and `C-u g\=' there looks another word up
+in Gaffiot instead.  Bailly, Gaffiot and Georges are the three with a print as
+well as an entry.
 
 For a print-only dictionary -- the OLD, Montanari, the CGL, the BDAG, Passow,
 the TGL -- the letter opens the scan and the prefix asks which word to open it
