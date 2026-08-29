@@ -375,6 +375,72 @@ If it is incomplete, buffer it and prepend it when called again."
 		 (goto-char pos))
 		(t (recenter -1 t)))))))))
 
+(defvar-local diogenes--browser-corpus nil
+  "The corpus this browser buffer is reading -- `tlg\=', `phi\=', and the rest.
+Recorded so that the buffer can say what it is showing.  It could not: a
+browser buffer knew its LANGUAGE and nothing else, so nothing outside it could
+name the passage on the screen -- not a link to it, not a citation, not a
+message.  Set where the buffer is made, that being the one place every route in
+passes through.")
+
+(defvar-local diogenes--browser-author nil
+  "The author number this browser buffer is reading; see
+`diogenes--browser-corpus\='.")
+
+(defvar-local diogenes--browser-work nil
+  "The work number this browser buffer is reading; see
+`diogenes--browser-corpus\='.")
+
+(defvar-local diogenes--browser-passage nil
+  "The passage this browser buffer was opened at, if one was given.
+Where the reader answered `no\=' to `Specify passage?\=' this is nil and the
+buffer began at the start of the work.  It is where it BEGAN, not where it now
+is: paging moves the buffer and does not update this, the position being the
+Perl process's to know.")
+
+(defun diogenes-browser-citation-at (&optional position)
+  "The citation of the line at POSITION, or at point.
+Nil where there is none -- a header line, a blank, the space between passages.
+Searches BACKWARD from there if the line itself has none, a citation belonging
+to the lines that follow it rather than sitting on every one."
+  (save-excursion
+    (when position (goto-char position))
+    (or (get-text-property (point) 'cit)
+        (let ((match (text-property-search-backward 'cit)))
+          (and match (prop-match-value match))))))
+
+(defun diogenes-browser-citation-interval ()
+  "The citations bounding the region, or the one at point.
+Returns (START . END), with END nil where there is no region: a reader
+referring to a single line wants that line, and one who has marked a passage
+wants its extent.
+
+This is what the buffer can say about WHERE IT IS.  It keeps no record of that
+-- paging is the Perl process\='s business and the buffer is told only what to
+display -- but every line carries its citation as a text property, so the
+position is readable from the text even though it is not remembered."
+  (if (use-region-p)
+      (cons (diogenes-browser-citation-at (region-beginning))
+            (diogenes-browser-citation-at (max (region-beginning)
+                                               (1- (region-end)))))
+    (cons (diogenes-browser-citation-at) nil)))
+
+(defun diogenes-browser-reference ()
+  "Everything needed to name, and to reopen, the passage in this buffer.
+A plist: `:corpus\=', `:author\=', `:work\=', `:from\=' and `:to\=' -- the last two
+being citations, and `:to\=' nil unless a region is marked.
+
+The corpus, author and work are what `diogenes-browse-tlg\=' and its siblings
+take, so a reference is enough to open the work again; `:from\=' says where in it.
+Nil in a buffer that is not a browser, there being nothing to refer to."
+  (when (derived-mode-p 'diogenes-browser-mode)
+    (let ((interval (diogenes-browser-citation-interval)))
+      (list :corpus diogenes--browser-corpus
+            :author diogenes--browser-author
+            :work diogenes--browser-work
+            :from (car interval)
+            :to (cdr interval)))))
+
 (defun diogenes--browse-work (options passage)
   "Function that browses a work from the Diogenes Databases.
 
@@ -389,7 +455,15 @@ number of the author and the number of the work."
     (setq diogenes--browser-language
 	  (pcase (plist-get options :type)
 	    ("tlg" "greek")
-	    ("phi" "latin")))))
+	    ("phi" "latin")))
+    ;; What this buffer is reading.  PASSAGE begins with the author and the
+    ;; work, whatever else follows: `diogenes--browse-database' builds it as
+    ;; `(nconc (list author work) passage)'.
+    (setq diogenes--browser-corpus (plist-get options :type))
+    (setq diogenes--browser-author (car passage))
+    (setq diogenes--browser-work (cadr passage))
+    (setq diogenes--browser-passage (cddr passage))
+    (current-buffer)))
 
 (defun diogenes--browse-database (type &optional author work)
   "Select a specific passage in a work from a diogenes database for browsing.
