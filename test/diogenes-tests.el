@@ -1595,6 +1595,30 @@ scanned page\='."
     (should (symbolp (car cell)))
     (should (stringp (cdr cell)))))
 
+(ert-deftest diogenes-test-purpose-binds-no-keys-of-its-own ()
+  "`diogenes-purpose\=' leaves the keys to the core.
+It had two keymaps, and only one was emptied when the commands moved: the minor
+mode for the scanned dictionaries kept `C-c C-l\=', `C-c C-b\=' and `C-c C-e\='
+bound to commands of its own.
+
+Which did more than duplicate.  The cheatsheet lifts into `Everywhere\=' the
+bindings identical in every section, comparing the key AND the command -- so a
+scan running `diogenes-purpose-focus-browser-window\=' where an entry runs
+`diogenes-focus-browser\=' had the same key doing two things, nothing was common,
+and the four keys went on being listed once per section."
+  (when (boundp 'diogenes-purpose-dict-mode-map)
+    ;; Empty: the mode remains so a dictionary buffer can be recognised.
+    (should (keymapp diogenes-purpose-dict-mode-map))
+    (dolist (key '("C-c C-l" "C-c C-b" "C-c C-e"))
+      (should-not (lookup-key diogenes-purpose-dict-mode-map (kbd key)))))
+  ;; And the same for the mode maps purpose used to install into.
+  (when (boundp 'diogenes-lookup-mode-map)
+    (dolist (key '("C-c C-l" "C-c C-b"))
+      (let ((command (lookup-key diogenes-lookup-mode-map (kbd key))))
+        (when command
+          (should-not (string-prefix-p "diogenes-purpose-"
+                                       (symbol-name command))))))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

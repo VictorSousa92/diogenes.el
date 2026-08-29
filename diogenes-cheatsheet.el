@@ -659,13 +659,17 @@ column is all there is and the panel scrolls instead."
 	 (tallest (apply #'max 1 (mapcar #'length blocks)))
 	 (result (diogenes-cheatsheet--paste
 		  (diogenes-cheatsheet--columnate blocks height))))
-    (while (and (> (nth 1 result) width) (< height (* 2 tallest)))
-      ;; A quarter taller each time: enough to drop a column within a few
-      ;; rounds, and small enough not to overshoot into one tall column when
-      ;; two would have fitted.
-      (setq height (max (1+ height) (round (* height 1.25)))
-	    result (diogenes-cheatsheet--paste
-		    (diogenes-cheatsheet--columnate blocks height))))
+    ;; AND NOTHING MORE.  An earlier version, finding the result too wide, packed
+    ;; again with a taller allowance -- fewer columns, less width.  Which works,
+    ;; and trades a horizontal crop for a vertical one: the height is the room
+    ;; the frame has, so a column taller than it is cut off the bottom, which is
+    ;; exactly what a reader reported.  Growing the height to fix the width is
+    ;; robbing one to pay the other.
+    ;;
+    ;; So the layout keeps to the height it was given, and the CALLER decides
+    ;; what to do when the result will not fit -- `diogenes-cheatsheet' shows it
+    ;; in a help window, which scrolls, rather than in a panel that cannot.
+    (ignore tallest)
     result))
 
 
@@ -780,7 +784,14 @@ this falls back to an ordinary help window."
 			 2))))
     (seq-let (text width height)
 	(diogenes-cheatsheet--render room (- (frame-width parent) 4))
-      (if (not (display-graphic-p))
+      (if (or (not (display-graphic-p))
+	      ;; TOO BIG FOR A PANEL, in either direction: a child frame is
+	      ;; clamped to its parent and shows nothing of what falls outside,
+	      ;; so a reader loses whole sections and is not told.  A help window
+	      ;; scrolls, which is the honest answer to more content than room --
+	      ;; and it is the same fallback a terminal frame already takes.
+	      (> width (- (frame-width parent) 4))
+	      (> height room))
 	  (with-help-window (help-buffer) (princ text))
 	(diogenes-cheatsheet--delete-frame)
 	(diogenes-cheatsheet--show-child-frame

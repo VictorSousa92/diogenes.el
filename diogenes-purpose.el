@@ -228,15 +228,20 @@ Consulted by `diogenes-purpose-focus-dictionary-window' when no window is
 currently showing a dictionary.")
 
 (defvar diogenes-purpose-dict-mode-map
-  (let ((map (make-sparse-keymap)))
-    (keymap-set map "C-c C-l" #'diogenes-purpose-focus-lookup-window)
-    (keymap-set map "C-c C-b" #'diogenes-purpose-focus-browser-window)
-    (keymap-set map "C-c C-e" #'diogenes-purpose-focus-dictionary-window)
-    map)
+  (make-sparse-keymap)
   "Keymap for `diogenes-purpose-dict-mode'.
-The same three keys as everywhere else, `C-c C-e' included: pressed in the
-dictionary it is a no-op, which is better than being an error or, worse,
-some other command.")
+EMPTY, and that is the point of it now: the mode still exists so that a
+dictionary buffer can be recognised, and the keys it used to carry --
+`C-c C-l', `C-c C-b', `C-c C-e' -- are in the core, bound by
+`diogenes-focus-keys' and `diogenes-old-visit-dictionary-key' in every Diogenes
+buffer including this one.
+
+Leaving them here did more than duplicate: the cheatsheet lifts into
+`Everywhere' the bindings that are the same in every section, comparing the key
+AND the command, and a scan running `diogenes-purpose-focus-browser-window'
+where an entry runs `diogenes-focus-browser' has the same key doing two things.
+So nothing was common, nothing was lifted, and the four keys went on being
+listed four times over.")
 
 (define-minor-mode diogenes-purpose-dict-mode
   "Mark this buffer as a Diogenes print dictionary.
