@@ -485,10 +485,18 @@
      here regardless, since what you mean by the key is the same.</p>
   <div id="c-keys-focus"></div>
 
-  <h3>One key each</h3>
-  <p class="note">Keys with an option of their own rather than a place in a
-     table.</p>
-  <div id="c-keys-single"></div>
+  <h3>Inside a print dictionary</h3>
+  <p class="note">Pressed on a scanned page, and bound there through a minor
+     mode of Diogenes' own, so an unrelated PDF keeps its own keys.</p>
+  <div id="c-keys-scan"></div>
+
+  <div id="c-keys-evil-group" hidden>
+    <h3>Evil</h3>
+    <p class="note">Diogenes puts its read-only buffers in Emacs state, so the
+       single letters reach the dictionaries. This is the way back to normal
+       state.</p>
+    <div id="c-keys-evil"></div>
+  </div>
 
   <h2>Frames</h2>
   <div class="row">
@@ -793,12 +801,24 @@ const LOOKUP_KEYS = [
   ['diogenes--quit', 'q', 'close the entry'],
 ];
 
-const SINGLE_KEYS = [
-  ['diogenes-pdf-search-key', 'L', 'look a word up from inside a scanned dictionary'],
-  ['diogenes-tgl-index-key', 'i', "volume V's index, from a TGL volume"],
-
-  ['diogenes-evil-normal-state-key', '<escape>', 'out of Emacs state, under evil'],
+// Inside a SCAN: pressed on a page of a printed dictionary, and bound there
+// through `diogenes-pdf-search-mode' so no unrelated PDF is affected.
+const SCAN_KEYS = [
+  ['diogenes-pdf-search-key', 'L',
+   'look a word up \u2014 with a prefix, its root, or a TGL index reference'],
+  ['diogenes-tgl-index-key', 'i',
+   "volume V's index, around the word you are on \u2014 TGL volumes only"],
 ];
+
+// Only where evil is in use, which the answer at the top of this tab decides.
+const EVIL_KEYS = [
+  ['diogenes-evil-normal-state-key', '<escape>',
+   'leave Emacs state for normal state, in a read-only Diogenes buffer'],
+];
+
+// Both together, wherever the code wants every standalone key rather than a
+// group of them: the conflict check, the warnings, and the emitted block.
+const SINGLE_KEYS = SCAN_KEYS.concat(EVIL_KEYS);
 
 // Going from one Diogenes window to another: `diogenes-focus-keys'.  A table of
 // its own because it is one option, written whole when any of it changes -- and
@@ -1632,20 +1652,20 @@ el('c-keys-focus').innerHTML =
       <div data-warnfor="${k[0]}" class="warnline"></div>
     </div>`).join('');
 
-el('c-keys-single').innerHTML =
-  SINGLE_KEYS.map(k => `
+const singleKeyRow = k => `
     <div class="keyrow">
       <div class="what"><code>${k[0]}</code><em>${k[2]}</em></div>
       <div class="keybox">
         <input type="text" data-singlekey="${k[0]}" placeholder="${k[1]}"
-               data-context="${k[0] === 'diogenes-pdf-search-key' ||
-                               k[0] === 'diogenes-tgl-index-key' ? 'document'
-                               : k[0] === 'diogenes-evil-normal-state-key' ? 'lookup'
-                               : 'lookup'}">
+               data-context="${SCAN_KEYS.some(s => s[0] === k[0])
+                               ? 'document' : 'lookup'}">
         <button data-record="1" title="Press the keys instead of typing them">\u2328</button>
       </div>
       <div data-warnfor="${k[0]}" class="warnline"></div>
-    </div>`).join('');
+    </div>`;
+
+el('c-keys-scan').innerHTML = SCAN_KEYS.map(singleKeyRow).join('');
+el('c-keys-evil').innerHTML = EVIL_KEYS.map(singleKeyRow).join('');
 
 el('c-distro').innerHTML = `
   <div class="distro">
@@ -1671,6 +1691,15 @@ document.addEventListener('change', e => {
   }
   if (e.target.id === 'c-evil') renderConfig();
 });
+
+// The evil group is shown only where evil is in use.  A key for leaving Emacs
+// state is meaningless without evil, and offering it would invite a reader to
+// set something that can never fire -- the same reasoning that keeps an
+// unconfigured dictionary out of an entry's banner.
+function renderEvilGroup() {
+  const group = el('c-keys-evil-group');
+  if (group) group.hidden = !el('c-evil').checked;
+}
 
 function renderEvilNote() {
   const distro = (document.querySelector('input[name=distro]:checked') || {}).value
@@ -1869,7 +1898,9 @@ function configText() {
   }
 
   const singles = [];
-  SINGLE_KEYS.concat(DICTIONARY_KEY).forEach(k => {
+  SINGLE_KEYS.concat(DICTIONARY_KEY).filter(k =>
+    !(EVIL_KEYS.some(e => e[0] === k[0]) && !el('c-evil').checked)
+  ).forEach(k => {
     const v = keyValue(document.querySelector(`input[data-singlekey="${k[0]}"]`));
     if (v !== undefined)
       singles.push(`  (setq ${k[0]} ${v === null ? 'nil' : JSON.stringify(v)})`);
@@ -2469,6 +2500,9 @@ function effectiveKeys() {
   // DICTIONARY_KEY is read here too: it is a single option, and only its place
   // on the page moved.
   SINGLE_KEYS.concat(DICTIONARY_KEY).forEach(k => {
+    // A key whose group is hidden is not in play: without evil there is no
+    // Emacs state to leave, so `<escape>' can collide with nothing.
+    if (EVIL_KEYS.some(e => e[0] === k[0]) && !el('c-evil').checked) return;
     const input = document.querySelector(`input[data-singlekey="${k[0]}"]`);
     const key = readBox(input, k[1]);
     const where = (input && input.dataset.context) || 'lookup';
@@ -2655,6 +2689,7 @@ function renderConfig() {
   renderWarnings();
   fitKeyBoxes();
   renderEvilNote();
+  renderEvilGroup();
 }
 
 // A tab is reachable by its own URL, so the README can link to whichever half
