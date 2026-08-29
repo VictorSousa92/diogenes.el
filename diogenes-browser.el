@@ -546,6 +546,48 @@ position is readable from the text even though it is not remembered."
                                                (1- (region-end)))))
     (cons (diogenes-browser-citation-at) nil)))
 
+(defun diogenes-citation-abbreviation (corpus author &optional work)
+  "How the dictionaries cite this author, or this work of theirs.
+Returns (AUTHOR-ABBREV . WORK-ABBREV), either of which may be nil.
+
+`Arist.\=' and `Metaph.\=', `Hom.\=' and `Il.\=', `Verg.\=' and `A.\=' -- the forms LSJ
+and Lewis & Short use, taken from the dictionaries themselves rather than from
+their printed front matter, which names no numbers.  See
+`tools/extract-abbreviations.py\='.
+
+Nil for a text neither dictionary cites, which is most of the two corpora: the
+table covers some five hundred works of the TLG and two hundred and seventy of
+the PHI, being the texts the lexicographers had occasion to quote."
+  (when (featurep 'diogenes-abbreviations)
+    (cons (gethash (list corpus author) diogenes-abbreviations)
+          (and work (gethash (list corpus author work)
+                             diogenes-abbreviations)))))
+
+(defun diogenes-reference-to-string (reference)
+  "REFERENCE written as a scholar would write it.
+`Arist. Metaph. 1053a15\=', `Hom. Il. 9.1\=', `Verg. A. 4.208\='.
+
+Falls back by degrees, each step giving up something and none failing outright:
+the work\='s abbreviation where the dictionaries have one, the author\='s alone
+where they name him but not it, and the numbers where they name neither.  A
+reader who cites a text no lexicographer quoted gets `tlg 2632/001 3.4\=', which
+is at least unambiguous."
+  (let* ((corpus (plist-get reference :corpus))
+         (author (plist-get reference :author))
+         (work (plist-get reference :work))
+         (text (plist-get reference :text))
+         (pair (diogenes-citation-abbreviation corpus author work))
+         (author-abbrev (car pair))
+         (work-abbrev (cdr pair)))
+    (string-join
+     (delq nil
+           (list (cond ((and author-abbrev work-abbrev)
+                        (concat author-abbrev " " work-abbrev))
+                       (author-abbrev)
+                       (t (format "%s %s/%s" corpus author work)))
+                 text))
+     " ")))
+
 (defun diogenes-browser-reference ()
   "Everything needed to name, and to reopen, the passage in this buffer.
 A plist: `:corpus\=', `:author\=', `:work\=', `:from\=' and `:to\=' -- the last two
@@ -580,6 +622,10 @@ Nil in a buffer that is not a browser, there being nothing to refer to."
                    (concat (diogenes-citation-to-key from)
                            (when to
                              (concat "-" (diogenes-citation-to-key to)))))))))
+
+;; `:citation' is added after the fact, `diogenes-reference-to-string' needing
+;; the reference it goes into.  A separate call rather than a fourth key, so
+;; that a caller wanting only the numbers pays nothing for the abbreviations.
 
 (defun diogenes--browse-work (options passage)
   "Function that browses a work from the Diogenes Databases.
