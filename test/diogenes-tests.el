@@ -1610,7 +1610,7 @@ and the four keys went on being listed once per section."
     ;; Empty: the mode remains so a dictionary buffer can be recognised.
     (should (keymapp diogenes-purpose-dict-mode-map))
     (dolist (key '("C-c C-l" "C-c C-b" "C-c C-e"))
-      (should-not (lookup-key diogenes-purpose-dict-mode-map (kbd key)))))
+      (should-not (commandp (lookup-key diogenes-purpose-dict-mode-map (kbd key))))))
   ;; And the same for the mode maps purpose used to install into.
   (when (boundp 'diogenes-lookup-mode-map)
     (dolist (key '("C-c C-l" "C-c C-b"))
