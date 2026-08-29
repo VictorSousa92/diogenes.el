@@ -248,6 +248,38 @@ has not been created answers nil."
         (cdr (assq (buffer-local-value 'major-mode buffer)
                    diogenes--role-modes)))))
 
+(defun diogenes--remember-role (window role)
+  "Note on WINDOW that it has held a buffer of ROLE.
+A window keeps a list, most recent first, so a window that held an entry and now
+holds a scanned page still answers to `lookup\='.
+
+Which is the point of it.  A scan REPLACES the entry by default, and the window
+then shows a PDF: the next entry looked for a window showing a lookup buffer,
+found none, and split -- so a reader who consulted the print and then looked up
+another word got a third window instead of the entry\='s own back.  The window had
+held an entry a moment before and nothing said so."
+  (when (window-live-p window)
+    (let ((held (window-parameter window 'diogenes-roles)))
+      (set-window-parameter window 'diogenes-roles
+                            (cons role (delq role (copy-sequence held)))))))
+
+(defun diogenes--window-that-held (role)
+  "A window on a visible frame that holds, or has held, a buffer of ROLE.
+Windows showing that kind NOW come first: a second entry belongs beside the
+first, not in the window where a scan happens to have displaced one.
+
+For PLACEMENT only.  The keys for going between windows use
+`diogenes--windows-of-role\=', which asks what a window shows and not what it
+once showed -- `C-c C-l\=' should take a reader to an entry, and a window holding
+a page of the OLD is not an entry however lately it was."
+  (or (diogenes--window-of-role role)
+      (catch 'found
+        (dolist (frame (frame-list))
+          (when (frame-visible-p frame)
+            (dolist (window (window-list frame 'no-minibuffer))
+              (when (memq role (window-parameter window 'diogenes-roles))
+                (throw 'found window))))))))
+
 (defun diogenes--windows-of-role (role)
   "Every window on a visible frame showing a buffer whose role is ROLE.
 In a settled order -- the frame list, and within a frame the window list -- so
@@ -513,7 +545,7 @@ another frame beside it.
 Returns nil where there is no such frame, so the actions after it get their
 turn: normally `display-buffer-pop-up-frame\='."
   (when-let* ((role (diogenes--buffer-role buffer))
-              (window (diogenes--window-of-role role)))
+              (window (diogenes--window-that-held role)))
     (window--display-buffer buffer window 'reuse alist)))
 
 (defun diogenes--gathering-p ()
@@ -1080,6 +1112,12 @@ miss and was missed here."
       ;; and `diogenes--show-dict-entry' recenters -- that leaving it to
       ;; follow from `select-window' is not good enough.
       (set-buffer (window-buffer window)))
+    ;; What this window has held, so a window whose entry a scan replaced is
+    ;; still the place the next entry belongs.  Recorded from the KIND asked
+    ;; for rather than from the buffer's role: they agree, and the kind is what
+    ;; the caller meant.
+    (when (and (window-live-p window) kind)
+      (diogenes--remember-role window kind))
     (diogenes--display-log buffer window)
     window))
 

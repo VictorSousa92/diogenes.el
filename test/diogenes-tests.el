@@ -1619,6 +1619,42 @@ and the four keys went on being listed once per section."
           (should-not (string-prefix-p "diogenes-purpose-"
                                        (symbol-name command))))))))
 
+(ert-deftest diogenes-test-a-window-remembers-what-it-held ()
+  "An entry goes back to the window a scan took from it.
+The default has a scanned page REPLACE the entry, so that window then shows a
+PDF.  A second entry looked for a window showing a lookup buffer, found none,
+and split -- a third window where the reader wanted their entry back.  The
+window had held an entry a moment before, and nothing recorded it.
+
+Recorded now, on the window, and consulted for PLACEMENT only: the keys for
+going between windows still ask what a window SHOWS, `C-c C-l' being no use if
+it takes a reader to a page of the OLD."
+  (let ((entry (get-buffer-create "*diogenes-lookup*"))
+        (scan (get-buffer-create "Oxford Latin Dictionary.pdf")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (with-current-buffer scan (setq major-mode 'pdf-view-mode))
+          (let ((window (selected-window)))
+            (set-window-buffer window entry)
+            (diogenes--remember-role window 'lookup)
+            ;; The scan replaces it: the window now shows a PDF.
+            (set-window-buffer window scan)
+            (diogenes--remember-role window 'dictionary)
+            ;; No window SHOWS a lookup any more...
+            (should-not (diogenes--window-of-role 'lookup))
+            ;; ...but this one held one, so an entry belongs here.
+            (should (eq (diogenes--window-that-held 'lookup) window))
+            ;; And a window showing the kind is still preferred to one that
+            ;; merely held it: a second entry belongs beside the first.
+            (let ((other (split-window)))
+              (set-window-buffer other entry)
+              (should (eq (diogenes--window-that-held 'lookup) other)))
+            ;; The navigation keys are unaffected -- they ask what is shown.
+            (should-not (memq window (diogenes--windows-of-role 'lookup)))))
+      (dolist (b (list entry scan))
+        (when (buffer-live-p b) (kill-buffer b))))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is
