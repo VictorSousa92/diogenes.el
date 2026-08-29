@@ -615,13 +615,13 @@ user interface."
     ("di" "Dump from the Classical Inscriptions" diogenes-dump-ins)
     ("dc" "Dump from the Christian Inscriptions" diogenes-dump-chr)
     ("dm" "Dump from the Miscellaneous PHI Texts" diogenes-dump-misc)]]
+  ;; The keys for going between the windows are NOT here.  This menu is for
+  ;; STARTING things -- search a corpus, look a word up -- where going from one
+  ;; Diogenes buffer to another is done while already in one, and `C-c C-b',
+  ;; `C-c C-l', `C-c C-a' and `C-c C-e' are to hand there.  The cheatsheet lists
+  ;; them under `Going between the windows and frames'.
   ["CUSTOM CORPORA"
-   ("c" "Manage custom search corpora" diogenes-manage-user-corpora)]
-  ["GOING BETWEEN THEM"
-   ("wb" "Go to the text" diogenes-focus-browser)
-   ("wl" "Go to the entry" diogenes-focus-lookup)
-   ("wa" "Go to the analysis" diogenes-focus-morphology)
-   ("wd" "Go to the scanned page" diogenes-focus-dictionary)])
+   ("c" "Manage custom search corpora" diogenes-manage-user-corpora)])
 
 (provide 'diogenes)
 

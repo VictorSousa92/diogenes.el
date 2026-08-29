@@ -404,7 +404,12 @@ answering `you are there\=' would be true and useless."
 
 ;;;###autoload
 (defun diogenes-focus-dictionary ()
-  "Go to the scanned dictionary -- raising its frame if it is in one."
+  "Go to the scanned dictionary -- raising its frame if it is in one.
+Bound to nothing by default, and that is deliberate: `C-c C-e\=' reaches the
+scans, `diogenes-old-visit-dictionary\=' preferring the page opened from the
+entry one is reading and calling this when there is none.  One key for the whole
+of it.  Bind this where the plain behaviour is wanted, or call it from a
+function of your own."
   (interactive)
   (diogenes--focus-role 'dictionary "dictionary"))
 
