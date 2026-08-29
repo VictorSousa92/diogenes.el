@@ -1075,11 +1075,26 @@ It no longer stands aside for `diogenes-purpose\=': that module used to bind thi
 key to a command of its own and does not any more, the commands being in the
 core."
   (unless (null diogenes-old-visit-dictionary-key)
+    ;; EVERY Diogenes buffer, not only the two that read dictionaries.  From a
+    ;; passage one may well want the scan of the word just looked up, and a key
+    ;; bound in some of our buffers and not others is a key a reader cannot
+    ;; rely on -- and the cheatsheet, which lists as `Everywhere' what is bound
+    ;; in every section, could not lift it while the browser lacked it.
     (with-eval-after-load 'diogenes-perseus
-      (dolist (map '(diogenes-lookup-mode-map diogenes-analysis-mode-map))
+      (dolist (map '(diogenes-lookup-mode-map diogenes-analysis-mode-map
+                     diogenes-select-forms-mode-map))
         (when (boundp map)
           (keymap-set (symbol-value map) diogenes-old-visit-dictionary-key
                       #'diogenes-old-visit-dictionary))))
+    (dolist (feature-and-map '((diogenes-browser . diogenes-browser-mode-map)
+                               (diogenes-search . diogenes-search-mode-map)
+                               (diogenes-corpora . diogenes-corpus-mode-map)))
+      (let ((feature (car feature-and-map))
+            (map (cdr feature-and-map)))
+        (with-eval-after-load feature
+          (when (boundp map)
+            (keymap-set (symbol-value map) diogenes-old-visit-dictionary-key
+                        #'diogenes-old-visit-dictionary)))))
     (with-eval-after-load 'diogenes-pdf-search
       (when (boundp 'diogenes-pdf-search-mode-map)
         (keymap-set diogenes-pdf-search-mode-map

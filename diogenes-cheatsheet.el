@@ -415,12 +415,14 @@ first, so the panel answers \"what can I press HERE\" before anything else."
     (diogenes-pdf-search "C-u L"
                          "its ROOT, for a badly-OCR\u2019d word -- and in tomes I-IV \
 of the TGL, an index reference such as `t.3 c.746\'")
-    (diogenes-lookup-bailly "B" "Bailly -- and, pressed INSIDE a Bailly entry, \
-its printed page")
-    (diogenes-lookup-bailly "C-u B" "Bailly, asking which word: another word up \
-in the XML, not the print")
-    (diogenes-lookup-gaffiot "g" "Gaffiot -- and, inside a Gaffiot entry, the print")
-    (diogenes-lookup-georges "G" "Georges -- and, inside a Georges entry, the print")
+    ;; One rule, said once: a prefixed letter looks a word up IN that
+    ;; dictionary, the XML where there is one.  Bare, the letter does that too
+    ;; -- except inside that dictionary's own entry, where it reaches the print.
+    (diogenes-lookup-bailly "C-u <letter>"
+                            "look a word up in that dictionary -- the XML where \
+it has one")
+    (diogenes-lookup-bailly "B, g, G"
+                            "inside that dictionary's own entry, the printed page")
     (diogenes-browser-forward "C-c C-n" "the next page of the passage")
     (diogenes-browser-forward "C-u 5 C-c C-n" "five pages on")
     (diogenes-browser-backward "C-u 5 C-c C-p" "five pages back"))
