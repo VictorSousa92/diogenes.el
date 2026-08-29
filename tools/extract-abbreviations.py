@@ -77,24 +77,46 @@ def extract(path, corpus):
     return authors, works
 
 
-# Below this many citations an abbreviation is not trusted.  The dictionaries
-# contain the odd mistagged reference -- Homer's Iliad appears once as
-# `phi,0012', which is his TLG number in the Latin corpus -- and a single
-# occurrence is as likely to be one of those as a real abbreviation.  Every
-# author the lexicographers actually use has hundreds: `Cic.' has 39158.
+# A count is the wrong filter, and printing what a threshold DROPPED is what
+# showed it.  At three occurrences it discarded 319 rows of 1051, and they were
+# not accidents: Euripides' plays -- `Hipp.', `Hec.', `Supp.', `Hel.', `Ba.' --
+# Plutarch's Lives and Comparationes, `Sapph.', `h.Hom.', Cicero's `Fam.' and
+# `Off.'.  Texts a LEXICON quotes once or twice because they are short or seldom
+# bear on a word, which says nothing against the abbreviation.
 #
-# It costs the genuinely rare authors, which is the right way round.  An author
-# quoted twice in the whole of Lewis & Short is one whose abbreviation a reader
-# would rather look up than take on trust.
-MINIMUM = 3
+# The accidents are recognisable by their SHAPE instead:
+#
+#   0474/0055 -> "Off,"      a comma where a stop belongs
+#   0474/0056 -> "Fam."      a four-digit work number, and there are none
+#   0474/065  -> "Horte"     the Hortensius, truncated
+#   phi 0012  -> "Hom."      Homer's TLG number in the Latin corpus
+#
+# So: keep whatever is wellformed, whatever its count.  A work number is three
+# characters, digits or a leading minus for the fragments; an abbreviation
+# carries no comma.  That admits `Hipp.' and `Fam.' and excludes the malformed,
+# which a frequency cannot distinguish in either direction.
+WORK_NUMBER = re.compile(r"\A[0-9-]{3}\Z")
+
+
+def wellformed(key, abbrev):
+    """Whether this row looks like a citation rather than a slip.
+
+    KEY is (AUTHOR) or (AUTHOR WORK).  Malformed rows are few -- four in a
+    thousand -- and each is malformed in a way a count would not catch."""
+    if "," in abbrev or not abbrev.strip():
+        return False
+    if len(key) > 1 and not WORK_NUMBER.match(key[1]):
+        return False
+    return True
 
 
 def most_frequent(counter, key_length, dropped=None):
     """The commonest abbreviation for each key, with how often it occurred.
 
     Keys whose best abbreviation falls below MINIMUM are left out, and noted in
-    DROPPED where a list is given, so that what the threshold cost is visible
-    rather than silent."""
+    Rows that do not look wellformed are left out, and noted in DROPPED where a
+    list is given, so that what the filter cost is visible rather than
+    silent."""
     best = {}
     for key, count in counter.items():
         short = key[:key_length]
@@ -102,7 +124,7 @@ def most_frequent(counter, key_length, dropped=None):
             best[short] = (key[key_length], count)
     kept = {}
     for short, (abbrev, count) in best.items():
-        if count >= MINIMUM:
+        if wellformed(short, abbrev):
             kept[short] = (abbrev, count)
         elif dropped is not None:
             dropped.append((short, abbrev, count))
@@ -134,8 +156,7 @@ def main():
         provenance.append(";; %s (%s): %d authors, %d works"
                           % (name, filename, len(best_authors), len(best_works)))
         if dropped:
-            provenance.append(";;   %d cited fewer than %d times, left out"
-                              % (len(dropped), MINIMUM))
+            provenance.append(";;   %d malformed, left out" % len(dropped))
             for short, abbrev, count in sorted(dropped)[:40]:
                 sys.stderr.write("  dropped %-18s %-14s %d\n"
                                  % ("/".join(short), abbrev, count))

@@ -546,6 +546,24 @@ position is readable from the text even though it is not remembered."
                                                (1- (region-end)))))
     (cons (diogenes-browser-citation-at) nil)))
 
+(defcustom diogenes-abbreviation-overrides nil
+  "Abbreviations to use instead of the generated table\='s.
+An alist keyed as the table is -- `((\"tlg\" \"0086\") . \"Aristot.\")\=' for an
+author, `((\"tlg\" \"0086\" \"025\") . \"Met.\")\=' for a work -- and consulted first,
+so an entry here wins.
+
+Two uses.  A reader who prefers another convention to LSJ\='s: `Aristot.\=' for
+`Arist.\=', or an English title where the dictionaries give a Latin one.
+
+And the handful of rows the extraction gets wrong, which are wrong in ways no
+rule catches.  `phi 0012\=' is Homer, whose number that is in the TLG and not the
+PHI, from a mistagged citation in Lewis & Short -- harmless, there being no such
+author to browse.  `phi 0474/065\=' reads `Horte\=', the Hortensius truncated in
+the source.  Four such rows in a thousand when this was written, and each is
+one line to correct here rather than a reason to distrust the rest."
+  :type '(alist :key-type (repeat string) :value-type string)
+  :group 'diogenes)
+
 (defun diogenes-citation-abbreviation (corpus author &optional work)
   "How the dictionaries cite this author, or this work of theirs.
 Returns (AUTHOR-ABBREV . WORK-ABBREV), either of which may be nil.
@@ -558,10 +576,12 @@ their printed front matter, which names no numbers.  See
 Nil for a text neither dictionary cites, which is most of the two corpora: the
 table covers some five hundred works of the TLG and two hundred and seventy of
 the PHI, being the texts the lexicographers had occasion to quote."
-  (when (featurep 'diogenes-abbreviations)
-    (cons (gethash (list corpus author) diogenes-abbreviations)
-          (and work (gethash (list corpus author work)
-                             diogenes-abbreviations)))))
+  (let ((look (lambda (key)
+                (or (cdr (assoc key diogenes-abbreviation-overrides))
+                    (and (boundp 'diogenes-abbreviations)
+                         (gethash key diogenes-abbreviations))))))
+    (cons (funcall look (list corpus author))
+          (and work (funcall look (list corpus author work))))))
 
 (defun diogenes-reference-to-string (reference)
   "REFERENCE written as a scholar would write it.
