@@ -1506,6 +1506,45 @@ cannot."
          '((diogenes-tests--no-such-command "C-u Z" "nothing at all"))))
     (should-not (diogenes-cheatsheet--prefixed))))
 
+(ert-deftest diogenes-test-cheatsheet-lifts-the-common-keys ()
+  "A key that does the same thing everywhere is listed once.
+The cheatsheet builds a section per buffer, so the four navigation keys appeared
+in each of them -- four copies of the same four lines, which is both noise and a
+good part of what has to fit on the screen.
+
+Both halves of the test matter: the same key doing DIFFERENT things is a
+coincidence and not a common binding.  `i\=' opens the TGL index in a volume and
+is `evil-insert-state\=' elsewhere; listing it once would say something false
+about both."
+  ;; A section is (NAME . PAIRS), so the pairs are the cdr DIRECTLY -- not a
+  ;; list containing them, which is how this test first failed.
+  (let ((sections
+         '(("Lookup"  ("C-c C-b" . focus-browser) ("q" . quit) ("o" . old))
+           ("Browser" ("C-c C-b" . focus-browser) ("q" . quit) ("C-c C-n" . next))
+           ("Scan"    ("C-c C-b" . focus-browser) ("q" . quit) ("L" . search)))))
+    (let* ((lifted (diogenes-cheatsheet--lift-common sections))
+           (common (cdr (assoc "Everywhere" lifted))))
+      (should common)
+      (should (equal (mapcar #'car common) '("C-c C-b" "q")))
+      ;; And taken out of the rest, not merely added.
+      (dolist (section (cdr lifted))
+        (should-not (assoc "C-c C-b" (cdr section)))
+        (should-not (assoc "q" (cdr section))))
+      ;; Each keeps what is its own.
+      (should (equal (mapcar #'car (cdr (assoc "Lookup" lifted))) '("o")))))
+  ;; The same key, different commands: not common.
+  (let* ((sections
+          '(("Scan"   ("i" . tgl-index) ("q" . quit))
+            ("Lookup" ("i" . evil-insert) ("q" . quit))))
+         (lifted (diogenes-cheatsheet--lift-common sections))
+         (common (cdr (assoc "Everywhere" lifted))))
+    (should (equal (mapcar #'car common) '("q")))
+    (should (assoc "i" (cdr (assoc "Scan" lifted))))
+    (should (assoc "i" (cdr (assoc "Lookup" lifted)))))
+  ;; One section has nothing to have in common with, and is left alone.
+  (let ((one '(("Lookup" ("q" . quit)))))
+    (should (equal (diogenes-cheatsheet--lift-common one) one))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

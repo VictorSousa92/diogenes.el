@@ -266,7 +266,11 @@ Such an entry needs no row of its own: the parent's row names it."
     "Latin print dictionaries" "Latin dictionaries"
     "Greek print dictionaries" "Greek dictionaries"
     "Print dictionaries" "Dictionaries"
-    "Windows" "Other")
+    ;; `Windows' was the old name and is kept, harmlessly, for anyone whose
+    ;; configuration still produces it; the rule now says the longer thing,
+    ;; which is what a reader needs to see.
+    "Going between the windows and frames" "Windows"
+    "Other")
   "The order the groups appear in, whichever of them turn out to be used.")
 
 (defun diogenes-cheatsheet--configured-p (binding)
@@ -371,7 +375,8 @@ first, so the panel answers \"what can I press HERE\" before anything else."
 			   bindings)
 	     into out
 	     finally return
-	     (let ((entry (diogenes-cheatsheet--entry-points))
+	     (let ((out (diogenes-cheatsheet--lift-common out))
+		   (entry (diogenes-cheatsheet--entry-points))
 		   ;; The prefixed variants, which the maps cannot supply: `C-u L'
 		   ;; is `L' given an argument, and no keymap holds it.
 		   (prefixed (diogenes-cheatsheet--prefixed)))
@@ -405,6 +410,47 @@ ask only whether they were given an argument, not how.
 A command absent from this installation is left out, as elsewhere."
   :type '(repeat (list function string string))
   :group 'diogenes-cheatsheet)
+
+(defun diogenes-cheatsheet--lift-common (sections)
+  "SECTIONS with the bindings common to all of them in a section of their own.
+A binding is common when the SAME KEY runs the SAME COMMAND in every Diogenes
+buffer -- the keys for going between the windows, `q\=', and whatever else is
+bound everywhere.  Listed once under `Everywhere\=' and taken out of the rest.
+
+Both halves of that test are needed.  The same key doing different things is
+not common but a coincidence: `i\=' opens the TGL index in a TGL volume and is
+`evil-insert-state\=' elsewhere, and listing it once would say something false
+about both.  So the pair is compared, not the key.
+
+Where there is only one section there is nothing to have in common, and it is
+returned untouched -- a reader with one Diogenes buffer open wants its keys, not
+a separate panel saying they are also available in it."
+  (if (< (length sections) 2)
+      sections
+    (let* ((first (cdr (car sections)))
+           (common
+            (cl-remove-if-not
+             (lambda (pair)
+               (cl-every (lambda (section)
+                           (cl-find pair (cdr section)
+                                    :test (lambda (a b)
+                                            (and (equal (car a) (car b))
+                                                 (eq (cdr a) (cdr b))))))
+                         (cdr sections)))
+             first)))
+      (if (null common)
+          sections
+        (append
+         (list (cons "Everywhere" common))
+         (cl-loop for section in sections
+                  for rest = (cl-remove-if
+                              (lambda (pair)
+                                (cl-find pair common
+                                         :test (lambda (a b)
+                                                 (and (equal (car a) (car b))
+                                                      (eq (cdr a) (cdr b))))))
+                              (cdr section))
+                  when rest collect (cons (car section) rest)))))))
 
 (defun diogenes-cheatsheet--prefixed ()
   "The (KEY . DESCRIPTION) pairs for `diogenes-cheatsheet-prefixed\='."
@@ -514,14 +560,34 @@ better a panel that runs long than a section cut in half."
 	(* diogenes-cheatsheet-column-gap (max 0 (1- (length widths)))))
      height)))
 
-(defun diogenes-cheatsheet--render (&optional available-height)
+(defun diogenes-cheatsheet--render (&optional available-height available-width)
   "The cheatsheet laid out in columns.  Returns (TEXT WIDTH HEIGHT).
-AVAILABLE-HEIGHT is how many lines there is room for; it decides how many
-columns the sections are spread over."
+AVAILABLE-HEIGHT is how many lines there is room for and AVAILABLE-WIDTH how
+many columns of characters; between them they decide how the sections are
+spread.
+
+The WIDTH is the part that was missing, and it is what made the panel crop.
+Columns were packed to fit the height alone, the frame was then clamped to the
+parent's width, and whatever did not fit was simply not shown -- a section
+missing altogether, with nothing to say it was there.  So: pack, measure, and
+where the result is too wide, pack again with a taller allowance, which puts
+more into each column and so uses fewer of them.  Repeated until it fits or
+until the columns are as tall as the blocks themselves, at which point one
+column is all there is and the panel scrolls instead."
   (let* ((blocks (diogenes-cheatsheet--blocks))
-	 (height (or available-height 40)))
-    (diogenes-cheatsheet--paste
-     (diogenes-cheatsheet--columnate blocks height))))
+	 (height (or available-height 40))
+	 (width (or available-width 80))
+	 (tallest (apply #'max 1 (mapcar #'length blocks)))
+	 (result (diogenes-cheatsheet--paste
+		  (diogenes-cheatsheet--columnate blocks height))))
+    (while (and (> (nth 1 result) width) (< height (* 2 tallest)))
+      ;; A quarter taller each time: enough to drop a column within a few
+      ;; rounds, and small enough not to overshoot into one tall column when
+      ;; two would have fitted.
+      (setq height (max (1+ height) (round (* height 1.25)))
+	    result (diogenes-cheatsheet--paste
+		    (diogenes-cheatsheet--columnate blocks height))))
+    result))
 
 
 ;;;; Showing it
@@ -633,7 +699,8 @@ this falls back to an ordinary help window."
 				       (frame-height parent)))
 			   diogenes-cheatsheet-max-height)
 			 2))))
-    (seq-let (text width height) (diogenes-cheatsheet--render room)
+    (seq-let (text width height)
+	(diogenes-cheatsheet--render room (- (frame-width parent) 4))
       (if (not (display-graphic-p))
 	  (with-help-window (help-buffer) (princ text))
 	(diogenes-cheatsheet--delete-frame)
