@@ -311,12 +311,20 @@ word."
 			     prop-a)))))))))
 
 (defun diogenes-browser-lookup ()
-  "Lookup word at point."
+  "Lookup word at point, joined with its other half where the text divided it.
+`C-c C-c\=' in the browser is this command and not the ordinary lookup, so the
+joining had to be asked for here as well: hooking it into
+`diogenes--word-at-point-for-lookup\=' left this key -- the one a reader actually
+presses on a passage -- calling `thing-at-point\=' as before, and looking up
+`captan\=' where the word is `captantem\='."
   (interactive)
   (funcall (intern (concat "diogenes-parse-and-lookup-"
 			   diogenes--browser-language))
-	   (replace-regexp-in-string "[^[:alpha:]]" ""
-				     (thing-at-point 'word))))
+	   (replace-regexp-in-string
+	    "[^[:alpha:]]" ""
+	    (or (and diogenes-browser-join-broken-words
+		     (diogenes-browser--word-at-point-joined))
+		(thing-at-point 'word)))))
 
 ;;; Browser Mode
 (defvar diogenes-browser-mode-map
