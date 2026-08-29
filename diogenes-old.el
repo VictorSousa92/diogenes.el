@@ -968,15 +968,22 @@ always, for a reader who wants the plain behaviour."
                           (current-buffer)))
                     (buffer-list)))))
     (cond
+     ;; ALREADY IN A SCAN: the reader is not asking to be brought here, so the
+     ;; key means `the next one' -- which is what the focus command does when
+     ;; point is already in a window of that role.  Tried FIRST, or the
+     ;; provenance below would answer instead and pressing the key twice in a
+     ;; scan would go nowhere.
+     ((and (eq (diogenes--buffer-role (current-buffer)) 'dictionary)
+           (fboundp 'diogenes-focus-dictionary))
+      (diogenes-focus-dictionary))
      ;; A page opened FROM this entry, which is the best answer where there is
      ;; one: it is the page for the word being read.
      (page (switch-to-buffer page))
-     ;; Otherwise whatever scan is open, cycling where there are several.  The
-     ;; old behaviour was to refuse -- `No dictionary page open from this
-     ;; entry' -- which is exact and unhelpful: a reader pressing this key wants
-     ;; the scan, and does not care which entry it was opened from.  It also
-     ;; refused almost always, since the provenance is recorded only when a page
-     ;; REPLACES an entry, and does not exist under `split' or `frames' at all.
+     ;; Otherwise whatever scan is open.  Refusing -- `No dictionary page open
+     ;; from this entry' -- was exact and unhelpful: a reader pressing this key
+     ;; wants the scan and does not care which entry it came from.  It also
+     ;; refused almost always, the provenance being recorded only where a page
+     ;; REPLACES an entry, which `split' and `frames' never do.
      ((fboundp 'diogenes-focus-dictionary) (diogenes-focus-dictionary))
      (t (message "No dictionary page open")))))
 
@@ -991,26 +998,31 @@ management.  Nil binds nothing."
 
 ;;;###autoload
 (defun diogenes-old-install-return-keys ()
-  "Bind `diogenes-old-visit-dictionary-key\=' in the lookup buffers.
-`q\=' in the page is bound where the page is displayed, there being nothing
-to go back to until then.
+  "Bind `diogenes-old-visit-dictionary-key\=' where it is wanted.
+`q\=' in the page is bound where the page is displayed, there being nothing to go
+back to until then.
 
-Does nothing when `diogenes-purpose\=' is loaded, which binds the same key to
-`diogenes-purpose-focus-dictionary-window\='.  The two are not rivals: with
-purpose the page is in a window of its own and what is wanted is to move to
-that window, while here it shares the entry\='s window and what is wanted is
-to show it.  Each module answers for the arrangement it makes, and purpose\='s
-answer is the right one where purpose is in charge."
-  ;; `purpose-mode', not `(featurep \='diogenes-purpose)': the question is
-  ;; whether window-purpose is running and has bound this key itself, and our
-  ;; own module is required from `diogenes.el' and so always present.
-  (unless (or (null diogenes-old-visit-dictionary-key)
-              (bound-and-true-p purpose-mode))
+In the LOOKUP buffers, where the key means `show me the page\='.  And in the
+scanned pages themselves, where it means `the next page\=' -- one cannot cycle
+through the scans with a key that is only bound outside them.  For the viewers
+that is a minor mode of ours, `diogenes-pdf-search-mode\=', enabled on the
+configured dictionaries and nowhere else: binding into `pdf-view-mode-map\='
+would take the key from every PDF a reader opens, which is not ours to do.
+
+It no longer stands aside for `diogenes-purpose\=': that module used to bind this
+key to a command of its own and does not any more, the commands being in the
+core."
+  (unless (null diogenes-old-visit-dictionary-key)
     (with-eval-after-load 'diogenes-perseus
       (dolist (map '(diogenes-lookup-mode-map diogenes-analysis-mode-map))
         (when (boundp map)
           (keymap-set (symbol-value map) diogenes-old-visit-dictionary-key
-                      #'diogenes-old-visit-dictionary))))))
+                      #'diogenes-old-visit-dictionary))))
+    (with-eval-after-load 'diogenes-pdf-search
+      (when (boundp 'diogenes-pdf-search-mode-map)
+        (keymap-set diogenes-pdf-search-mode-map
+                    diogenes-old-visit-dictionary-key
+                    #'diogenes-old-visit-dictionary)))))
 
 (diogenes-old-install-return-keys)
 

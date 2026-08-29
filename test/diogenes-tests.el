@@ -1390,9 +1390,16 @@ raising a window is particular to a distribution."
       (when (cdr cell)
         (should-not (member (cdr cell) theirs))
         (when visit (should-not (equal (cdr cell) visit))))))
-  ;; `C-c C-d' is deliberately unused: KDE Plasma takes Ctrl-D for its own
-  ;; window management and the sequence never reaches Emacs.
-  (should-not (member "C-c C-d" (mapcar #'cdr diogenes-focus-keys)))
+  ;; The scanned page has no key in THIS table: `C-c C-e' reaches it, being
+  ;; `diogenes-old-visit-dictionary', which prefers the page opened from the
+  ;; entry, falls back on the focus command, and cycles through it when pressed
+  ;; inside a scan.  One key for the whole of it.
+  (should-not (cdr (assq 'diogenes-focus-dictionary diogenes-focus-keys)))
+  ;; And no key is bound into a viewer's own map, which would take it from every
+  ;; PDF a reader opens.  Ours, or our minor mode's.
+  (dolist (map diogenes--focus-maps)
+    (should-not (memq map '(pdf-view-mode-map doc-view-mode-map
+                            reader-mode-map))))
   ;; And installing them binds where a reader would press them: in a lookup
   ;; buffer, and in a scanned page, which is where one most wants the entry
   ;; back.
@@ -1450,7 +1457,29 @@ again goes to the next, and past the last comes back to the first."
   (save-window-excursion
     (delete-other-windows)
     (should-not (diogenes--windows-of-role 'dictionary))
-    (should (stringp (diogenes-focus-dictionary)))))
+    (should (stringp (diogenes-focus-dictionary))))
+  ;; And `C-c C-e' PRESSED INSIDE A SCAN means `the next one': the provenance
+  ;; branch must not answer first, or a second press in a scan would go nowhere.
+  (let ((a (get-buffer-create "Oxford Latin Dictionary.pdf"))
+        (b (get-buffer-create "TLL vol 3.pdf")))
+    (unwind-protect
+        (progn
+          (dolist (buffer (list a b))
+            (with-current-buffer buffer (setq major-mode 'pdf-view-mode)))
+          (save-window-excursion
+            (delete-other-windows)
+            (switch-to-buffer a)
+            (let ((second (split-window)))
+              (set-window-buffer second b)
+              (select-window (get-buffer-window a))
+              ;; In the first scan; the key goes to the second.
+              (diogenes-old-visit-dictionary)
+              (should (eq (window-buffer (selected-window)) b))
+              ;; And round again.
+              (diogenes-old-visit-dictionary)
+              (should (eq (window-buffer (selected-window)) a)))))
+      (dolist (buffer (list a b))
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))
 
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.

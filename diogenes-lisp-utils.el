@@ -418,7 +418,13 @@ answering `you are there\=' would be true and useless."
   '((diogenes-focus-browser    . "C-c C-b")
     (diogenes-focus-lookup     . "C-c C-l")
     (diogenes-focus-morphology . "C-c C-a")
-    (diogenes-focus-dictionary . "C-c C-s"))
+    ;; The scanned page has no key here: `C-c C-e' is
+    ;; `diogenes-old-visit-dictionary', which prefers the page opened from the
+    ;; entry one is reading, falls back on this command, and cycles through this
+    ;; command when pressed inside a scan.  One key doing the whole of it beats
+    ;; two that differ in a way nobody can remember.  Give this command a key of
+    ;; its own if the plain behaviour is wanted.
+    (diogenes-focus-dictionary . nil))
   "Keys for going from one Diogenes window to another, as (COMMAND . KEY).
 Bound in the Diogenes buffers themselves -- an entry, a passage, an analysis, a
 scanned page -- since going from one to another is something one does while in
@@ -429,16 +435,16 @@ one of them.  Nil for a key binds nothing.
 these are ours to take.  Under evil the read-only buffers are in Emacs state,
 so the chords work there without further arrangement.
 
-`C-c C-s\=' for the SCANNED page, which wants explaining twice over.  Not
-`C-c C-d\=': KDE Plasma claims Ctrl-D for its own window management and the
-sequence never arrives at Emacs.  And not `C-c C-e\=' either, which
-`diogenes-purpose\=' used for this and which is
-`diogenes-old-visit-dictionary-key\=' -- that OPENS a page where this GOES to one
-already open, two different wishes that should not share a key.
+The SCANNED page is reached by `C-c C-e\=', which is
+`diogenes-old-visit-dictionary-key\=' and not set here: that command prefers the
+page opened from the entry one is reading, falls back on
+`diogenes-focus-dictionary\=', and CYCLES through it when pressed inside a scan.
+So one key does the whole of it, and this table leaves that command unbound
+rather than offering a second key that differs in a way nobody can remember.
 
-`diogenes-purpose\=' bound `C-c C-b\=' and `C-c C-l\=' to commands of its own before
-these existed.  It no longer does: the keys are the same and the commands are
-in the core, so they work whether purpose is loaded or not.
+`diogenes-purpose\=' bound `C-c C-b\=' and `C-c C-l\=' to commands of its own
+before these existed.  It no longer does: the keys are the same and the commands
+are in the core, so they work whether purpose is loaded or not.
 
 These matter most when the kinds are in FRAMES, where there is no window to move
 to with `C-x o\=' -- but they work within a frame as well, which is why they are
@@ -459,12 +465,17 @@ menu offers them under `w\='."
     diogenes-search-mode-map
     diogenes-select-forms-mode-map
     diogenes-corpus-mode-map
-    pdf-view-mode-map
-    doc-view-mode-map
-    reader-mode-map)
+    ;; A minor mode of OURS for the scanned pages, and not
+    ;; `pdf-view-mode-map': that map belongs to pdf-tools, and binding into it
+    ;; would take these keys from every PDF a reader opens.
+    ;; `diogenes-pdf-search-mode' is enabled on the configured dictionaries and
+    ;; nowhere else, which is the same reasoning that gave `L' a minor mode
+    ;; rather than a viewer binding.
+    diogenes-pdf-search-mode-map)
   "The maps the focus keys are bound in.
-Every buffer one might be reading FROM, including the document viewers: a
-scanned page is where one is most likely to want the entry back.")
+Every buffer one might be reading FROM: our own modes, and the scanned pages
+through our own minor mode -- a scan being where one is most likely to want the
+entry back.")
 
 ;;;###autoload
 (defun diogenes-install-focus-keys ()
