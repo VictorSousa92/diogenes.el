@@ -116,11 +116,22 @@ Takes no prefix argument, as `diogenes-browser-forward' takes none."
 	       (when-let* ((citation (get-text-property (point) 'cit)))
 		 (insert (diogenes--browser-format-citation citation)))))))))
 
-(defcustom diogenes-browser-join-broken-words t
+(defcustom diogenes-browser-join-broken-words nil
   "Whether a word broken across two lines is joined before it is looked up.
 A text may divide a word at the end of a line, and `C-c C-c\=' on either half
 looked up that half -- `praeci\=' and `pitur\=' rather than `praecipitur\=', neither
 of which any dictionary has.
+
+OFF BY DEFAULT, having shipped broken.  The first version read the wrong text
+property -- the citation printed at the head of a line is marked
+`diogenes-citation\=', not `cit\=' -- and so took the citation's own digits for the
+second half of the word: `captan-\=' followed by `10.20.2.4 tem spiritus liquit\='
+was looked up as `captan10\='.  With the citations hidden it was worse: the loop
+that skipped them could not advance and Emacs hung.
+
+Both are mended, and the default stays off until a reader turns it on knowingly.
+A convenience that returns a wrong word is worse than no convenience, and one
+that hangs is worse than that.
 
 Only where the buffer SAYS the word is divided: a hyphen at the end of the line,
 or the record `C-c C--\=' leaves behind when it removes one.  A line merely
@@ -198,13 +209,38 @@ has chosen to show or hide, the line numbers are never taken for part of the
 word."
   (save-excursion
     (forward-line 1)
-    (while (and (not (eobp)) (get-text-property (point) 'cit))
-      (goto-char (or (next-single-property-change (point) 'cit)
-                     (line-end-position))))
+    ;; Past the citation printed at the head of the line.  `diogenes-citation'
+    ;; is the property that marks it -- `cit' is on the TEXT, carrying the
+    ;; citation the words belong to, which is a different thing and the one this
+    ;; first read.  Reading it meant the loop exited at once and the citation's
+    ;; digits were taken for the word: `captan-' and `10.20.2.4 tem spiritus'
+    ;; became `captan10'.
+    ;;
+    ;; BOUNDED, and that matters more than the property.  A loop whose progress
+    ;; depends on `next-single-property-change' advancing should never be
+    ;; written without a floor: with the citations hidden it did not advance,
+    ;; and Emacs hung.  Ten steps is far more than a citation needs and is not
+    ;; forever.
+    (let ((steps 0)
+          (limit (line-end-position)))
+      (while (and (< steps 10)
+                  (< (point) limit)
+                  (get-text-property (point) 'diogenes-citation))
+        (let ((next (next-single-property-change (point) 'diogenes-citation
+                                                 nil limit)))
+          ;; Not advancing is the hang: step over one character rather than
+          ;; standing still, and let the count end it if even that fails.
+          (goto-char (if (and next (> next (point))) next (1+ (point)))))
+        (setq steps (1+ steps))))
     (skip-chars-forward " \t")
-    (when-let* ((tail (bounds-of-thing-at-point 'word)))
-      (concat first-half
-              (buffer-substring-no-properties (car tail) (cdr tail))))))
+    ;; And nothing to join to where the rest of the line is a citation and no
+    ;; word follows it.
+    (when-let* ((tail (bounds-of-thing-at-point 'word))
+                (second (buffer-substring-no-properties (car tail) (cdr tail))))
+      ;; A second half that is all digits is a citation, not a word: no text
+      ;; divides a word so that the remainder is a number.
+      (unless (string-match-p "\\\\`[0-9.]+\\\\'" second)
+        (concat first-half second)))))
 
 (defun diogenes-browser-remove-hyphenation (&optional mark-with-vertical-bar)
   "Join all hyphenated words in the current Diogenes Browser Buffer."
