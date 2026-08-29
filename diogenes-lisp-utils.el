@@ -219,8 +219,12 @@ what they are called:
 
 (defconst diogenes--role-modes
   '((diogenes-lookup-mode . lookup)
-    (diogenes-analysis-mode . lookup)
-    (diogenes-select-forms-mode . lookup)
+    ;; `morphology', not `lookup'.  The name regexps got this right and this
+    ;; table did not, so a buffer classified by NAME went to the analysis frame
+    ;; and the same buffer classified by MODE went to the entry's -- and which
+    ;; happened depended on whether the mode was set before it was displayed.
+    (diogenes-analysis-mode . morphology)
+    (diogenes-select-forms-mode . morphology)
     (diogenes-browser-mode . browser)
     (diogenes-search-mode . search)
     (pdf-view-mode . dictionary)
@@ -244,14 +248,24 @@ has not been created answers nil."
         (cdr (assq (buffer-local-value 'major-mode buffer)
                    diogenes--role-modes)))))
 
-(defun diogenes--window-of-role (role)
-  "A window on any visible frame showing a buffer whose role is ROLE."
-  (catch 'found
+(defun diogenes--windows-of-role (role)
+  "Every window on a visible frame showing a buffer whose role is ROLE.
+In a settled order -- the frame list, and within a frame the window list -- so
+that going from one to the next lands somewhere predictable rather than
+wherever the last command happened to leave things."
+  (let (found)
     (dolist (frame (frame-list))
       (when (frame-visible-p frame)
         (dolist (window (window-list frame 'no-minibuffer))
           (when (eq role (diogenes--buffer-role (window-buffer window)))
-            (throw 'found window)))))))
+            (push window found)))))
+    (nreverse found)))
+
+(defun diogenes--window-of-role (role)
+  "A window on any visible frame showing a buffer whose role is ROLE.
+The first of `diogenes--windows-of-role\=', for callers that want somewhere to
+put a buffer rather than somewhere to go."
+  (car (diogenes--windows-of-role role)))
 
 (defcustom diogenes-companion-roles
   '((morphology . lookup))
@@ -347,15 +361,34 @@ column; `diogenes-companion-direction\=' says otherwise."
         (window--display-buffer buffer new 'window alist)))))
 
 (defun diogenes--focus-role (role what)
-  "Raise and select the window or frame holding a buffer of role ROLE.
-WHAT names the kind, for the message when there is none."
-  (let ((window (diogenes--window-of-role role)))
-    (if (not window)
-        (message "No %s window open" what)
-      (let ((frame (window-frame window)))
-        (unless (eq frame (selected-frame))
-          (select-frame-set-input-focus frame))
-        (select-window window)))))
+  "Go to a window holding a buffer of role ROLE, raising its frame if need be.
+WHAT names the kind, for the message when there is none.
+
+With ONE such window this simply goes there.  With several -- which `frames\='
+makes ordinary, a scan of the OLD beside a scan of the TLL -- pressing the key
+again goes to the next, and past the last comes back to the first.  So a reader
+who wants a particular one presses until they arrive, and a reader with only one
+of a kind never notices there was a choice.
+
+Where point is already in a window of that role, the NEXT one is chosen; where
+it is not, the first.  A reader pressing the key means `take me there\=', and
+answering `you are there\=' would be true and useless."
+  (let ((windows (diogenes--windows-of-role role)))
+    (cond
+     ((null windows) (message "No %s window open" what))
+     (t
+      (let* ((here (selected-window))
+             (position (cl-position here windows))
+             (target (if position
+                         (nth (mod (1+ position) (length windows)) windows)
+                       (car windows))))
+        (unless (eq (window-frame target) (selected-frame))
+          (select-frame-set-input-focus (window-frame target)))
+        (select-window target)
+        (when (and position (> (length windows) 1))
+          (message "%s %d of %d" (capitalize what)
+                   (1+ (mod (1+ position) (length windows)))
+                   (length windows))))))))
 
 ;;;###autoload
 (defun diogenes-focus-lookup ()

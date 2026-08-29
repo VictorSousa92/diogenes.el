@@ -38,6 +38,7 @@
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
+(declare-function diogenes-focus-dictionary "diogenes-lisp-utils" ())
 (declare-function reader-open-doc "reader" (file))
 
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus" (expected dict-name))
@@ -952,17 +953,32 @@ dictionary opened from `M-x\=' has nothing behind it."
 The other half of `diogenes-old-return-to-entry\=': with a page and an entry
 sharing one window, moving between them should not depend on remembering
 which buffer is which.  Bound to `C-c C-e\=' in the lookup buffer by
-`diogenes-old-install-return-keys\=', the same key `diogenes-purpose\=' uses
-for the dictionary window."
+`diogenes-old-install-return-keys\='.
+
+A page opened FROM this entry is preferred, that being the page for the word
+in front of the reader.  Failing one -- and it fails often, the provenance
+being recorded only where a page REPLACES an entry, which `split\=' and `frames\='
+never do -- this goes to whatever scan is open, cycling where there are
+several.  `diogenes-focus-dictionary\=' on `C-c C-s\=' does the second thing
+always, for a reader who wants the plain behaviour."
   (interactive)
   (let ((page (car (seq-filter
                     (lambda (b)
                       (eq (buffer-local-value 'diogenes-old--return-buffer b)
                           (current-buffer)))
                     (buffer-list)))))
-    (if page
-        (switch-to-buffer page)
-      (message "No dictionary page open from this entry"))))
+    (cond
+     ;; A page opened FROM this entry, which is the best answer where there is
+     ;; one: it is the page for the word being read.
+     (page (switch-to-buffer page))
+     ;; Otherwise whatever scan is open, cycling where there are several.  The
+     ;; old behaviour was to refuse -- `No dictionary page open from this
+     ;; entry' -- which is exact and unhelpful: a reader pressing this key wants
+     ;; the scan, and does not care which entry it was opened from.  It also
+     ;; refused almost always, since the provenance is recorded only when a page
+     ;; REPLACES an entry, and does not exist under `split' or `frames' at all.
+     ((fboundp 'diogenes-focus-dictionary) (diogenes-focus-dictionary))
+     (t (message "No dictionary page open")))))
 
 (defcustom diogenes-old-visit-dictionary-key "C-c C-e"
   "Key in a lookup buffer for `diogenes-old-visit-dictionary\='.

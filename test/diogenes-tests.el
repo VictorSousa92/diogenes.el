@@ -1403,6 +1403,55 @@ raising a window is particular to a distribution."
         (should (eq (lookup-key diogenes-lookup-mode-map (kbd (cdr cell)))
                     (car cell)))))))
 
+(ert-deftest diogenes-test-focus-cycles-among-windows-of-a-role ()
+  "Going to a kind goes to the next one where there are several.
+`frames' makes several ordinary -- a scan of the OLD beside a scan of the TLL --
+and a command that always chose the first could not reach the second.  Pressing
+again goes to the next, and past the last comes back to the first."
+  (let ((old (get-buffer-create "*diogenes-lookup*"))
+        (a (get-buffer-create "Oxford Latin Dictionary.pdf"))
+        (b (get-buffer-create "TLL vol 3.pdf")))
+    ;; The role of a scan comes from its MODE, its name matching no regexp --
+    ;; and from `buffer-local-value', so the mode has to be set IN the buffer.
+    ;; A `let' of `major-mode' binds it in the current buffer only, which is
+    ;; how this test first came to find no windows at all.
+    (dolist (buffer (list a b))
+      (with-current-buffer buffer (setq major-mode 'pdf-view-mode)))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer old)
+          ;; Two windows of the dictionary role, and one of another.
+          (let ((w1 (split-window))
+                (w2 nil))
+            (set-window-buffer w1 a)
+            (setq w2 (split-window w1))
+            (set-window-buffer w2 b)
+            (let ((found (diogenes--windows-of-role 'dictionary)))
+              ;; Both are found, in a settled order.
+              (should (= 2 (length found)))
+              (should (equal (mapcar (lambda (w) (buffer-name (window-buffer w)))
+                                     found)
+                             (list (buffer-name (window-buffer w1))
+                                   (buffer-name (window-buffer w2)))))
+              ;; From elsewhere: the first.
+              (select-window (get-buffer-window old))
+              (diogenes-focus-dictionary)
+              (should (eq (selected-window) (car found)))
+              ;; Again: the next.
+              (diogenes-focus-dictionary)
+              (should (eq (selected-window) (cadr found)))
+              ;; And again: back to the first.
+              (diogenes-focus-dictionary)
+              (should (eq (selected-window) (car found))))))
+      (dolist (buffer (list old a b))
+        (when (buffer-live-p buffer) (kill-buffer buffer)))))
+  ;; With none of a kind open, a message and no error.
+  (save-window-excursion
+    (delete-other-windows)
+    (should-not (diogenes--windows-of-role 'dictionary))
+    (should (stringp (diogenes-focus-dictionary)))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is
