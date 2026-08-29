@@ -17,9 +17,9 @@
 ;;
 ;; The listing is GENERATED from the live keymaps rather than written out
 ;; here, so it cannot drift: the print-dictionary keys each module registers
-;; through `diogenes-lookup-register-dictionary', and the focus keys
-;; `diogenes-purpose' adds when it is loaded, appear because they are in the
-;; maps, not because this file knows about them.
+;; through `diogenes-lookup-register-dictionary', and the keys for going from
+;; one Diogenes window or frame to another, appear because they are in the maps,
+;; not because this file knows about them.
 
 ;;; Code:
 
@@ -309,7 +309,14 @@ does."
 	       ((memq command diogenes-cheatsheet-navigation-commands)
 		"Navigation")
 	       (entry (diogenes-cheatsheet--dictionary-title entry))
-	       ((string-prefix-p "diogenes-purpose-focus-" name) "Windows")
+	       ;; Going from one window or FRAME to another.  Both spellings:
+	       ;; `diogenes-focus-*\=' is where these live now, and
+	       ;; `diogenes-purpose-focus-*\=' is what they were called when only
+	       ;; window-purpose had them -- a reader may still have one bound.
+	       ((or (string-prefix-p "diogenes-focus-" name)
+		    (string-prefix-p "diogenes-purpose-focus-" name)
+		    (eq command 'diogenes-old-visit-dictionary))
+		"Going between the windows and frames")
 	       ;; Fallbacks: a dictionary that registered no :command, or a
 	       ;; key bound before the registry existed.
 	       ((string-prefix-p "diogenes-lookup-open-" name)
@@ -566,8 +573,8 @@ the parent's own window is put back if something got past all three."
   "Show the Diogenes keys in a floating panel, until the next keystroke.
 The keys of the current Diogenes buffer come first, then those of the other
 Diogenes buffers, then the commands that get you into one.  The listing is
-read from the live keymaps, so registered print dictionaries and the
-`diogenes-purpose\=' focus keys appear of their own accord.
+read from the live keymaps, so registered print dictionaries and the keys for
+going between the windows appear of their own accord.
 
 The sections are laid out in as many columns as the frame has room for, so
 nothing is cut off.  On a terminal frame, where there are no child frames,

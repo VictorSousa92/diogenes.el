@@ -459,6 +459,12 @@
      answer differs there. For a sequence under a leader, press the leader and
      let which-key list what is taken.</p>
   <div id="c-keys"></div>
+  <p class="note"><b>The <code>C-c</code> chords go between the windows and
+     frames.</b> They matter most with <em>frames</em>, where the kinds are in
+     separate frames and <code>C-x o</code> cannot reach them &mdash; the key
+     raises the frame and puts you in it. Within one frame they move between
+     windows just as usefully. Press one twice where there are two of a kind, an
+     OLD page and a TLL page say, and you go to the second.</p>
 
   <h2>Frames</h2>
   <div class="row">
@@ -767,8 +773,8 @@ const SINGLE_KEYS = [
   ['diogenes-pdf-search-key', 'L', 'look a word up from inside a scanned dictionary'],
   ['diogenes-tgl-index-key', 'i', "volume V's index, from a TGL volume"],
   ['diogenes-old-visit-dictionary-key', 'C-c C-e',
-   'the scanned page \u2014 the one opened from this entry if there is one, else ' +
-   'any open scan, and the next one when pressed inside a scan'],
+   'go to the scanned page \u2014 the one opened from this entry if there is one, ' +
+   'else any open scan; pressed inside a scan it goes to the next'],
   ['diogenes-evil-normal-state-key', '<escape>', 'out of Emacs state, under evil'],
 ];
 
@@ -777,9 +783,12 @@ const SINGLE_KEYS = [
 // because these are the keys most likely to collide with something a reader has
 // bound, being short chords in a common shape.
 const FOCUS_KEYS = [
-  ['diogenes-focus-browser', 'C-c C-b', 'go to the text'],
-  ['diogenes-focus-lookup', 'C-c C-l', 'go to the entry'],
-  ['diogenes-focus-morphology', 'C-c C-a', 'go to the analysis'],
+  ['diogenes-focus-browser', 'C-c C-b',
+   'go to the text \u2014 raising its frame if it is in one'],
+  ['diogenes-focus-lookup', 'C-c C-l',
+   'go to the entry \u2014 raising its frame if it is in one'],
+  ['diogenes-focus-morphology', 'C-c C-a',
+   'go to the analysis \u2014 raising its frame if it is in one'],
 ];
 
 const BEHAVIOURS = {
