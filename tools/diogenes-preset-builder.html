@@ -766,8 +766,20 @@ const LOOKUP_KEYS = [
 const SINGLE_KEYS = [
   ['diogenes-pdf-search-key', 'L', 'look a word up from inside a scanned dictionary'],
   ['diogenes-tgl-index-key', 'i', "volume V's index, from a TGL volume"],
-  ['diogenes-old-visit-dictionary-key', 'C-c C-e', 'back to the page from an entry'],
+  ['diogenes-old-visit-dictionary-key', 'C-c C-e',
+   'the scanned page \u2014 the one opened from this entry if there is one, else ' +
+   'any open scan, and the next one when pressed inside a scan'],
   ['diogenes-evil-normal-state-key', '<escape>', 'out of Emacs state, under evil'],
+];
+
+// Going from one Diogenes window to another: `diogenes-focus-keys'.  A table of
+// its own because it is one option, written whole when any of it changes -- and
+// because these are the keys most likely to collide with something a reader has
+// bound, being short chords in a common shape.
+const FOCUS_KEYS = [
+  ['diogenes-focus-browser', 'C-c C-b', 'go to the text'],
+  ['diogenes-focus-lookup', 'C-c C-l', 'go to the entry'],
+  ['diogenes-focus-morphology', 'C-c C-a', 'go to the analysis'],
 ];
 
 const BEHAVIOURS = {
@@ -1555,6 +1567,16 @@ el('c-keys').innerHTML =
       </div>
       <div data-warnfor="lk${i}" class="warnline"></div>
     </div>`).join('') +
+  FOCUS_KEYS.map(k => `
+    <div class="keyrow">
+      <div class="what"><code>${k[0]}</code><em>${k[2]}</em></div>
+      <div class="keybox">
+        <input type="text" data-focuskey="${k[0]}" placeholder="${k[1]}"
+               data-context="lookup">
+        <button data-record="1" title="Press the keys instead of typing them">\u2328</button>
+      </div>
+      <div data-warnfor="${k[0]}" class="warnline"></div>
+    </div>`).join('') +
   SINGLE_KEYS.map(k => `
     <div class="keyrow">
       <div class="what"><code>${k[0]}</code><em>${k[2]}</em></div>
@@ -1768,6 +1790,26 @@ function configText() {
     out.push('  ;; The whole table: it is one option, so the keys you have not');
     out.push('  ;; changed are written too rather than left unbound.');
     out.push("  (setq diogenes-lookup-keys\n        '(" + rows.join('\n').trimStart() + '))');
+  }
+
+  // `diogenes-focus-keys' is one option, so any change writes the whole table
+  // -- the keys not changed included, or they would be unbound.  The scanned
+  // page is absent from it on purpose: `C-c C-e' reaches that, and giving the
+  // focus command a key of its own would be a second way to do one thing.
+  const focusChanged = FOCUS_KEYS.some(k =>
+    keyValue(document.querySelector(`input[data-focuskey="${k[0]}"]`)) !== undefined);
+  if (focusChanged) {
+    const rows = FOCUS_KEYS.map(k => {
+      const v = keyValue(document.querySelector(`input[data-focuskey="${k[0]}"]`));
+      const key = v === undefined ? k[1] : v;
+      return `        (${k[0].padEnd(26)} . ${key === null ? 'nil' : JSON.stringify(key)})`;
+    });
+    rows.push('        (diogenes-focus-dictionary   . nil)');
+    out.push('');
+    out.push('  ;; Going from one Diogenes window to another.  Bound in the');
+    out.push('  ;; Diogenes buffers, not globally.  The whole table, since it is');
+    out.push('  ;; one option and the keys left out of it would be unbound.');
+    out.push("  (setq diogenes-focus-keys\n        '(" + rows.join('\n').trimStart() + '))');
   }
 
   const singles = [];
@@ -2372,7 +2414,25 @@ function effectiveKeys() {
     const input = document.querySelector(`input[data-singlekey="${k[0]}"]`);
     const key = readBox(input, k[1]);
     const where = (input && input.dataset.context) || 'lookup';
-    if (key) out.push({ key, where, slot: k[0], what: k[0] });
+    if (!key) return;
+    out.push({ key, where, slot: k[0], what: k[0] });
+    // The dictionary key is bound in the entries AND in the scans, since it
+    // cycles through the scans when pressed inside one -- so it can collide in
+    // either.
+    if (k[0] === 'diogenes-old-visit-dictionary-key')
+      out.push({ key, where: 'document', slot: k[0], what: k[0] });
+  });
+  FOCUS_KEYS.forEach(k => {
+    const key = readBox(document.querySelector(`input[data-focuskey="${k[0]}"]`),
+                        k[1]);
+    // In BOTH contexts, because these are bound in both: in our own modes for
+    // the entries and the text, and in `diogenes-pdf-search-mode' for the
+    // scans.  Listed once per context, so a collision with `L' -- which lives
+    // only in a scan -- is found as well as one with a dictionary letter.
+    if (key) {
+      out.push({ key, where: 'lookup', slot: k[0], what: k[0] });
+      out.push({ key, where: 'document', slot: k[0], what: k[0] });
+    }
   });
   return out;
 }
@@ -2427,6 +2487,7 @@ function slotOf(input) {
   const d = input.dataset;
   if (d.dictkey) return d.dictkey;
   if (d.singlekey) return d.singlekey;
+  if (d.focuskey) return d.focuskey;
   if (d.lookupkey !== undefined) return 'lk' + d.lookupkey;
   return null;
 }
@@ -2434,6 +2495,7 @@ function slotOf(input) {
 function inputForSlot(slot) {
   return document.querySelector(`input[data-dictkey="${slot}"]`) ||
          document.querySelector(`input[data-singlekey="${slot}"]`) ||
+         document.querySelector(`input[data-focuskey="${slot}"]`) ||
          (String(slot).startsWith('lk')
           ? document.querySelector(`input[data-lookupkey="${String(slot).slice(2)}"]`)
           : null);
@@ -2503,6 +2565,8 @@ function renderWarnings() {
     show('lk' + i, document.querySelector(`input[data-lookupkey="${i}"]`)));
   SINGLE_KEYS.forEach(k =>
     show(k[0], document.querySelector(`input[data-singlekey="${k[0]}"]`)));
+  FOCUS_KEYS.forEach(k =>
+    show(k[0], document.querySelector(`input[data-focuskey="${k[0]}"]`)));
 }
 
 function renderWhereNote() {
