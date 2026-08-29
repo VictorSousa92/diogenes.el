@@ -606,28 +606,90 @@ window a dictionary lands in may be a different size from the last one."
                  (const :tag "Leave the viewer alone" nil))
   :group 'diogenes)
 
+(defcustom diogenes-old-pdf-fit-retries 10
+  "How many times to try scaling a page before giving up.
+pdf-tools renders in another process and answers when it is ready, so a fit
+asked for in the same breath as the page can arrive too early: the command
+signals, and a page opens at whatever scale the last document was left at.
+That was the reported symptom -- pages not filling the width under Doom -- and
+the error had been swallowed, so nothing said why.
+
+The window may also still be settling.  A frame just made, a split about to
+happen, the gathering moving things: any of them leaves the window a different
+width a moment later, and a fit computed from the old width is wrong even
+though the command succeeded.  So the scale is checked against what was asked
+for, and asked again where it does not match.
+
+Each attempt is a tenth of a second after the last, so ten is a second in the
+worst case and nothing at all in the ordinary one, where the first attempt
+works.  Nil or zero tries once and accepts the answer."
+  :type '(choice (const :tag "Try once" nil) integer)
+  :group 'diogenes)
+
 (defun diogenes-old--fit-page (window)
   "Scale the document in WINDOW according to `diogenes-old-pdf-fit\='.
 Each viewer is asked in its own terms, and only if it has the command:
 pdf-tools and doc-view both have the three, the Emacs Reader has what it
 has, and a viewer without any is left as it is."
   (when (and diogenes-old-pdf-fit (window-live-p window))
+    (diogenes-old--fit-page-1 window diogenes-old-pdf-fit-retries)))
+
+(defun diogenes-old--fit-command ()
+  "The command that scales a page as `diogenes-old-pdf-fit\=' asks, or nil.
+Each viewer in its own terms, and only where it HAS the command: asking
+`fboundp\=' of pdf-tools' name in a doc-view buffer would find it, pdf-tools
+being loaded, and call it in a buffer it knows nothing about.  So the mode is
+consulted first."
+  (cond
+   ((derived-mode-p 'pdf-view-mode)
+    (pcase diogenes-old-pdf-fit
+      ('width 'pdf-view-fit-width-to-window)
+      ('height 'pdf-view-fit-height-to-window)
+      (_ 'pdf-view-fit-page-to-window)))
+   ((derived-mode-p 'doc-view-mode)
+    (pcase diogenes-old-pdf-fit
+      ('width 'doc-view-fit-width-to-window)
+      ('height 'doc-view-fit-height-to-window)
+      (_ 'doc-view-fit-page-to-window)))
+   ((and (fboundp 'reader-mode) (derived-mode-p 'reader-mode))
+    (pcase diogenes-old-pdf-fit
+      ('width 'reader-fit-to-width)
+      ('height 'reader-fit-to-height)
+      (_ 'reader-fit-to-page)))))
+
+(defun diogenes-old--fit-looks-right-p ()
+  "Whether the page is scaled as `diogenes-old-pdf-fit\=' asked.
+Only pdf-tools records what it was asked for, in `pdf-view-display-size\=', so
+only there can this be answered; elsewhere the answer is yes, there being
+nothing to check against and no reason to retry blindly."
+  (if (and (derived-mode-p 'pdf-view-mode)
+           (boundp 'pdf-view-display-size))
+      (eq pdf-view-display-size
+          (pcase diogenes-old-pdf-fit
+            ('width 'fit-width)
+            ('height 'fit-height)
+            (_ 'fit-page)))
+    t))
+
+(defun diogenes-old--fit-page-1 (window tries)
+  "Try to scale the document in WINDOW, TRIES times if need be."
+  (when (window-live-p window)
     (with-selected-window window
-      (let ((command
-             (cl-find-if
-              #'fboundp
-              (pcase diogenes-old-pdf-fit
-                ('width  '(pdf-view-fit-width-to-window
-                           doc-view-fit-width-to-window
-                           reader-fit-to-width))
-                ('height '(pdf-view-fit-height-to-window
-                           doc-view-fit-height-to-window
-                           reader-fit-to-height))
-                (_       '(pdf-view-fit-page-to-window
-                           doc-view-fit-page-to-window
-                           reader-fit-to-page))))))
-        (when command
-          (ignore-errors (funcall command)))))))
+      (let* ((command (diogenes-old--fit-command))
+             (worked
+              (and command
+                   (fboundp command)
+                   (condition-case nil
+                       (progn (funcall command) t)
+                     ;; A viewer not ready to be measured -- pdf-tools renders
+                     ;; in another process -- signals here, and that is the
+                     ;; case worth trying again rather than reporting.
+                     (error nil)))))
+        (when (and (or (not worked) (not (diogenes-old--fit-looks-right-p)))
+                   (numberp tries) (> tries 0))
+          (run-with-timer
+           0.1 nil
+           (lambda () (diogenes-old--fit-page-1 window (1- tries)))))))))
 
 (defun diogenes-old--goto-page-in-window (buffer page)
   "Go to PAGE in the window that displays BUFFER, disturbing no other window.

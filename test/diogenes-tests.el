@@ -1545,6 +1545,56 @@ about both."
   (let ((one '(("Lookup" ("q" . quit)))))
     (should (equal (diogenes-cheatsheet--lift-common one) one))))
 
+(ert-deftest diogenes-test-cheatsheet-splits-a-tall-section ()
+  "A section too tall for the panel continues in the next column.
+It used to be allowed a column of its own and to overflow, on the reasoning
+that a panel running long beats a section cut in half -- but it does not run
+long: the frame is clamped to the parent, so the overflow is not shown.  The
+Lookup section, with a group for each language and each kind of dictionary, lost
+its last lines mid-word."
+  (let ((block (append (list "Lookup")
+                       (list " Navigation" "  C-c C-p  previous" "  C-c C-n  next")
+                       (list " Latin dictionaries" "  G  Georges" "  g  Gaffiot")
+                       (list " Greek dictionaries" "  d  DGE" "  P  Pape")
+                       (list " Other" "  q  quit"))))
+    ;; Room enough: one part, untouched.
+    (should (equal (diogenes-cheatsheet--split-block block 40) (list block)))
+    ;; Too tall: cut, and cut at a GROUP -- every part after the first begins
+    ;; with a group heading, never in the middle of one.
+    (let ((parts (diogenes-cheatsheet--split-block block 7)))
+      (should (> (length parts) 1))
+      (dolist (part parts)
+        (should (<= (length part) 7)))
+      ;; The first keeps the title; the rest say they are continued, or a
+      ;; reader meets keys belonging to nothing they can see.
+      (should (equal (car (car parts)) "Lookup"))
+      (dolist (part (cdr parts))
+        (should (string-match-p "continued" (car part))))
+      ;; Nothing lost and nothing repeated: the parts' bodies are the original.
+      (should (equal (apply #'append (mapcar #'cdr parts)) (cdr block))))
+    ;; And the group test reads the shape: one leading space is a heading, two
+    ;; is a key.
+    (should (diogenes-cheatsheet--group-start-p " Navigation"))
+    (should-not (diogenes-cheatsheet--group-start-p "  q  quit"))
+    (should-not (diogenes-cheatsheet--group-start-p "Lookup"))))
+
+(ert-deftest diogenes-test-cheatsheet-labels-say-what-a-key-does ()
+  "A label says what pressing the key does, not what the function is called.
+`diogenes-old-visit-dictionary\=' read `old visit dictionary\=' in a section
+headed `Going between the windows and frames\=', where the useful words are `the
+scanned page\='."
+  (should (equal (diogenes-cheatsheet--label 'diogenes-old-visit-dictionary)
+                 "the scanned page"))
+  (should (equal (diogenes-cheatsheet--label 'diogenes-focus-browser) "the text"))
+  ;; A name that reads well is left alone.
+  (should (equal (diogenes-cheatsheet--label 'diogenes-lookup-open-montanari)
+                 "montanari"))
+  ;; And every command named in the table exists, or the label describes
+  ;; something gone.
+  (dolist (cell diogenes-cheatsheet-labels)
+    (should (symbolp (car cell)))
+    (should (stringp (cdr cell)))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is

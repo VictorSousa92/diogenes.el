@@ -45,6 +45,7 @@
 
 (defcustom diogenes-cheatsheet-command-prefixes
   '("diogenes-lookup-open-" "diogenes-lookup-" "diogenes-browser-"
+    "diogenes-focus-" "diogenes-old-" "diogenes-tgl-" "diogenes-pdf-"
     "diogenes-purpose-focus-" "diogenes-purpose-" "diogenes--" "diogenes-")
   "Prefixes stripped from a command name to label it, longest first.
 `diogenes-lookup-open-montanari' becomes \"montanari\"."
@@ -87,14 +88,39 @@ governs the shape of the panel more than how much of it you see."
 
 ;;;; Gathering the keys
 
+(defcustom diogenes-cheatsheet-labels
+  '((diogenes-old-visit-dictionary . "the scanned page")
+    (diogenes-focus-browser        . "the text")
+    (diogenes-focus-lookup         . "the entry")
+    (diogenes-focus-morphology     . "the analysis")
+    (diogenes-focus-dictionary     . "the scanned page")
+    (diogenes-pdf-search           . "look a word up")
+    (diogenes-tgl-open-index-here  . "the index, around this word")
+    (diogenes-browser-remove-hyphenation  . "join divided words")
+    (diogenes-browser-reinsert-hyphenation . "divide them again")
+    (diogenes-evil-normal-state    . "normal state"))
+  "Labels to use instead of the one made from a command's name.
+An alist of (COMMAND . LABEL).  Stripping the prefixes off
+`diogenes-old-visit-dictionary\=' leaves `old visit dictionary\=', which says
+what the function is called and not what pressing the key does -- and in a
+section headed `Going between the windows and frames\=' the useful label is `the
+scanned page\='.
+
+Only for the names that read badly.  Most do not need an entry:
+`diogenes-lookup-open-montanari\=' becomes `montanari\=', which is exactly right."
+  :type '(alist :key-type function :value-type string)
+  :group 'diogenes-cheatsheet)
+
 (defun diogenes-cheatsheet--label (command)
   "A short human label for COMMAND."
-  (let ((name (symbol-name command)))
+  (or
+   (cdr (assq command diogenes-cheatsheet-labels))
+   (let ((name (symbol-name command)))
     (cl-loop for prefix in diogenes-cheatsheet-command-prefixes
 	     when (string-prefix-p prefix name)
 	     do (setq name (substring name (length prefix)))
 	     and return nil)
-    (replace-regexp-in-string "-" " " name)))
+     (replace-regexp-in-string "-" " " name))))
 
 (defcustom diogenes-cheatsheet-uninteresting-commands
   '(self-insert-command undefined digit-argument negative-argument
@@ -513,12 +539,65 @@ by a column break."
 							      'diogenes-cheatsheet-key)
 						  label)))))))))
 
+(defun diogenes-cheatsheet--group-start-p (line)
+  "Whether LINE begins a group within a section.
+A group heading has one leading space and a key line two, which is how the
+lines are built a few forms above.  Read from the shape rather than from the
+face, so that a section rendering its own way -- `With a prefix\=' does -- is
+treated as one group and not cut up."
+  (and (stringp line)
+       (> (length line) 1)
+       (eq (aref line 0) ?\s)
+       (not (eq (aref line 1) ?\s))))
+
+(defun diogenes-cheatsheet--split-block (block height)
+  "BLOCK as a list of blocks, none taller than HEIGHT.
+Cut at GROUP boundaries, so a section too tall for the panel continues in the
+next column with its groups intact.  The parts after the first are titled
+`... (continued)\=', or a reader meets a column of keys belonging to nothing
+they can see.
+
+A block was previously allowed to overflow, on the reasoning that a panel
+running long is better than a section cut in half.  It does not run long: the
+frame is clamped to the parent, so the overflow is simply not shown -- the
+Lookup section, with a group for each language and each kind of dictionary, lost
+its last lines mid-word.
+
+Where a single GROUP is taller than the room, there is nothing to cut at and it
+is cut at the height; that is a section with thirty dictionaries in it, and
+half of it visible beats none."
+  (if (or (null height) (<= (length block) height))
+      (list block)
+    (let* ((title (car block))
+           (continued (concat title "  (continued)"))
+           (parts nil)
+           (current nil)
+           (used 1)                     ; the title line
+           (first t))
+      (dolist (line (cdr block))
+        (when (and (>= (1+ used) height)
+                   ;; Cut before a group where there is one to cut before, and
+                   ;; at the height where there is not.
+                   (or (diogenes-cheatsheet--group-start-p line)
+                       (>= used height)))
+          (push (cons (if first title continued) (nreverse current)) parts)
+          (setq current nil used 1 first nil))
+        (push line current)
+        (setq used (1+ used)))
+      (when current
+        (push (cons (if first title continued) (nreverse current)) parts))
+      (nreverse parts))))
+
 (defun diogenes-cheatsheet--columnate (blocks height)
-  "Distribute BLOCKS into columns no taller than HEIGHT where possible.
-A block taller than HEIGHT takes a column of its own and sets the height:
-better a panel that runs long than a section cut in half."
+  "Distribute BLOCKS into columns no taller than HEIGHT.
+A block taller than HEIGHT is split at its group boundaries and continues in
+the next column -- see `diogenes-cheatsheet--split-block\='.  It used to be
+allowed a column of its own and to overflow, which meant being clipped, the
+frame being clamped to the parent's size."
   (let (columns current (used 0))
-    (dolist (block blocks)
+    (dolist (block (cl-mapcan (lambda (b)
+                                (diogenes-cheatsheet--split-block b height))
+                              blocks))
       (let ((size (1+ (length block))))	; a blank line between blocks
 	(when (and current (> (+ used size) height))
 	  (push (nreverse current) columns)
