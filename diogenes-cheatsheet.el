@@ -370,10 +370,47 @@ first, so the panel answers \"what can I press HERE\" before anything else."
 	     collect (cons (if (eq tag here) (concat title "  (here)") title)
 			   bindings)
 	     into out
-	     finally return (let ((entry (diogenes-cheatsheet--entry-points)))
-			      (if entry
-				  (append out (list (cons "Getting in" entry)))
-				out)))))
+	     finally return
+	     (let ((entry (diogenes-cheatsheet--entry-points))
+		   ;; The prefixed variants, which the maps cannot supply: `C-u L'
+		   ;; is `L' given an argument, and no keymap holds it.
+		   (prefixed (diogenes-cheatsheet--prefixed)))
+	       (append out
+		       (when prefixed (list (cons "With a prefix" prefixed)))
+		       (when entry (list (cons "Getting in" entry))))))))
+
+(defcustom diogenes-cheatsheet-prefixed
+  '((diogenes-pdf-search "L" "the word under point, or one you type")
+    (diogenes-pdf-search "C-u L"
+                         "its ROOT, for a badly-OCR\u2019d word -- and in tomes I-IV \
+of the TGL, an index reference such as `t.3 c.746\'")
+    (diogenes-lookup-open-bailly "B" "the entry in the XML")
+    (diogenes-lookup-open-bailly "C-u B" "the page in the print")
+    (diogenes-browser-forward "C-c C-n" "the next page of the passage")
+    (diogenes-browser-forward "C-u 5 C-c C-n" "five pages on")
+    (diogenes-browser-backward "C-u 5 C-c C-p" "five pages back"))
+  "Commands whose behaviour changes with a prefix argument.
+A list of (COMMAND KEY DESCRIPTION), shown under \"With a prefix\".
+
+Written out rather than read from the keymaps, and it has to be: a prefix
+argument is not a binding.  `C-u L\=' is `L\=' given an argument, so no map has
+anything to say about it, and a cheatsheet built from the maps alone can never
+mention the second half of what these keys do.
+
+`C-u\=' is Emacs\='s `universal-argument\=' and not ours to move.  Where a
+distribution has taken `C-u\=' for scrolling the argument is on the leader --
+`SPC u\=' under Doom and Spacemacs -- and `M-1\=' serves anywhere; the commands
+ask only whether they were given an argument, not how.
+
+A command absent from this installation is left out, as elsewhere."
+  :type '(repeat (list function string string))
+  :group 'diogenes-cheatsheet)
+
+(defun diogenes-cheatsheet--prefixed ()
+  "The (KEY . DESCRIPTION) pairs for `diogenes-cheatsheet-prefixed\='."
+  (cl-loop for (command key description) in diogenes-cheatsheet-prefixed
+	   when (fboundp command)
+	   collect (cons key description)))
 
 (defcustom diogenes-cheatsheet-entry-points
   '(diogenes
@@ -409,6 +446,16 @@ by a column break."
      for section in sections
      collect
      (cons (propertize (car section) 'face 'diogenes-cheatsheet-title)
+	   ;; The prefixed section carries STRINGS where the others carry
+	   ;; commands, its entries being descriptions of what an argument does
+	   ;; rather than bindings -- so it goes round `--classify', which reads a
+	   ;; command's name to decide the group and would fail on a string.
+	   (if (equal (car section) "With a prefix")
+	       (cl-loop for (key . label) in (cdr section)
+			collect (format "  %s  %s"
+					(propertize (format "%-11s" key)
+						    'face 'diogenes-cheatsheet-key)
+					label))
 	   (cl-loop
 	    for group in (diogenes-cheatsheet--classify (cdr section))
 	    append (cons (propertize (format " %s" (car group))
@@ -418,7 +465,7 @@ by a column break."
 						  (propertize (format "%-11s" key)
 							      'face
 							      'diogenes-cheatsheet-key)
-						  label))))))))
+						  label)))))))))
 
 (defun diogenes-cheatsheet--columnate (blocks height)
   "Distribute BLOCKS into columns no taller than HEIGHT where possible.

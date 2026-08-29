@@ -1481,6 +1481,31 @@ again goes to the next, and past the last comes back to the first."
       (dolist (buffer (list a b))
         (when (buffer-live-p buffer) (kill-buffer buffer))))))
 
+(ert-deftest diogenes-test-cheatsheet-lists-the-prefixed-commands ()
+  "The cheatsheet says what a prefix argument does.
+It is built from the live keymaps, and a prefix argument is not a binding: `C-u
+L\=' is `L\=' given an argument, so no map holds it and a cheatsheet reading maps
+alone can never mention the second half of what these keys do.  Hence a written
+table -- and hence this test, since a written table can go stale where a keymap
+cannot."
+  (should (boundp 'diogenes-cheatsheet-prefixed))
+  ;; Every command named exists, or the entry is describing something gone.
+  (dolist (entry diogenes-cheatsheet-prefixed)
+    (should (symbolp (nth 0 entry)))
+    (should (stringp (nth 1 entry)))
+    (should (stringp (nth 2 entry)))
+    ;; The description is prose, not a symbol name: this section renders its own
+    ;; way for that reason, `--classify' reading a command's name to group it.
+    (should (string-match-p " " (nth 2 entry))))
+  ;; The two that matter are there: the TGL's root search and Bailly's print.
+  (let ((keys (mapcar (lambda (e) (nth 1 e)) diogenes-cheatsheet-prefixed)))
+    (should (member "C-u L" keys))
+    (should (member "C-u B" keys)))
+  ;; And absent commands are left out rather than listed.
+  (let ((diogenes-cheatsheet-prefixed
+         '((diogenes-tests--no-such-command "C-u Z" "nothing at all"))))
+    (should-not (diogenes-cheatsheet--prefixed))))
+
 (ert-deftest diogenes-test-buffer-role ()
   "A buffer's kind is read from its name first and its mode second.
 Name first because a lookup buffer is DISPLAYED before its major mode is
