@@ -1500,7 +1500,18 @@ cannot."
   ;; The two that matter are there: the TGL's root search and Bailly's print.
   (let ((keys (mapcar (lambda (e) (nth 1 e)) diogenes-cheatsheet-prefixed)))
     (should (member "C-u L" keys))
-    (should (member "C-u B" keys)))
+    (should (member "C-u B" keys))
+    ;; The three dictionaries with both an XML and a print are all listed: the
+    ;; table named only Bailly, and the rule is the same for the other two.
+    (dolist (key '("B" "g" "G"))
+      (should (member key keys))))
+  ;; And `C-u B' is not described as opening the print, which it does not:
+  ;; pressing `B' again inside a Bailly entry is what does that.  This was
+  ;; documented wrongly and read wrongly from the same misunderstanding.
+  (let ((entry (cl-find "C-u B" diogenes-cheatsheet-prefixed
+                        :key (lambda (e) (nth 1 e)) :test #'equal)))
+    (should entry)
+    (should-not (string-match-p "the page in the print" (nth 2 entry))))
   ;; And absent commands are left out rather than listed.
   (let ((diogenes-cheatsheet-prefixed
          '((diogenes-tests--no-such-command "C-u Z" "nothing at all"))))

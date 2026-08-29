@@ -415,8 +415,12 @@ first, so the panel answers \"what can I press HERE\" before anything else."
     (diogenes-pdf-search "C-u L"
                          "its ROOT, for a badly-OCR\u2019d word -- and in tomes I-IV \
 of the TGL, an index reference such as `t.3 c.746\'")
-    (diogenes-lookup-open-bailly "B" "the entry in the XML")
-    (diogenes-lookup-open-bailly "C-u B" "the page in the print")
+    (diogenes-lookup-bailly "B" "Bailly -- and, pressed INSIDE a Bailly entry, \
+its printed page")
+    (diogenes-lookup-bailly "C-u B" "Bailly, asking which word: another word up \
+in the XML, not the print")
+    (diogenes-lookup-gaffiot "g" "Gaffiot -- and, inside a Gaffiot entry, the print")
+    (diogenes-lookup-georges "G" "Georges -- and, inside a Georges entry, the print")
     (diogenes-browser-forward "C-c C-n" "the next page of the passage")
     (diogenes-browser-forward "C-u 5 C-c C-n" "five pages on")
     (diogenes-browser-backward "C-u 5 C-c C-p" "five pages back"))
@@ -432,6 +436,17 @@ mention the second half of what these keys do.
 distribution has taken `C-u\=' for scrolling the argument is on the leader --
 `SPC u\=' under Doom and Spacemacs -- and `M-1\=' serves anywhere; the commands
 ask only whether they were given an argument, not how.
+
+WHAT THE PREFIX MEANS is the same for every dictionary letter: `ask me which
+word\='.  It does NOT switch between a dictionary's XML and its print.  What does
+that is pressing the letter again INSIDE that dictionary's own entry -- `g\=' in a
+Gaffiot entry opens Gaffiot's printed page, and `C-u g\=' there looks another word
+up in the XML instead.  Bailly, Gaffiot and Georges are the three with both.
+
+For a print-only dictionary -- the OLD, Montanari, the CGL, the BDAG, Passow,
+the TGL -- the letter opens the scan and the prefix asks which word to open it
+at.  `C-u L\=' inside a scan is the exception that does more, and it is listed
+above.
 
 A command absent from this installation is left out, as elsewhere."
   :type '(repeat (list function string string))
