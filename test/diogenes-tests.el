@@ -1497,21 +1497,18 @@ cannot."
     ;; The description is prose, not a symbol name: this section renders its own
     ;; way for that reason, `--classify' reading a command's name to group it.
     (should (string-match-p " " (nth 2 entry))))
-  ;; The two that matter are there: the TGL's root search and Bailly's print.
+  ;; The RULE is listed, rather than a row per dictionary: a prefixed letter
+  ;; looks a word up in that dictionary, and the bare letter reaches the print
+  ;; only from inside that dictionary's own entry.
   (let ((keys (mapcar (lambda (e) (nth 1 e)) diogenes-cheatsheet-prefixed)))
     (should (member "C-u L" keys))
-    (should (member "C-u B" keys))
-    ;; The three dictionaries with both an XML and a print are all listed: the
-    ;; table named only Bailly, and the rule is the same for the other two.
-    (dolist (key '("B" "g" "G"))
-      (should (member key keys))))
-  ;; And `C-u B' is not described as opening the print, which it does not:
-  ;; pressing `B' again inside a Bailly entry is what does that.  This was
-  ;; documented wrongly and read wrongly from the same misunderstanding.
-  (let ((entry (cl-find "C-u B" diogenes-cheatsheet-prefixed
-                        :key (lambda (e) (nth 1 e)) :test #'equal)))
-    (should entry)
-    (should-not (string-match-p "the page in the print" (nth 2 entry))))
+    (should (member "C-u <letter>" keys))
+    (should (member "B, g, G" keys)))
+  ;; And no prefixed row says a prefix opens the print, which it does not.
+  (dolist (entry diogenes-cheatsheet-prefixed)
+    (when (string-prefix-p "C-u" (nth 1 entry))
+      (should-not (string-match-p "printed page\\|page in the print"
+                                  (nth 2 entry)))))
   ;; And absent commands are left out rather than listed.
   (let ((diogenes-cheatsheet-prefixed
          '((diogenes-tests--no-such-command "C-u Z" "nothing at all"))))
