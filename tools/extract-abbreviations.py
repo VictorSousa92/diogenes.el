@@ -77,14 +77,36 @@ def extract(path, corpus):
     return authors, works
 
 
-def most_frequent(counter, key_length):
-    """The commonest abbreviation for each key, with how often it occurred."""
+# Below this many citations an abbreviation is not trusted.  The dictionaries
+# contain the odd mistagged reference -- Homer's Iliad appears once as
+# `phi,0012', which is his TLG number in the Latin corpus -- and a single
+# occurrence is as likely to be one of those as a real abbreviation.  Every
+# author the lexicographers actually use has hundreds: `Cic.' has 39158.
+#
+# It costs the genuinely rare authors, which is the right way round.  An author
+# quoted twice in the whole of Lewis & Short is one whose abbreviation a reader
+# would rather look up than take on trust.
+MINIMUM = 3
+
+
+def most_frequent(counter, key_length, dropped=None):
+    """The commonest abbreviation for each key, with how often it occurred.
+
+    Keys whose best abbreviation falls below MINIMUM are left out, and noted in
+    DROPPED where a list is given, so that what the threshold cost is visible
+    rather than silent."""
     best = {}
     for key, count in counter.items():
         short = key[:key_length]
         if short not in best or count > best[short][1]:
             best[short] = (key[key_length], count)
-    return best
+    kept = {}
+    for short, (abbrev, count) in best.items():
+        if count >= MINIMUM:
+            kept[short] = (abbrev, count)
+        elif dropped is not None:
+            dropped.append((short, abbrev, count))
+    return kept
 
 
 def main():
@@ -105,11 +127,18 @@ def main():
             provenance.append(";; %s: %s NOT FOUND" % (name, filename))
             continue
         authors, works = extract(path, corpus)
-        best_authors = most_frequent(authors, 1)
-        best_works = most_frequent(works, 2)
+        dropped = []
+        best_authors = most_frequent(authors, 1, dropped)
+        best_works = most_frequent(works, 2, dropped)
         tables[corpus] = (best_authors, best_works)
         provenance.append(";; %s (%s): %d authors, %d works"
                           % (name, filename, len(best_authors), len(best_works)))
+        if dropped:
+            provenance.append(";;   %d cited fewer than %d times, left out"
+                              % (len(dropped), MINIMUM))
+            for short, abbrev, count in sorted(dropped)[:40]:
+                sys.stderr.write("  dropped %-18s %-14s %d\n"
+                                 % ("/".join(short), abbrev, count))
 
     out = sys.stdout
     out.write(""";;; diogenes-abbreviations.el --- how the dictionaries cite -*- lexical-binding: t; -*-
