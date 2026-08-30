@@ -116,22 +116,25 @@ Takes no prefix argument, as `diogenes-browser-forward' takes none."
 	       (when-let* ((citation (get-text-property (point) 'cit)))
 		 (insert (diogenes--browser-format-citation citation)))))))))
 
-(defcustom diogenes-browser-join-broken-words nil
+(defcustom diogenes-browser-join-broken-words t
   "Whether a word broken across two lines is joined before it is looked up.
 A text may divide a word at the end of a line, and `C-c C-c\=' on either half
 looked up that half -- `praeci\=' and `pitur\=' rather than `praecipitur\=', neither
 of which any dictionary has.
 
-OFF BY DEFAULT, having shipped broken.  The first version read the wrong text
-property -- the citation printed at the head of a line is marked
-`diogenes-citation\=', not `cit\=' -- and so took the citation's own digits for the
-second half of the word: `captan-\=' followed by `10.20.2.4 tem spiritus liquit\='
-was looked up as `captan10\='.  With the citations hidden it was worse: the loop
-that skipped them could not advance and Emacs hung.
+It was off for a while, having shipped broken.  The first version read the wrong
+text property -- the citation printed at the head of a line is marked
+`diogenes-citation\=', not `cit\=', which is on the text -- and so took the
+citation's own digits for the second half of the word: `captan-\=' followed by
+`10.20.2.4 tem spiritus liquit\=' was looked up as `captan10\='.  With the citations
+hidden it was worse: the loop that skipped them could not advance and Emacs
+hung.
 
-Both are mended, and the default stays off until a reader turns it on knowingly.
-A convenience that returns a wrong word is worse than no convenience, and one
-that hangs is worse than that.
+Both are mended and confirmed in use, in the Greek and the Latin both --
+`captantem\=' in Seneca, `singulos\=' in a PHI text whose citation has four levels
+-- so the default is on.  A reader meeting a divided word wants the word, and
+having to know that an option exists before `C-c C-c\=' will find it is a poor
+bargain for a fault that no longer happens.
 
 Only where the buffer SAYS the word is divided: a hyphen at the end of the line,
 or the record `C-c C--\=' leaves behind when it removes one.  A line merely
