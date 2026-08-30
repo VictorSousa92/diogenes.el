@@ -35,8 +35,20 @@ DICTIONARIES = [
     ("phi", "lat.ls.perseus-eng1.xml", "Lewis & Short"),
 ]
 
+# `[^>]*>' and not `[^"]*">', which cost forty per cent of the LSJ.  The tag
+# often carries another attribute after the identifier:
+#
+#     <bibl n="Perseus:abo:tlg,0008,001:5:207c" default="NO"><author>Ath.</author>
+#
+# and a pattern demanding `>' straight after the closing quote finds a space
+# instead and skips the whole citation.  266,035 citations matched where
+# 439,887 exist -- Athenaeus absent from the table with 2849 of them, every one
+# tagged `default="NO"'.
+#
+# Found by asking why one author was missing and testing the pattern piece by
+# piece; nothing about the count of rows suggested a third of them were absent.
 BIBL = re.compile(
-    rb'<bibl n="Perseus:abo:(tlg|phi),(\d{4}),([0-9-]{3,4})[^"]*">(.{0,300}?)</bibl>',
+    rb'<bibl n="Perseus:abo:(tlg|phi),(\d{4}),([0-9-]{3,4})[^>]*>(.{0,300}?)</bibl>',
     re.S)
 AUTHOR = re.compile(rb'<author>([^<]{1,40})</author>')
 TITLE = re.compile(rb'<title>([^<]{1,60})</title>')
