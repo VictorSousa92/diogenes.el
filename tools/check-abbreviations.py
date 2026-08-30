@@ -43,6 +43,62 @@ def clean(raw):
     return re.sub(r"\s+", " ", raw.decode("utf-8", "replace").strip())
 
 
+def read_catalogue(path):
+    """Every (corpus, author, work) the Perseus catalogue knows, from a tarball.
+
+    An authority independent of the dictionaries: the catalogue says which texts
+    exist and under what numbers, where the dictionaries only say what they
+    happened to cite.  So it catches what a count cannot -- a work number that
+    is not a work at all.
+
+    Read from the FILENAMES, which carry the identifiers, rather than from the
+    MODS records inside: 38,505 records is a great deal to parse for a fact the
+    paths already state."""
+    import tarfile
+    pairs = set()
+    name = re.compile(r"(tlg|phi)(\d{4})\.(?:abo|tlg|phi)(\d+)")
+    try:
+        with tarfile.open(path, "r:*") as archive:
+            for member in archive:
+                found = name.search(os.path.basename(member.name))
+                if found:
+                    corpus, author, work = found.groups()
+                    pairs.add((corpus, author, work))
+    except (OSError, tarfile.TarError) as error:
+        sys.stderr.write("Cannot read the catalogue: %s\n" % error)
+        return None
+    return pairs
+
+
+def report_absent(table, catalogue):
+    """Table entries naming a work the catalogue does not have."""
+    if not catalogue:
+        return
+    authors = {(corpus, author) for (corpus, author, _) in catalogue}
+    missing_works = []
+    missing_authors = []
+    for key in sorted(table):
+        if len(key) == 3:
+            if key not in catalogue:
+                missing_works.append(key)
+        elif key not in authors:
+            missing_authors.append(key)
+    print()
+    print("=== AGAINST THE PERSEUS CATALOGUE ===")
+    print("%d works and %d authors in the catalogue"
+          % (len(catalogue), len(authors)))
+    if missing_authors:
+        print("\n%d AUTHORS the catalogue does not have:" % len(missing_authors))
+        for key in missing_authors[:40]:
+            print("  %-12s -> %s" % ("/".join(key), table[key]))
+    if missing_works:
+        print("\n%d WORKS the catalogue does not have:" % len(missing_works))
+        for key in missing_works[:60]:
+            print("  %-18s -> %s" % ("/".join(key), table[key]))
+    if not missing_authors and not missing_works:
+        print("\nEvery entry names a text the catalogue knows.")
+
+
 def read_table(path):
     """The generated table as {(corpus, author[, work]): abbreviation}."""
     table = {}
@@ -147,6 +203,54 @@ def summarise(what, sampled, total, disputed, unsupported, table):
             print("  %s -> %s" % ("/".join(key), table[key]))
 
 
+def survey(works, table, work_keys):
+    """What remains questionable, by kind rather than one row at a time.
+
+    The faults found so far have each been a KIND of fault -- a count threshold
+    discarding rare citations, a regexp missing an attribute, a number naming a
+    collection -- and each was found by accident.  This groups what is left so
+    that a kind is visible without meeting an instance of it."""
+    collections = []
+    close = []
+    thin = []
+    for key in work_keys:
+        found = alternatives(works, key)
+        if len(found) < 2:
+            if found and found[0][1] < 3:
+                thin.append((key, found[0]))
+            continue
+        best, second = found[0], found[1]
+        share = second[1] / best[1] if best[1] else 0
+        if share > 0.25:
+            collections.append((key, found))
+        elif share > 0.05:
+            close.append((key, found))
+
+    print()
+    print("=== WHAT REMAINS QUESTIONABLE ===")
+    print()
+    print("%d works whose second title has more than a QUARTER of the "
+          "commonest's" % len(collections))
+    print("   -- these name a collection and should carry no work "
+          "abbreviation:")
+    for key, found in collections[:25]:
+        print("   %-18s %s" % ("/".join(key),
+                               ", ".join("%s (%d)" % p for p in found[:4])))
+    print()
+    print("%d works whose second title has between a twentieth and a quarter"
+          % len(close))
+    print("   -- a spelling variant, or a collection the threshold missed:")
+    for key, found in close[:25]:
+        print("   %-18s %s" % ("/".join(key),
+                               ", ".join("%s (%d)" % p for p in found[:4])))
+    print()
+    print("%d works resting on fewer than three citations" % len(thin))
+    print("   -- right about what the dictionary says, and thin evidence "
+          "that it meant this work:")
+    for key, found in thin[:20]:
+        print("   %-18s %s (%d)" % ("/".join(key), found[0], found[1]))
+
+
 def main():
     how_many = int(sys.argv[1]) if len(sys.argv) > 1 else 200
     root = None
@@ -179,6 +283,25 @@ def main():
     disputed, unsupported = report(works, table, work_keys, how_many, "WORKS")
     summarise("works", min(how_many, len(work_keys)), len(work_keys),
               disputed, unsupported, table)
+
+    # And against the catalogue, where one is to hand.  This is the check that
+    # states a FACT rather than a majority: a work number the catalogue does not
+    # list is not a work, whatever the dictionaries did with it.
+    survey(works, table, work_keys)
+
+    catalogue_path = os.environ.get("PERSEUS_CATALOGUE")
+    if not catalogue_path:
+        for candidate in ("catalog_data_tar.gz",
+                          os.path.expanduser("~/catalog_data_tar.gz")):
+            if os.path.exists(candidate):
+                catalogue_path = candidate
+                break
+    if catalogue_path and os.path.exists(catalogue_path):
+        report_absent(table, read_catalogue(catalogue_path))
+    else:
+        print()
+        print("No Perseus catalogue given; set PERSEUS_CATALOGUE to check "
+              "whether every work in the table exists.")
 
 
 if __name__ == "__main__":
