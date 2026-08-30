@@ -53,6 +53,11 @@
 (require 'diogenes-perl-interface)
 (require 'diogenes-user-interface)
 (require 'diogenes-browser)
+;; The abbreviations LSJ and Lewis & Short use, generated from the dictionaries
+;; themselves.  Optional: a reader without the file gets citations by number,
+;; `tlg 0086/025 1053a15' instead of `Arist. Metaph. 1053a15', and nothing
+;; fails.  `require' with NOERROR for that reason.
+(require 'diogenes-abbreviations nil t)
 (require 'diogenes-search)
 (require 'diogenes-perseus)
 (require 'diogenes-dict-faces)

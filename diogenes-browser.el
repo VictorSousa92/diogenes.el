@@ -563,6 +563,58 @@ strings are what a caller wants and no attempt is made to guess which were
 numbers."
   (and key (split-string key "\\." t)))
 
+(defun diogenes-citation-interval-from-key (key)
+  "KEY back to (FROM . TO), TO nil where KEY names a single citation.
+The inverse of what `diogenes-browser-reference\=' puts in `:key\='.
+
+Split on the HYPHEN first and each half on stops after: splitting the whole of
+`2.2-2.5\=' on stops gave `(\"2\" \"2-2\" \"5\")\=', the hyphen swallowed into an
+element and the passage unopenable.  `diogenes-citation-from-key\=' reads one
+citation and was handed two, which is the sort of fault that shows only when
+something tries to read back what was written -- and a link that cannot be read
+back is a dead link."
+  (when key
+    (let* ((halves (split-string key "-" t))
+           (from (diogenes-citation-from-key (car halves)))
+           (to (and (cdr halves)
+                    (diogenes-citation-from-key (cadr halves)))))
+      (cons from to))))
+
+(defun diogenes-open-passage (corpus author work &optional passage)
+  "Open WORK of AUTHOR in CORPUS, at PASSAGE, asking nothing.
+CORPUS is `tlg\=', `phi\=' and the rest; AUTHOR and WORK are the numbers as
+strings; PASSAGE is a list of strings, as `diogenes-citation-from-key\=' returns,
+or nil for the beginning of the work.
+
+PUBLIC, and non-interactive, which is the point of it.  `diogenes-browse-tlg\='
+and its siblings ask `Specify passage?\=' and then for each level in turn --
+right for a reader choosing where to go, and no use to anything holding a
+reference already.  A link that asked four questions before opening would not be
+a link.
+
+It is also the boundary a separate package should call.  `diogenes--browse-work\='
+is private: the two hyphens say that its name and its arguments are nobody
+else\='s business, and a package outside this one calling it would break silently
+on a rename."
+  (diogenes--browse-work (list :type corpus)
+                         (nconc (list author work)
+                                (copy-sequence passage))))
+
+(defun diogenes-open-reference (reference)
+  "Open the passage REFERENCE names.
+REFERENCE is what `diogenes-browser-reference\=' returns, or the same plist read
+back from wherever it was stored -- a link, a note.  `:key\=' is used in
+preference to `:from\=', being the form that survives writing down."
+  (let* ((key (plist-get reference :key))
+         (interval (and key (diogenes-citation-interval-from-key key)))
+         (from (or (car interval)
+                   (mapcar (lambda (element) (format "%s" element))
+                           (plist-get reference :from)))))
+    (diogenes-open-passage (plist-get reference :corpus)
+                           (plist-get reference :author)
+                           (plist-get reference :work)
+                           from)))
+
 (defun diogenes-browser-citation-at (&optional position)
   "The citation of the line at POSITION, or at point.
 Nil where there is none -- a header line, a blank, the space between passages.
