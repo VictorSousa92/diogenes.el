@@ -846,6 +846,35 @@ a Perl process on every page."
 	      'font-lock-face 'font-lock-comment-face
 	      'rear-nonsticky t))
 
+(defun diogenes--browser-remove-duplicate-header (header)
+  "Take out any header already in the buffer whose text is HEADER's.
+Called before inserting one, so that paging leaves a passage with a single
+header at its top rather than one at every place a fetch began.
+
+Compared by TEXT, not by position: a reader who pages out of one work and into
+another wants both headers, and only the repetition of one header is the
+mistake."
+  ;; TRIMMED before comparing.  The backwards path inserts a newline before the
+  ;; header it is about to add, so one copy begins with a newline and the other
+  ;; does not -- and `equal' on the two texts is then false for two copies of
+  ;; one header, which is the only case this function exists to catch.  Nothing
+  ;; else distinguishes them: the author, the work, the edition are the same
+  ;; string.
+  (let ((wanted (string-trim (substring-no-properties header)))
+        (case-fold-search nil))
+    (save-excursion
+      (goto-char (point-min))
+      (let (match)
+        (while (setq match (text-property-search-forward 'diogenes-header t #'eq))
+          (let ((start (prop-match-beginning match))
+                (end (prop-match-end match)))
+            (when (equal (string-trim
+                          (buffer-substring-no-properties start end))
+                         wanted)
+              (delete-region start end)
+              ;; The search\='s idea of where it is went with the text.
+              (goto-char (min start (point-max))))))))))
+
 (defun diogenes--browser-format-header (header-lines)
   (propertize (concat (string-join header-lines
 				   "\n")
@@ -905,7 +934,23 @@ If it is incomplete, buffer it and prepend it when called again."
 	   (let ((inhibit-read-only t))
 	     (erase-buffer))
 	   (goto-char (point-min)))
-	 (when header (insert (diogenes--browser-format-header header)))
+	 (when header
+	   ;; A HEADER ALREADY IN THE BUFFER, saying the same thing, is taken
+	   ;; out.  Diogenes prints the header with every stretch it fetches, and
+	   ;; paging backwards inserts the new stretch above the old: so the
+	   ;; header that was at the top ends up in the middle of the text, three
+	   ;; lines of `Plato Phil., Cratylus' between one verse and the next.
+	   ;;
+	   ;; Only where it says the SAME thing.  A reader who has paged out of
+	   ;; one work and into another wants both headers -- that is the header
+	   ;; doing its job -- and comparing the text is how to tell the two
+	   ;; cases apart.
+	   ;;
+	   ;; AFTER the erase above: a page that was turned is emptied first, so
+	   ;; there is then nothing to remove and the new header simply goes in.
+	   (diogenes--browser-remove-duplicate-header
+	    (diogenes--browser-format-header header))
+	   (insert (diogenes--browser-format-header header)))
 	 ;; The size of the first page, for turning one later.  Set once: see
 	 ;; `diogenes--browser-page-lines'.
 	 (unless diogenes--browser-page-lines
