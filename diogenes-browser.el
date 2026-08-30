@@ -233,13 +233,41 @@ word."
           (goto-char (if (and next (> next (point))) next (1+ (point)))))
         (setq steps (1+ steps))))
     (skip-chars-forward " \t")
+    ;; And past a citation the PROPERTY does not cover.  The loop above skips
+    ;; what the browser marked `diogenes-citation'; a text may print its own
+    ;; reference at the head of the line unmarked -- `pes-' followed by
+    ;; `8.1.2.2 simum est' -- and there the loop stopped at the first digit and
+    ;; `8' was taken for the second half.  Stripped of its non-letters by
+    ;; `diogenes-browser-lookup' that is `pes', which parses, which is why it
+    ;; looked like no bug at all: the reader gets `pēs, masc nom/voc sg' for a
+    ;; word that is `pessimum'.
+    ;;
+    ;; Only a reference SHAPED like one -- digits and dots, and whitespace
+    ;; after it.  No text divides a word so that the remainder begins with a
+    ;; digit, so nothing here can eat a real second half.  Bounded, like the
+    ;; loop above: three is more than any citation needs.
+    (let ((steps 0))
+      (while (and (< steps 3)
+                  (looking-at "[0-9]+\\(?:\\.[0-9]+\\)*[ \t]+"))
+        (goto-char (match-end 0))
+        (setq steps (1+ steps))))
     ;; And nothing to join to where the rest of the line is a citation and no
     ;; word follows it.
     (when-let* ((tail (bounds-of-thing-at-point 'word))
+                ;; ON THIS LINE.  `bounds-of-thing-at-point' crosses a
+                ;; newline, so at the end of a line that is nothing but a
+                ;; citation it would reach down to the line after and join a
+                ;; word two lines from the hyphen.
+                ((< (car tail) (line-end-position)))
                 (second (buffer-substring-no-properties (car tail) (cdr tail))))
       ;; A second half that is all digits is a citation, not a word: no text
       ;; divides a word so that the remainder is a number.
-      (unless (string-match-p "\\\\`[0-9.]+\\\\'" second)
+      ;;
+      ;; The regex was written `"\\\\`[0-9.]+\\\\'"' -- four backslashes, the
+      ;; docstring convention leaking into code -- so the string held `\\`'
+      ;; and the pattern looked for a literal backslash before a backtick.
+      ;; It could not match a number, and the guard had never once fired.
+      (unless (string-match-p "\\`[0-9.]+\\'" second)
         (concat first-half second)))))
 
 (defun diogenes-browser-remove-hyphenation (&optional mark-with-vertical-bar)
