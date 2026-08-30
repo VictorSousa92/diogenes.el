@@ -39,6 +39,14 @@ PUTHASH = re.compile(
     r'\(puthash \(list "(tlg|phi)" "(\d{4})"(?: "([0-9-]{3,4})")?\) "([^"]*)" table\)')
 
 
+def compare_form(abbrev):
+    """ABBREV reduced to what distinguishes it from another abbreviation.
+Spaces removed and case folded: the dictionaries are inconsistent about the
+space after a stop, and comparing printed forms made `Comp. Phil.Flam.\' and
+`Comp.Phil.Flam.\' -- one title -- look like two."""
+    return re.sub(r"\s+", "", abbrev).lower()
+
+
 def clean(raw):
     return re.sub(r"\s+", " ", raw.decode("utf-8", "replace").strip())
 
@@ -140,9 +148,27 @@ def count(root):
 
 
 def alternatives(counter, key):
-    """Every abbreviation for KEY, commonest first."""
-    found = [(abbrev, n) for ((k, abbrev), n) in counter.items() if k == key]
-    return sorted(found, key=lambda pair: -pair[1])
+    """Every abbreviation for KEY, commonest first, whitespace variants merged.
+
+    Merging matters more than it looks.  Before it, the survey called
+    ninety-nine works collections and most were a title beside itself with a
+    space moved -- `Comp. Phil.Flam.\' at three citations and
+    `Comp.Phil.Flam.\' at one, which any ratio rule flags and which is one
+    abbreviation."""
+    merged = {}
+    for ((k, abbrev), n) in counter.items():
+        if k != key:
+            continue
+        form = compare_form(abbrev)
+        if form not in merged:
+            merged[form] = [abbrev, n]
+        else:
+            # The printed form of the commoner spelling, and the sum of both.
+            if n > merged[form][1]:
+                merged[form][0] = abbrev
+            merged[form][1] += n
+    return sorted((tuple(pair) for pair in merged.values()),
+                  key=lambda pair: -pair[1])
 
 
 def report(counter, table, keys, how_many, what):

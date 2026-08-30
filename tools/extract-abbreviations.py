@@ -58,6 +58,18 @@ TITLE = re.compile(rb'<title>([^<]{1,60})</title>')
 ANAPHORS = {"id.", "ib.", "ibid.", "idem", "ead.", "eadem"}
 
 
+def compare_form(abbrev):
+    """ABBREV reduced to what distinguishes it from another abbreviation.
+
+    Spaces removed and case folded, so `Comp. Phil.Flam.\' and
+    `Comp.Phil.Flam.\' count as one -- which they are.  The dictionaries are
+    inconsistent about the space after a stop, and comparing the printed form
+    made two spellings of one title look like two titles: a first attempt at
+    finding collections flagged ninety-nine works, most of them a title beside
+    itself with a space moved."""
+    return re.sub(r"\s+", "", abbrev).lower()
+
+
 def clean(raw):
     text = raw.decode("utf-8", "replace").strip()
     text = re.sub(r"\s+", " ", text)
@@ -122,6 +134,54 @@ def wellformed(key, abbrev):
     return True
 
 
+# A work number whose citations carry SEVERAL distinct titles, each with real
+# support, names a collection and not a work.  Suetonius is the case that showed
+# it: `phi,1348,001' is `De Vita Caesarum', which Diogenes has as one work and
+# the dictionary cites as one work -- and Lewis & Short puts the title of
+# whichever LIFE is meant inside the citation.  So the number attracts twelve
+# titles, `Aug.' 1681 times, `Caes.' 1143, `Tib.' 1015, and eleven twelfths of
+# any single choice is wrong.
+#
+# Sallust the same, `Cat.' beside `Hist.'; Varro, `L. L.' beside `R. R.';
+# Caelius Aurelianus, `Acut.' beside `Tard.'; Pindar's fragments beside his
+# Paeans.  For those the author's abbreviation alone is right -- `Suet. 6.4' --
+# and a work abbreviation is worse than none.
+#
+# A THIRD, because the gap is wide and unambiguous.  `Caes.' has 68 per cent of
+# `Aug.'; `de Off.' has 0.2 per cent of `Off.', being the same work spelt
+# longer.  Nothing observed falls between 5 and 60.
+COLLECTION_SHARE = 0.25
+
+# And a count cannot catch them all, which Varro settles.  `L. L.' has 1767
+# citations and `Sat. Men.' 13 -- two different works, one at three quarters of
+# a per cent of the other.  Cicero's `Off.' has 3037 and `de Off.' 7, which is
+# ONE work spelt two ways at two tenths of a per cent.  Nothing numerical
+# separates those, because the difference is what the titles MEAN.
+#
+# So the rest are named.  From Lewis & Short's own list of authors and works:
+# Sallust `C./Cat.' Catilina beside `H./Hist.' Historia and `J./Jug.' Jugurtha;
+# Varro `L. L.' De Lingua Latina beside `R. R.' De Re Rustica; Pindar's `Fr.'
+# fragments beside his `Pae.' Paeans and `Parth.' Partheneia.  Each is a number
+# Diogenes holds as one work and the dictionaries cite for several.
+COLLECTIONS = {
+    ("phi", "0631", "001"),             # Sallust: Catilina, Historiae, Jugurtha
+    ("phi", "0684", "001"),             # Varro: De Lingua Latina, Sat. Menippeae
+    ("tlg", "0033", "005"),             # Pindar: fragments, Paeans, Partheneia
+}
+
+
+def names_a_collection(key, found):
+    """Whether these titles are several works under one number.
+
+    FOUND is [(title, count)], commonest first.  Either a rival with real
+    support, or a number known to be a collection where the counts cannot say."""
+    if key in COLLECTIONS:
+        return True
+    if len(found) < 2:
+        return False
+    return found[1][1] > found[0][1] * COLLECTION_SHARE
+
+
 def most_frequent(counter, key_length, dropped=None):
     """The commonest abbreviation for each key, with how often it occurred.
 
@@ -134,12 +194,36 @@ def most_frequent(counter, key_length, dropped=None):
         short = key[:key_length]
         if short not in best or count > best[short][1]:
             best[short] = (key[key_length], count)
+    # Every title each key attracts, so a collection can be told from a work --
+    # MERGED by comparison form first, or a title beside itself with a space
+    # moved looks like two titles.
+    titles = {}
+    for key, count in counter.items():
+        short = key[:key_length]
+        merged = titles.setdefault(short, {})
+        form = compare_form(key[key_length])
+        if form not in merged or count > merged[form][1]:
+            merged[form] = (key[key_length], count)
+        else:
+            merged[form] = (merged[form][0], merged[form][1] + count)
+    for short, merged in list(titles.items()):
+        titles[short] = sorted(merged.values(), key=lambda pair: -pair[1])
+
     kept = {}
     for short, (abbrev, count) in best.items():
-        if wellformed(short, abbrev):
+        if not wellformed(short, abbrev):
+            if dropped is not None:
+                dropped.append((short, abbrev, count, "malformed"))
+        elif key_length == 2 and names_a_collection(short, titles.get(short, [])):
+            # Works only: an AUTHOR cited under two names is Aurelius Victor
+            # and Symmachus sharing a number, which is a different fault and
+            # not one a majority makes worse.
+            if dropped is not None:
+                rivals = ", ".join("%s (%d)" % pair
+                                   for pair in titles[short][:4])
+                dropped.append((short, abbrev, count, "a collection: " + rivals))
+        else:
             kept[short] = (abbrev, count)
-        elif dropped is not None:
-            dropped.append((short, abbrev, count))
     return kept
 
 
@@ -168,10 +252,13 @@ def main():
         provenance.append(";; %s (%s): %d authors, %d works"
                           % (name, filename, len(best_authors), len(best_works)))
         if dropped:
-            provenance.append(";;   %d malformed, left out" % len(dropped))
-            for short, abbrev, count in sorted(dropped)[:40]:
-                sys.stderr.write("  dropped %-18s %-14s %d\n"
-                                 % ("/".join(short), abbrev, count))
+            malformed = len([d for d in dropped if d[3] == "malformed"])
+            collections = len(dropped) - malformed
+            provenance.append(";;   %d malformed and %d naming a collection, "
+                              "left out" % (malformed, collections))
+            for short, abbrev, count, why in sorted(dropped)[:40]:
+                sys.stderr.write("  dropped %-18s %-14s %6d  %s\n"
+                                 % ("/".join(short), abbrev, count, why))
 
     out = sys.stdout
     out.write(""";;; diogenes-abbreviations.el --- how the dictionaries cite -*- lexical-binding: t; -*-
