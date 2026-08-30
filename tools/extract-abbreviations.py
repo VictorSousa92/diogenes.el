@@ -58,15 +58,90 @@ TITLE = re.compile(rb'<title>([^<]{1,60})</title>')
 ANAPHORS = {"id.", "ib.", "ibid.", "idem", "ead.", "eadem"}
 
 
+# Prepositions, which belong to a Latin title and not to the abbreviation:
+# `de Sen.\' and `Sen.\' are De Senectute twice, `post Red. in Sen.\' and
+# `Red. in Sen.\' one oration.  `c\' is deliberately absent though it can mean
+# `cum\': dropping it mangles `C. S.\', the Carmen Saeculare.
+PREPOSITIONS = {"de", "ad", "in", "post", "contra", "adv", "ex", "pro", "cum",
+                "apud", "ap"}
+
+
+def title_parts(abbrev):
+    """ABBREV as its meaningful components, folded and stripped of prepositions."""
+    bits = re.split(r"[\s.]+", abbrev.lower())
+    return [bit for bit in bits if bit and bit not in PREPOSITIONS]
+
+
+def one_title(first, second):
+    """Whether FIRST and SECOND are one title abbreviated two ways.
+
+    These dictionaries shorten COMPONENT BY COMPONENT and to no fixed length:
+    `Bell. Pun.\' and `B. Pun.\', `Pet. Cons.\' and `Petit. Cons.\', `C. S.\' and
+    `Carm. Sec.\', `Excerpt. Contr.\' and `Exc. Contr.\'.  And a component may be
+    dropped altogether -- `Part.\' for `Part. Or.\', `Epit.\' for `Epit. lib.\'.
+
+    So: each component of the shorter a prefix of the corresponding component of
+    the longer, or the reverse.  Which merges those eight and leaves the real
+    collections alone -- `APo.\' beside `APr.\', `Cleom.\' beside `Agis\', `Od.\'
+    beside `Fr.\'.  Thirty-six pairs from a live run, every one as wanted.
+
+    Whitespace alone was not enough, and comparing whole strings was not
+    enough.  The dictionaries are irregular in three ways at once."""
+    left, right = title_parts(first), title_parts(second)
+    if not left or not right:
+        return False
+    short, long = (left, right) if len(left) <= len(right) else (right, left)
+    for part, whole in zip(short, long):
+        if not (part.startswith(whole) or whole.startswith(part)):
+            return False
+    return True
+
+
+# Diogenes' own translation between the dictionaries' numbering and its
+# databases', read from `perseus-abo.pl' in the Diogenes server directory.
+#
+# The dictionaries cite Euripides' plays as 001-019 and Diogenes holds them at
+# 034-052, so the whole of the Medea, the Hippolytus, the Bacchae and fifteen
+# more were dropped as texts Diogenes has not got.  They are among the most
+# cited works in the LSJ.
+#
+# `perseus-abo.pl' has said so all along -- twenty-one entries, Euripides,
+# Arrian's Epictetus and the Digest -- and applying it is data rather than a
+# rule, which after four rules that needed correcting is the better bargain.
+ABO_MAP_LINE = re.compile(
+    r"'(tlg|phi),(\d{4}),([0-9-]+)'\s*=>\s*'(tlg|phi),(\d{4}),([0-9-]+)'")
+
+
+def read_abo_map(path):
+    """{(corpus, author, work): (corpus, author, work)} from perseus-abo.pl."""
+    if not path or not os.path.exists(path):
+        return {}
+    mapping = {}
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            found = ABO_MAP_LINE.search(line)
+            if found:
+                a, b, c, d, e, f = found.groups()
+                mapping[(a, b, c.zfill(3))] = (d, e, f.zfill(3))
+    return mapping
+
+
+def find_abo_map():
+    """perseus-abo.pl, wherever Diogenes is."""
+    for candidate in (os.environ.get("PERSEUS_ABO_MAP"),
+                      "/usr/local/diogenes/server/perseus-abo.pl",
+                      os.path.expanduser("~/diogenes/server/perseus-abo.pl")):
+        if candidate and os.path.exists(os.path.expanduser(candidate)):
+            return os.path.expanduser(candidate)
+    return None
+
+
 def compare_form(abbrev):
     """ABBREV reduced to what distinguishes it from another abbreviation.
 
-    Spaces removed and case folded, so `Comp. Phil.Flam.\' and
-    `Comp.Phil.Flam.\' count as one -- which they are.  The dictionaries are
-    inconsistent about the space after a stop, and comparing the printed form
-    made two spellings of one title look like two titles: a first attempt at
-    finding collections flagged ninety-nine works, most of them a title beside
-    itself with a space moved."""
+    A rough key for grouping; `one_title\' is the real test.  Kept because
+    identical-but-for-space is the commonest case by far and worth a cheap
+    answer."""
     return re.sub(r"\s+", "", abbrev).lower()
 
 
@@ -76,7 +151,7 @@ def clean(raw):
     return text
 
 
-def extract(path, corpus):
+def extract(path, corpus, abo_map=None):
     """(authors, works), each a Counter keyed by number and abbreviation."""
     authors = collections.Counter()
     works = collections.Counter()
@@ -87,6 +162,12 @@ def extract(path, corpus):
             continue
         author_num = match.group(2).decode()
         work_num = match.group(3).decode()
+        # Translated where Diogenes says the numbering differs, so that a
+        # citation of the Medea lands on the number a reader can browse.
+        if abo_map:
+            moved = abo_map.get((corpus, author_num, work_num.zfill(3)))
+            if moved and moved[0] == corpus:
+                author_num, work_num = moved[1], moved[2]
         inner = match.group(4)
         found = AUTHOR.search(inner)
         if found:
@@ -182,6 +263,24 @@ def names_a_collection(key, found):
     return found[1][1] > found[0][1] * COLLECTION_SHARE
 
 
+def merge_titles(found):
+    """FOUND as [(title, count)] with the spellings of one title collapsed.
+
+    The commonest spelling keeps its printed form and takes the others\' counts,
+    so `Sen.\' at 714 and `de Sen.\' at 302 become `Sen.\' at 1016 -- one work
+    with a thousand citations rather than two with a suspicious ratio."""
+    groups = []
+    for title, count in sorted(found, key=lambda pair: -pair[1]):
+        for group in groups:
+            if one_title(group[0], title):
+                group[1] += count
+                break
+        else:
+            groups.append([title, count])
+    return sorted(((title, count) for title, count in groups),
+                  key=lambda pair: -pair[1])
+
+
 def most_frequent(counter, key_length, dropped=None):
     """The commonest abbreviation for each key, with how often it occurred.
 
@@ -199,15 +298,9 @@ def most_frequent(counter, key_length, dropped=None):
     # moved looks like two titles.
     titles = {}
     for key, count in counter.items():
-        short = key[:key_length]
-        merged = titles.setdefault(short, {})
-        form = compare_form(key[key_length])
-        if form not in merged or count > merged[form][1]:
-            merged[form] = (key[key_length], count)
-        else:
-            merged[form] = (merged[form][0], merged[form][1] + count)
-    for short, merged in list(titles.items()):
-        titles[short] = sorted(merged.values(), key=lambda pair: -pair[1])
+        titles.setdefault(key[:key_length], []).append((key[key_length], count))
+    for short, found in list(titles.items()):
+        titles[short] = merge_titles(found)
 
     kept = {}
     for short, (abbrev, count) in best.items():
@@ -227,6 +320,33 @@ def most_frequent(counter, key_length, dropped=None):
     return kept
 
 
+def read_diogenes_works(path):
+    r"""Every (corpus, author, work) Diogenes holds, from list-diogenes-works.pl.
+
+    The authority that decides, and the only one that answers what a reader can
+    open.  A text Diogenes has not got cannot be browsed, so an abbreviation for
+    it can never be printed and is dead weight in the table.
+
+    Epictetus is the case that showed it.  The dictionaries cite him as
+    `tlg,0575\=', which is no file at all; Diogenes has the Discourses under
+    `0557\=', where they are transmitted by Arrian and cited sometimes `Arr.\'
+    and sometimes `Epict.\'.  So `0575\=' is another numbering -- the LSJ\='s own,
+    or an older canon -- and `perseus-abo.pl\' keeps a fix-up map for exactly
+    such cases.
+
+    Absent, this filter does nothing: a reader without the list gets the whole
+    table and the rows that cannot fire simply never do."""
+    if not path or not os.path.exists(path):
+        return None
+    pairs = set()
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            bits = line.split()
+            if len(bits) == 3:
+                pairs.add(tuple(bits))
+    return pairs
+
+
 def main():
     root = None
     for candidate in (os.environ.get("DIOGENES_DATA"),
@@ -237,25 +357,56 @@ def main():
     if not root:
         sys.exit("Cannot find the Diogenes data directory; set DIOGENES_DATA.")
 
+    held = read_diogenes_works(os.path.expanduser(
+        os.environ.get("DIOGENES_WORKS", "/tmp/diogenes-works.txt")))
+    abo_map = read_abo_map(find_abo_map())
+
     tables = {}
     provenance = []
+    if abo_map:
+        provenance.append(";; %d numbers translated by Diogenes' own "
+                          "perseus-abo.pl" % len(abo_map))
+    else:
+        provenance.append(";; perseus-abo.pl NOT FOUND: Euripides' plays and "
+                          "Arrian's Epictetus")
+        provenance.append(";;   are cited under numbers Diogenes does not use, "
+                          "and will be dropped.")
     for corpus, filename, name in DICTIONARIES:
         path = os.path.join(root, filename)
         if not os.path.exists(path):
             provenance.append(";; %s: %s NOT FOUND" % (name, filename))
             continue
-        authors, works = extract(path, corpus)
+        authors, works = extract(path, corpus, abo_map)
         dropped = []
         best_authors = most_frequent(authors, 1, dropped)
         best_works = most_frequent(works, 2, dropped)
+        # Rows for texts Diogenes has not got: dropped, being unusable.
+        if held:
+            authors_held = {(c, a) for (c, a, _) in held}
+            for key in [k for k in best_authors
+                        if (corpus,) + k not in authors_held]:
+                dropped.append((key, best_authors.pop(key)[0], 0,
+                                "not in Diogenes"))
+            for key in [k for k in best_works
+                        if (corpus,) + k not in held]:
+                dropped.append((key, best_works.pop(key)[0], 0,
+                                "not in Diogenes"))
         tables[corpus] = (best_authors, best_works)
         provenance.append(";; %s (%s): %d authors, %d works"
                           % (name, filename, len(best_authors), len(best_works)))
         if dropped:
-            malformed = len([d for d in dropped if d[3] == "malformed"])
-            collections = len(dropped) - malformed
-            provenance.append(";;   %d malformed and %d naming a collection, "
-                              "left out" % (malformed, collections))
+            # Counted by REASON.  Subtracting the malformed from the total and
+            # calling the remainder collections put the 160 rows Diogenes has
+            # not got among them, so the header said 160 collections where the
+            # list showed 38.  A count derived by subtraction is a count of
+            # whatever one forgot.
+            reasons = collections.Counter(
+                "a collection" if d[3].startswith("a collection") else d[3]
+                for d in dropped)
+            provenance.append(
+                ";;   left out: "
+                + ", ".join("%d %s" % (n, why)
+                             for why, n in sorted(reasons.items())))
             for short, abbrev, count, why in sorted(dropped)[:40]:
                 sys.stderr.write("  dropped %-18s %-14s %6d  %s\n"
                                  % ("/".join(short), abbrev, count, why))

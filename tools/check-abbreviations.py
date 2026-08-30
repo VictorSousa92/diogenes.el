@@ -39,11 +39,51 @@ PUTHASH = re.compile(
     r'\(puthash \(list "(tlg|phi)" "(\d{4})"(?: "([0-9-]{3,4})")?\) "([^"]*)" table\)')
 
 
+# Prepositions, which belong to a Latin title and not to the abbreviation:
+# `de Sen.\' and `Sen.\' are De Senectute twice, `post Red. in Sen.\' and
+# `Red. in Sen.\' one oration.  `c\' is deliberately absent though it can mean
+# `cum\': dropping it mangles `C. S.\', the Carmen Saeculare.
+PREPOSITIONS = {"de", "ad", "in", "post", "contra", "adv", "ex", "pro", "cum",
+                "apud", "ap"}
+
+
+def title_parts(abbrev):
+    """ABBREV as its meaningful components, folded and stripped of prepositions."""
+    bits = re.split(r"[\s.]+", abbrev.lower())
+    return [bit for bit in bits if bit and bit not in PREPOSITIONS]
+
+
+def one_title(first, second):
+    """Whether FIRST and SECOND are one title abbreviated two ways.
+
+    These dictionaries shorten COMPONENT BY COMPONENT and to no fixed length:
+    `Bell. Pun.\' and `B. Pun.\', `Pet. Cons.\' and `Petit. Cons.\', `C. S.\' and
+    `Carm. Sec.\', `Excerpt. Contr.\' and `Exc. Contr.\'.  And a component may be
+    dropped altogether -- `Part.\' for `Part. Or.\', `Epit.\' for `Epit. lib.\'.
+
+    So: each component of the shorter a prefix of the corresponding component of
+    the longer, or the reverse.  Which merges those eight and leaves the real
+    collections alone -- `APo.\' beside `APr.\', `Cleom.\' beside `Agis\', `Od.\'
+    beside `Fr.\'.  Thirty-six pairs from a live run, every one as wanted.
+
+    Whitespace alone was not enough, and comparing whole strings was not
+    enough.  The dictionaries are irregular in three ways at once."""
+    left, right = title_parts(first), title_parts(second)
+    if not left or not right:
+        return False
+    short, long = (left, right) if len(left) <= len(right) else (right, left)
+    for part, whole in zip(short, long):
+        if not (part.startswith(whole) or whole.startswith(part)):
+            return False
+    return True
+
+
 def compare_form(abbrev):
     """ABBREV reduced to what distinguishes it from another abbreviation.
-Spaces removed and case folded: the dictionaries are inconsistent about the
-space after a stop, and comparing printed forms made `Comp. Phil.Flam.\' and
-`Comp.Phil.Flam.\' -- one title -- look like two."""
+
+    A rough key for grouping; `one_title\' is the real test.  Kept because
+    identical-but-for-space is the commonest case by far and worth a cheap
+    answer."""
     return re.sub(r"\s+", "", abbrev).lower()
 
 
@@ -78,8 +118,32 @@ def read_catalogue(path):
     return pairs
 
 
-def report_absent(table, catalogue):
-    """Table entries naming a work the catalogue does not have."""
+def read_diogenes_works(path):
+    """Every (corpus, author, work) Diogenes holds, from list-diogenes-works.pl.
+
+    THE authority, and the only one that answers the question a reader has: what
+    can I browse?  The Perseus catalogue covers 1627 authors where the TLG alone
+    has 1823, so a number absent from it proves nothing -- Epictetus, Philo and
+    Hermogenes are all absent from the catalogue and all real."""
+    pairs = set()
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                bits = line.split()
+                if len(bits) == 3:
+                    pairs.add(tuple(bits))
+    except OSError as error:
+        sys.stderr.write("Cannot read %s: %s\n" % (path, error))
+        return None
+    return pairs
+
+
+def report_absent(table, catalogue, what, conclusive):
+    """Table entries naming a work the authority does not have.
+
+    CONCLUSIVE says whether absence is a verdict.  For Diogenes it is: what it
+    does not hold cannot be browsed, so an abbreviation for it can never be
+    used.  For the Perseus catalogue it is not, the catalogue being partial."""
     if not catalogue:
         return
     authors = {(corpus, author) for (corpus, author, _) in catalogue}
@@ -92,9 +156,12 @@ def report_absent(table, catalogue):
         elif key not in authors:
             missing_authors.append(key)
     print()
-    print("=== AGAINST THE PERSEUS CATALOGUE ===")
-    print("%d works and %d authors in the catalogue"
-          % (len(catalogue), len(authors)))
+    print("=== AGAINST %s ===" % what)
+    print("%d works and %d authors known there" % (len(catalogue), len(authors)))
+    if not conclusive:
+        print("Absence here is NOT a verdict: this authority is partial, and "
+              "Epictetus,")
+        print("Philo and Hermogenes are among the real authors it omits.")
     if missing_authors:
         print("\n%d AUTHORS the catalogue does not have:" % len(missing_authors))
         for key in missing_authors[:40]:
@@ -155,20 +222,16 @@ def alternatives(counter, key):
     space moved -- `Comp. Phil.Flam.\' at three citations and
     `Comp.Phil.Flam.\' at one, which any ratio rule flags and which is one
     abbreviation."""
-    merged = {}
-    for ((k, abbrev), n) in counter.items():
-        if k != key:
-            continue
-        form = compare_form(abbrev)
-        if form not in merged:
-            merged[form] = [abbrev, n]
+    found = [(abbrev, n) for ((k, abbrev), n) in counter.items() if k == key]
+    groups = []
+    for abbrev, count in sorted(found, key=lambda pair: -pair[1]):
+        for group in groups:
+            if one_title(group[0], abbrev):
+                group[1] += count
+                break
         else:
-            # The printed form of the commoner spelling, and the sum of both.
-            if n > merged[form][1]:
-                merged[form][0] = abbrev
-            merged[form][1] += n
-    return sorted((tuple(pair) for pair in merged.values()),
-                  key=lambda pair: -pair[1])
+            groups.append([abbrev, count])
+    return sorted((tuple(g) for g in groups), key=lambda pair: -pair[1])
 
 
 def report(counter, table, keys, how_many, what):
@@ -315,19 +378,32 @@ def main():
     # list is not a work, whatever the dictionaries did with it.
     survey(works, table, work_keys)
 
-    catalogue_path = os.environ.get("PERSEUS_CATALOGUE")
-    if not catalogue_path:
-        for candidate in ("catalog_data_tar.gz",
-                          os.path.expanduser("~/catalog_data_tar.gz")):
-            if os.path.exists(candidate):
-                catalogue_path = candidate
-                break
-    if catalogue_path and os.path.exists(catalogue_path):
-        report_absent(table, read_catalogue(catalogue_path))
+    # DIOGENES first, being the authority that decides.  Made by
+    # `tools/list-diogenes-works.pl'; absence here means a reader can never
+    # browse the text, so an abbreviation for it can never be used.
+    works_path = os.path.expanduser(
+        os.environ.get("DIOGENES_WORKS", "/tmp/diogenes-works.txt"))
+    if os.path.exists(works_path):
+        report_absent(table, read_diogenes_works(works_path),
+                      "WHAT DIOGENES HOLDS", True)
     else:
         print()
-        print("No Perseus catalogue given; set PERSEUS_CATALOGUE to check "
-              "whether every work in the table exists.")
+        print("No list of Diogenes' works at %s." % works_path)
+        print("Make one -- it is the authority that settles this -- with:")
+        print("  cd /usr/local/diogenes/server")
+        print("  perl -I/usr/local/diogenes/dependencies/CPAN -I. \\")
+        print("       .../tools/list-diogenes-works.pl > /tmp/diogenes-works.txt")
+
+    # And the Perseus catalogue, which corroborates and does not decide.
+    catalogue_path = os.environ.get("PERSEUS_CATALOGUE")
+    if catalogue_path:
+        catalogue_path = os.path.expanduser(catalogue_path)
+    if catalogue_path and os.path.exists(catalogue_path):
+        report_absent(table, read_catalogue(catalogue_path),
+                      "THE PERSEUS CATALOGUE", False)
+    elif catalogue_path:
+        print()
+        print("No catalogue at %s." % catalogue_path)
 
 
 if __name__ == "__main__":
