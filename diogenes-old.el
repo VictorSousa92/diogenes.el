@@ -671,11 +671,29 @@ nothing to check against and no reason to retry blindly."
             (_ 'fit-page)))
     t))
 
-(defun diogenes-old--fit-page-1 (window tries)
-  "Try to scale the document in WINDOW, TRIES times if need be."
+(defun diogenes-old--fit-page-1 (window tries &optional last-width)
+  "Try to scale the document in WINDOW, TRIES times if need be.
+LAST-WIDTH is the pixel width WINDOW had when the previous attempt measured
+it, and nil on the first.  A fit is accepted only once an attempt finds the
+window the width the attempt before it did, so the scale is always confirmed
+against a window that has stopped moving.
+
+Trusting `diogenes-old--fit-looks-right-p\\=' alone was not enough.  It reads
+`pdf-view-display-size\\=', which `pdf-view-fit-width-to-window\\=' sets to
+`fit-width\\=' whenever it does not signal -- including when it measured a
+window that was about to be resized.  Doom\\='s popup rules do resize it, after
+the buffer is displayed: the first attempt succeeded, the check saw the
+symbol it wanted, no retry fired, and the page kept the scale worked out
+from the transient width.  Pressing `W\\=' fixed it, which is the tell -- the
+command was right, the width it was given was not.
+
+So the ordinary case now costs two fits a tenth of a second apart rather
+than one, and a window still settling keeps being remeasured until it
+stops."
   (when (window-live-p window)
     (with-selected-window window
-      (let* ((command (diogenes-old--fit-command))
+      (let* ((width (window-body-width window t))
+             (command (diogenes-old--fit-command))
              (worked
               (and command
                    (fboundp command)
@@ -685,11 +703,16 @@ nothing to check against and no reason to retry blindly."
                      ;; in another process -- signals here, and that is the
                      ;; case worth trying again rather than reporting.
                      (error nil)))))
-        (when (and (or (not worked) (not (diogenes-old--fit-looks-right-p)))
+        (when (and (or (not worked)
+                       (not (diogenes-old--fit-looks-right-p))
+                       ;; The width this attempt measured is not the width the
+                       ;; last one did, so the window is still settling and
+                       ;; this scale is as provisional as the one before it.
+                       (not (and last-width (= width last-width))))
                    (numberp tries) (> tries 0))
           (run-with-timer
            0.1 nil
-           (lambda () (diogenes-old--fit-page-1 window (1- tries)))))))))
+           (lambda () (diogenes-old--fit-page-1 window (1- tries) width))))))))
 
 (defun diogenes-old--goto-page-in-window (buffer page)
   "Go to PAGE in the window that displays BUFFER, disturbing no other window.
