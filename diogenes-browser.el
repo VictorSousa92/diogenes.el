@@ -360,11 +360,29 @@ presses on a passage -- calling `thing-at-point\=' as before, and looking up
 ;;; Browser Mode
 (defvar diogenes-browser-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
-    ;; Overrides of movement keys
-    (keymap-set map "<remap> <previous-line>"       #'diogenes-browser-backward-line)
-    (keymap-set map "<remap> <next-line>"           #'diogenes-browser-forward-line)
-    (keymap-set map "<remap> <beginning-of-buffer>" #'diogenes-browser-beginning-of-buffer)
-    (keymap-set map "<remap> <end-of-buffer>"       #'diogenes-browser-end-of-buffer)
+    ;; Overrides of movement keys.  A remap catches the command NAMED, and
+    ;; nothing else: under evil in normal state the arrows are
+    ;; `evil-previous-line' and `evil-next-line', which are not
+    ;; `previous-line', so remapping that one alone left a reader unable to
+    ;; page by arrow at all -- as happened under Doom, where the browser is in
+    ;; normal state, while Spacemacs and a plain Emacs worked because there it
+    ;; is in Emacs state and the arrows ARE `previous-line'.
+    ;;
+    ;; So evil's are remapped beside Emacs's, and the visual-line pair too:
+    ;; `evil-next-visual-line' is what the arrows run where `visual-line-mode'
+    ;; is on, which a reader may well have.
+    (dolist (pair '((previous-line            . backward-line)
+                    (next-line                . forward-line)
+                    (evil-previous-line       . backward-line)
+                    (evil-next-line           . forward-line)
+                    (evil-previous-visual-line . backward-line)
+                    (evil-next-visual-line     . forward-line)
+                    (beginning-of-buffer      . beginning-of-buffer)
+                    (end-of-buffer            . end-of-buffer)
+                    (evil-goto-first-line     . beginning-of-buffer)
+                    (evil-goto-line           . end-of-buffer)))
+      (keymap-set map (format "<remap> <%s>" (car pair))
+                  (intern (format "diogenes-browser-%s" (cdr pair)))))
     (keymap-set map "q" #'quit-window)
     (keymap-set map "C-c C-n"  #'diogenes-browser-forward)
     (keymap-set map "C-c C-p"  #'diogenes-browser-backward)
