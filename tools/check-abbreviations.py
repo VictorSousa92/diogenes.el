@@ -89,6 +89,64 @@ def alternatives(counter, key):
     return sorted(found, key=lambda pair: -pair[1])
 
 
+def report(counter, table, keys, how_many, what):
+    """Print HOW-MANY of KEYS with their support, and return what is amiss.
+
+    Returns (DISPUTED, UNSUPPORTED).  Sampled by how often a thing is cited, so
+    a partial run covers what a reader is likeliest to meet rather than the
+    lowest numbers."""
+    support = {}
+    for key in keys:
+        found = alternatives(counter, key)
+        support[key] = found[0][1] if found else 0
+    keys = sorted(keys, key=lambda k: -support[k])[:how_many]
+
+    disputed = []
+    unsupported = []
+    print()
+    print("=== %s ===" % what)
+    print("%-18s %-22s %7s   %s"
+          % ("KEY", "TABLE SAYS", "CITED", "ALTERNATIVES"))
+    print("-" * 86)
+    for key in keys:
+        found = alternatives(counter, key)
+        given = table[key]
+        best = found[0] if found else ("", 0)
+        floor = max(2, min(3, best[1] // 20))
+        others = [pair for pair in found[1:] if pair[1] >= floor]
+        if not found:
+            unsupported.append(key)
+        elif best[0] != given:
+            disputed.append((key, given, found))
+            # A DISPUTE always shows its rival, whatever the floor: the whole
+            # point of the row is that the table chose one and the dictionaries
+            # prefer another, and hiding the other for being uncommon leaves a
+            # reader with a complaint and no evidence.
+            others = found[1:4]
+        print("%-18s %-22s %7d   %s"
+              % ("/".join(key), given, best[1],
+                 ", ".join("%s (%d)" % pair for pair in others) or "-"))
+    return disputed, unsupported
+
+
+def summarise(what, sampled, total, disputed, unsupported, table):
+    print()
+    print("%d %s sampled, of %d in the table" % (sampled, what, total))
+    if disputed:
+        print("\nDISPUTED %s -- the table does not give the commonest:" % what)
+        for key, given, found in disputed:
+            print("  %-18s table %-20s dictionaries %s"
+                  % ("/".join(key), given,
+                     ", ".join("%s (%d)" % pair for pair in found[:4])))
+    else:
+        print("\nNo disputes among the %s: each is the commonest the "
+              "dictionaries give." % what)
+    if unsupported:
+        print("\nUNSUPPORTED %s -- in the table, cited nowhere:" % what)
+        for key in unsupported:
+            print("  %s -> %s" % ("/".join(key), table[key]))
+
+
 def main():
     how_many = int(sys.argv[1]) if len(sys.argv) > 1 else 200
     root = None
@@ -107,54 +165,20 @@ def main():
     table = read_table(table_path)
     authors, works = count(root)
 
-    # The authors of the table, most-cited first, so the sample is the ones a
-    # reader is likeliest to meet rather than the lowest numbers.
     author_keys = [k for k in table if len(k) == 2]
-    support = {}
-    for key in author_keys:
-        found = alternatives(authors, key)
-        support[key] = found[0][1] if found else 0
-    author_keys.sort(key=lambda k: -support[k])
-    sample = author_keys[:how_many]
+    work_keys = [k for k in table if len(k) == 3]
 
-    disputed = []
-    unsupported = []
-    print("%-12s %-14s %7s   %s" % ("KEY", "TABLE SAYS", "CITED", "ALTERNATIVES"))
-    print("-" * 78)
-    for key in sample:
-        found = alternatives(authors, key)
-        given = table[key]
-        best = found[0] if found else ("", 0)
-        # A twentieth of the commonest, or two occurrences, whichever is
-        # smaller: an alternative worth a reader's attention is one that could
-        # plausibly have been meant, and `Ar.' against `Arist.' at two to one is
-        # exactly that.  A fixed floor of three hid it.
-        floor = max(2, min(3, best[1] // 20))
-        others = [pair for pair in found[1:] if pair[1] >= floor]
-        if not found:
-            unsupported.append(key)
-        elif best[0] != given:
-            disputed.append((key, given, found))
-        print("%-12s %-14s %7d   %s"
-              % ("/".join(key), given, best[1],
-                 ", ".join("%s (%d)" % pair for pair in others) or "-"))
+    # WORKS as well as authors, and they are where the subtler error hides: an
+    # author's abbreviation is wrong loudly -- `Symm.' for Aurelius Victor -- and
+    # a work's is wrong quietly, a title attached to its neighbour's number.
+    disputed, unsupported = report(authors, table, author_keys, how_many,
+                                   "AUTHORS")
+    summarise("authors", min(how_many, len(author_keys)), len(author_keys),
+              disputed, unsupported, table)
 
-    print()
-    print("%d authors sampled, of %d in the table" % (len(sample), len(author_keys)))
-    print("%d works in the table" % len([k for k in table if len(k) == 3]))
-    if disputed:
-        print("\nDISPUTED -- the table does not give the commonest abbreviation:")
-        for key, given, found in disputed:
-            print("  %-12s table %-12s dictionaries %s"
-                  % ("/".join(key), given,
-                     ", ".join("%s (%d)" % pair for pair in found[:4])))
-    else:
-        print("\nNo disputes: every sampled author's abbreviation is the "
-              "commonest the dictionaries give.")
-    if unsupported:
-        print("\nUNSUPPORTED -- in the table, cited nowhere:")
-        for key in unsupported:
-            print("  %s -> %s" % ("/".join(key), table[key]))
+    disputed, unsupported = report(works, table, work_keys, how_many, "WORKS")
+    summarise("works", min(how_many, len(work_keys)), len(work_keys),
+              disputed, unsupported, table)
 
 
 if __name__ == "__main__":
