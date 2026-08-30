@@ -2462,6 +2462,27 @@ confirm is discarded."
 (defconst diogenes--latin-labials '(?p ?b ?m)
   "The letters before which a nasal is written m.")
 
+(defcustom diogenes-latin-prefix-variants
+  '(("de" . "di") ("di" . "de"))
+  "Prefixes the dictionary may key under a spelling other than Morpheus\\='s.
+An alist of (LEMMA . DICTIONARY): the prefix as the analyses file writes it,
+and the prefix to try instead when nothing else has matched a key.
+
+This is not assimilation, which is a sound change the hyphen lets one work
+out.  It is one prefix written two ways, the choice falling out differently
+in the two sources: Morpheus has `de-rego\\=' and `de-rigo\\=' where Lewis &
+Short keys `dirigo\\=', with derigo named inside the entry as the spelling
+Roby and Ribbeck preferred and the manuscripts mostly print.  A reader
+parsing any form of it -- `derigamus\\=' -- got no headword at all.
+
+Each is tried last, after every spelling `diogenes--latin-assimilations\\='
+works out, so a compound the dictionary has under its own prefix is never
+sent elsewhere: `de-duco\\=' finds `deduco\\=' and is not offered `diduco\\=',
+which is another verb.  Only a spelling the dictionary confirms is used."
+  :type '(alist :key-type (string :tag "Lemma prefix")
+                :value-type (string :tag "Dictionary prefix"))
+  :group 'diogenes)
+
 (defun diogenes--latin-assimilations (lemma)
   "The spellings a hyphenated LEMMA might be keyed under, likeliest first.
 `in-mitto\=' gives `immitto\=' and `inmitto\='; `con-pello\=' gives `compello\=',
@@ -2533,6 +2554,25 @@ whichever the dictionary actually has."
 	      (when (and final initial (memq final '(?n ?m ?d ?b ?s ?x)))
 		(push (concat stub (string (aref weakened 0)) weakened)
 		      candidates)))))
+	;; And the PREFIX itself may be spelt otherwise in the dictionary.
+	;; Not an assimilation: de- and di- are one prefix written two ways,
+	;; and the two spellings are distributed between Morpheus and Lewis
+	;; & Short.  Morpheus writes `de-rego' and `de-rigo'; the dictionary
+	;; keys the verb `dirigo' and mentions derigo only inside the entry.
+	;; So no candidate above reached a key, the confidence stayed at 0,
+	;; and every form of the commonest verb of its family -- `derigamus'
+	;; -- printed the gap between `derelictio' and `deripio'.
+	;;
+	;; Offered after everything else, and so tried only where the
+	;; dictionary has not got the compound under its own spelling:
+	;; `de-duco' matches `deduco' first and never asks about `diduco',
+	;; which is a different verb.
+	(let ((alt (cdr (assoc prefix diogenes-latin-prefix-variants))))
+	  (when (and alt (> (length stem) 0))
+	    (push (concat alt stem) candidates)
+	    (let ((weakened (diogenes--latin-weaken-stem stem)))
+	      (when weakened
+		(push (concat alt weakened) candidates)))))
 	(nreverse (delete-dups candidates))))))
 
 (defun diogenes--latin-weaken-stem (stem)
