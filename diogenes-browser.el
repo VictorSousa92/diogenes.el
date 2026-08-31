@@ -41,6 +41,55 @@
   (interactive "NLines to display: ")
   (diogenes--send-cmd-to-browser (number-to-string height)))
 
+(defcustom diogenes-browser-page-lines nil
+  "How many lines a page shows, and so when a page is turned.
+Nil for as many as the first page Diogenes sent, which it sized to the window --
+that being the honest measure, since the window\='s own height cannot account for
+the three lines of header printed with every fetch nor for the lines that wrap
+behind a citation.
+
+A number to say it outright, which is worth doing where a reader wants the same
+page whatever window the browser happens to be in."
+  :type '(choice (const :tag "As long as the first page came" nil)
+                 (integer :tag "This many lines"))
+  :group 'diogenes)
+
+(defcustom diogenes-browser-add-lines nil
+  "How many lines `C-c C-n\=' and `C-c C-p\=' add.
+Nil for `diogenes-browser-key-page-fraction\=' of a page -- half of it by default,
+which leaves the other half in view.  A number to say it outright."
+  :type '(choice (const :tag "A fraction of a page" nil)
+                 (integer :tag "This many lines"))
+  :group 'diogenes)
+
+(defcustom diogenes-browser-turn-keys
+  '(("C-c C-<next>" . diogenes-browser-page-forward)
+    ("C-c C-<prior>" . diogenes-browser-page-backward))
+  "Keys that TURN a page, as (KEY . COMMAND).
+Turning replaces what is shown; `C-c C-n\=' and `C-c C-p\=' add to it.  Until these
+existed a page could only be turned by clicking the header, which is no use to a
+reader who does not use a mouse.
+
+`C-c C-<next>\=' and `C-c C-<prior>\=' by default -- what PageDown and PageUp are
+called, and a page is what they turn.  Set to nil to bind nothing.
+
+`diogenes-browser-install-turn-keys\=' after changing it, or restart."
+  :type '(alist :key-type (string :tag "Key")
+                :value-type (function :tag "Command"))
+  :group 'diogenes)
+
+;;;###autoload
+(defun diogenes-browser-install-turn-keys ()
+  "Bind `diogenes-browser-turn-keys\=' in the browser."
+  (interactive)
+  (when (boundp 'diogenes-browser-mode-map)
+    (dolist (cell diogenes-browser-turn-keys)
+      (when (and (car cell) (cdr cell))
+        (condition-case error
+            (keymap-set diogenes-browser-mode-map (car cell) (cdr cell))
+          (error (message "Diogenes: cannot bind %s: %s"
+                          (car cell) (error-message-string error))))))))
+
 (defcustom diogenes-browser-page-margin 1
   "Lines held back when paging, beyond what wrapping accounts for.
 The browser asks Diogenes for a number of TEXT lines, and what a reader sees is
@@ -103,10 +152,12 @@ is what the keys did before."
   "How many lines `C-c C-n\=' and `C-c C-p\=' should ask for.
 `diogenes-browser-key-page-fraction\=' of the first page, and never less than
 one."
-  (max 1 (round (* diogenes-browser-key-page-fraction
-                   (or diogenes--browser-page-lines
-                       (max 1 (- (floor (window-screen-lines))
-                                 next-screen-context-lines)))))))
+  (or diogenes-browser-add-lines
+      (max 1 (round (* diogenes-browser-key-page-fraction
+                       (or diogenes-browser-page-lines
+                           diogenes--browser-page-lines
+                           (max 1 (- (floor (window-screen-lines))
+                                     next-screen-context-lines))))))))
 
 (defun diogenes-browser-forward ()
   "Add the next half-page to what is shown.
@@ -586,7 +637,8 @@ time.  A window does not drift."
   ;; three lines of header printed with every fetch and the lines that wrap
   ;; behind a citation, and the count of what is shown grows, `C-c C-n' adding
   ;; to the buffer until every press asked for more than the last.
-  (max 1 (or diogenes--browser-page-lines
+  (max 1 (or diogenes-browser-page-lines
+             diogenes--browser-page-lines
              (- (floor (window-screen-lines))
                 diogenes-browser-page-margin))))
 
