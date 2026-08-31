@@ -880,8 +880,8 @@ Approximate (`C-u L` [`SPC u L`]) details:
 - TGL: navigates by the clean running headers at the top of each column (short, all-caps, far more OCR-legible than the body), so it reaches the right article even when the body is garbled. This is the most dependable way to reach a badly OCR'd word.
 - TGL also offers a jump **by index reference** (the `t.N c.NNN` citations): choose the index-reference option, give the tomus and column, and it converts the column to a page. This is how you follow a reference you found in the index (e.g. `t.3 c.746`) to its place in another tome.
   - From tomes I-IV, `C-u L` [`SPC u L`] asks approximate-or-index-reference first.
-  - From volume V, the reference option appears in its menu as "other tome" (see below).
-### Volume V (special menu)
+  - From TGL volume V, the reference option appears in its menu as "other tome" (see below).
+### TGL Volume V (special menu)
  
 Volume V has extra structure, so `C-u L` [`SPC u L`] answering `5` to
 the tomus prompt offers a small menu.
