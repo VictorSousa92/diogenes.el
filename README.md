@@ -360,32 +360,32 @@ rather than broken.
   (setq diogenes-path "/path/to/diogenes")           ; Diogenes itself
 
   ;; Latin, printed
-  (setq diogenes-old-pdf-file        "/path/to/OLD.pdf")
-  (setq diogenes-tll-pdf-directory   "/path/to/TLL/fascicles/")
+  (setq diogenes-old-pdf-file        "/path/to/OLD.pdf")           ; one PDF
+  (setq diogenes-tll-pdf-directory   "/path/to/TLL/fascicles/")    ; a folder of fascicle PDFs
 
   ;; Latin, XML with a printed edition beside it
-  (setq diogenes-gaffiot-source-file "/path/to/gaffiot.tei.xml")  ; to build from
-  (setq diogenes-gaffiot-file        "/path/to/build/gaffiot.xml") ; where it goes
-  (setq diogenes-gaffiot-pdf-file    "/path/to/Gaffiot.pdf")       ; whatever the XML lacks
-  (setq diogenes-georges-source-file "/path/to/georges.tei.xml")
-  (setq diogenes-georges-file        "/path/to/build/georges.xml")
-  (setq diogenes-georges-directory   "/path/to/Georges/volumes/")
+  (setq diogenes-gaffiot-source-file "/path/to/gaffiot.tei.xml")  ; a file, a folder or a list: the TEI to build from
+  (setq diogenes-gaffiot-file        "/path/to/build/gaffiot.xml") ; one file: where the build writes it
+  (setq diogenes-gaffiot-pdf-file    "/path/to/Gaffiot.pdf")       ; one PDF: whatever the XML lacks
+  (setq diogenes-georges-source-file "/path/to/georges.tei.xml")  ; a file, a folder or a list
+  (setq diogenes-georges-file        "/path/to/build/georges.xml") ; one file
+  (setq diogenes-georges-directory   "/path/to/Georges/volumes/")  ; a folder: two volume PDFs
 
   ;; Greek, printed
-  (setq diogenes-montanari-pdf-file  "/path/to/Montanari.pdf")
-  (setq diogenes-cambridge-pdf-file  "/path/to/CGL.pdf")
-  (setq diogenes-bdag-pdf-file       "/path/to/BDAG.pdf")
+  (setq diogenes-montanari-pdf-file  "/path/to/Montanari.pdf")     ; one PDF
+  (setq diogenes-cambridge-pdf-file  "/path/to/CGL.pdf")           ; one PDF
+  (setq diogenes-bdag-pdf-file       "/path/to/BDAG.pdf")          ; one PDF
   (setq diogenes-passow-directory    "/path/to/Passow/")           ; parent folder
   (setq diogenes-tgl-directory       "/path/to/TGL/")              ; parent folder
 
   ;; Greek, XML
-  (setq diogenes-pape-source-file    "/path/to/pape.tei.xml")
-  (setq diogenes-pape-file           "/path/to/build/pape.xml")
-  (setq diogenes-dge-source-file     "/path/to/dge/xml/")
-  (setq diogenes-dge-file            "/path/to/build/dge.xml")
-  (setq diogenes-bailly-source-file  "/path/to/bailly.tei.xml")
-  (setq diogenes-bailly-file         "/path/to/build/bailly.xml")
-  (setq diogenes-bailly-pdf-file     "/path/to/Bailly.pdf")
+  (setq diogenes-pape-source-file    "/path/to/pape.tei.xml")      ; a file or a folder
+  (setq diogenes-pape-file           "/path/to/build/pape.xml")    ; one file
+  (setq diogenes-dge-source-file     "/path/to/dge/xml/")          ; a FOLDER here: the DGE comes as eight volume files
+  (setq diogenes-dge-file            "/path/to/build/dge.xml")     ; one file, and about 80 MB when built
+  (setq diogenes-bailly-source-file  "/path/to/bailly.tei.xml")    ; a file or a folder; one file here
+  (setq diogenes-bailly-file         "/path/to/build/bailly.xml")  ; one file
+  (setq diogenes-bailly-pdf-file     "/path/to/Bailly.pdf")        ; one PDF
 
   ;; Morphology
   (setq diogenes-morpheus-directory  "/path/to/morpheus")          ; optional, see below
@@ -427,11 +427,20 @@ rather than broken.
                   diogenes-analysis-mode-hook))
     (add-hook hook (lambda () (flyspell-mode -1))))
 
-  ;; Optional, if you use window-purpose (see below)
-  (diogenes-purpose-install)
+  ;; Optional. A click that looks a word up, as Heslin's Diogenes does (see below)
+  (setq diogenes-browser-mouse-keys '(("<mouse-1>" . diogenes-browser-lookup)))
+  (diogenes-browser-install-mouse-keys)  ; :config runs after the keys are bound
 
   :bind ("C-c d" . diogenes))
 ```
+
+Three kinds of path, and the comments above say which each is. A **`-source-file`**
+takes a single file, a folder — every `*.xml` in it, in name order — or a list of
+files: the DGE is published as eight volume documents, so a folder is the answer
+there, while Bailly is one file. A **`-file`** is the single file the build writes,
+and is never the source; naming one path for both would overwrite what you
+downloaded, and a source may be deleted once converted. A **scan** is one PDF
+except where the column says a folder, the TLL and Georges being the two.
 
 - Every option goes in `:init`. It runs before the package loads, which matters for one case only — declaring a dictionary by `(require 'diogenes-tll)` — but keeping the settings in one place costs nothing.
 - `:config` is for the two lines above and anything like them: a `keymap-set` in one of the package's maps, an `add-to-list` on one of its variables, advice on its functions. In `:init` those are void-variable errors, the symbols not existing yet.
