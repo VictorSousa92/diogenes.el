@@ -41,27 +41,59 @@
   (interactive "NLines to display: ")
   (diogenes--send-cmd-to-browser (number-to-string height)))
 
+(defcustom diogenes-browser-page-margin 1
+  "Lines held back when paging, beyond what wrapping accounts for.
+The browser asks Diogenes for a number of TEXT lines, and what a reader sees is
+SCREEN lines: a verse with its citation before it wraps in a narrow window, so
+forty lines of text can want sixty lines of window.  How much wrapping the
+current text does is measured rather than guessed -- see
+`diogenes-browser--lines-to-request\=' -- and this is the margin on top of it,
+for the line the measurement cannot foresee."
+  :type 'integer
+  :group 'diogenes)
+
+(defun diogenes-browser--lines-to-request ()
+  "How many TEXT lines to ask Diogenes for, to fill this window once.
+The window\='s height less the overlap, divided by how much the text now in the
+buffer wraps: a page whose lines take an average of one and a half screen lines
+each should be asked for two thirds as many.
+
+Measured from the buffer itself, so it follows the window\='s width, the font, and
+the length of the citations this work carries, none of which can be known in
+advance.  An empty buffer -- the first page -- has nothing to measure and is
+asked for the plain height."
+  (let* ((height (max 1 (- (floor (window-screen-lines))
+                           next-screen-context-lines
+                           diogenes-browser-page-margin)))
+         (text-lines (count-lines (point-min) (point-max)))
+         (screen-lines (if (> text-lines 0)
+                           (count-screen-lines (point-min) (point-max))
+                         0))
+         (factor (if (and (> text-lines 0) (> screen-lines text-lines))
+                     (/ (float screen-lines) text-lines)
+                   1.0)))
+    (max 1 (floor (/ height factor)))))
+
 (defun diogenes-browser-forward ()
   "Load the next page from the Diogenes browser.
-Takes no prefix argument: how much to advance is the window's own height
-less `next-screen-context-lines', not something to count."
+Takes no prefix argument: how much to advance is what fills the window once,
+which `diogenes-browser--lines-to-request\=' works out from the window\='s height
+and how much the text is wrapping."
   (interactive)
   (setq diogenes--browser-backwards nil)
   (goto-char (point-max))
   (diogenes--send-cmd-to-browser
-   (concat (number-to-string (- (floor (window-screen-lines))
-				next-screen-context-lines))
+   (concat (number-to-string (diogenes-browser--lines-to-request))
 	   "n")))
 
 (defun diogenes-browser-backward ()
   "Load the previous page from the Diogenes browser.
-Takes no prefix argument, as `diogenes-browser-forward' takes none."
+Takes no prefix argument, as `diogenes-browser-forward\=' takes none."
   (interactive)
   (setq diogenes--browser-backwards t)
   (goto-char (point-min))
   (diogenes--send-cmd-to-browser
-   (concat (number-to-string (- (floor (window-screen-lines))
-				next-screen-context-lines))
+   (concat (number-to-string (diogenes-browser--lines-to-request))
 	   "p")))
 
 (defun diogenes-browser-quit ()
