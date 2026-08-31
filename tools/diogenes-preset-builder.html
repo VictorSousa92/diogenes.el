@@ -646,6 +646,30 @@
       Measured at 3.65 seconds against 0.09.</em></label>
   </div>
 
+  <div class="field">
+    <span>Click that looks a word up in the browser &mdash;
+      <code>diogenes-browser-mouse-keys</code>. Heslin&rsquo;s Diogenes does this;
+      an Emacs buffer ordinarily does not, so it is off unless you choose a
+      gesture. A plain click is safe to take: dragging to mark a passage is a
+      different event and is left alone.</span>
+    <select id="mousegesture">
+      <option value="">None &mdash; clicking places point, as elsewhere in Emacs</option>
+      <option value="&lt;mouse-1&gt;">A plain click</option>
+      <option value="&lt;double-mouse-1&gt;">A double click</option>
+      <option value="&lt;C-mouse-1&gt;">Control-click</option>
+      <option value="&lt;C-S-mouse-1&gt;">Control-shift-click</option>
+      <option value="&lt;S-mouse-1&gt;">Shift-click</option>
+      <option value="&lt;mouse-3&gt;">The right button</option>
+    </select>
+  </div>
+  <div class="field">
+    <span>And what that click does</span>
+    <select id="mousecommand">
+      <option value="diogenes-browser-lookup">Analyse the word and show the entry</option>
+      <option value="diogenes-lookup-in-dictionary">Ask which dictionary first</option>
+    </select>
+  </div>
+
   <h2>Under evil</h2>
   <div class="row">
     <input type="checkbox" id="evilstate" checked>
@@ -1515,6 +1539,18 @@ function preset() {
   out.push(`(setq diogenes-lookup-show-all-entries ${el('allentries').checked ? 't' : 'nil'})`);
   out.push(`(setq diogenes-old-pdf-fit ${el('fitwidth').checked ? "'width" : 'nil'})`);
   out.push(`(setq diogenes-old-open-quietly ${el('quietly').checked ? 't' : 'nil'})`);
+  const gesture = el('mousegesture').value.trim();
+  if (gesture) {
+    const command = el('mousecommand').value;
+    out.push('');
+    out.push(';; A click looks a word up in the browser.  The installer is called');
+    out.push(';; after the option because the keys are bound when Diogenes loads,');
+    out.push(';; before this file runs -- so setting the option alone does nothing.');
+    out.push(`(setq diogenes-browser-mouse-keys '(("${gesture}" . ${command})))`);
+    out.push("(with-eval-after-load 'diogenes-browser");
+    out.push('  (diogenes-browser-install-mouse-keys))');
+  }
+
   if (!el('scaling').checked)
     out.push("(with-eval-after-load 'pdf-view\n  (setq pdf-view-use-scaling nil))");
   const key = el('escapekey').value.trim();
