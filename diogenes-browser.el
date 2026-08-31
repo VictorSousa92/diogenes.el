@@ -453,6 +453,19 @@ and `diogenes-browser-goto-passage\=' asks where to go."
   "Face for the clickable parts of the browser\='s header line."
   :group 'diogenes)
 
+(defun diogenes-browser--knows-its-work-p ()
+  "Whether this browser records which work it is showing.
+`diogenes--browser-corpus\=' and its fellows come with the passage reference; a
+version without that has no such variables, so they are asked for with `boundp\='
+before they are read.  Everything that needs to name the work -- the header, and
+`go to\=' -- asks this first."
+  (and (boundp 'diogenes--browser-corpus)
+       (boundp 'diogenes--browser-author)
+       (boundp 'diogenes--browser-work)
+       diogenes--browser-corpus
+       diogenes--browser-author
+       diogenes--browser-work))
+
 (defun diogenes-browser-goto-passage (&optional passage)
   "Open this work at PASSAGE, asking for it when not given.
 A citation as the work numbers itself -- `384a\=', `1.5.2\=', `1053a15\=' -- and not
@@ -465,9 +478,10 @@ the passage at the top rather than paged to."
   (interactive)
   (unless (derived-mode-p 'diogenes-browser-mode)
     (user-error "Not in a Diogenes browser"))
-  (unless (and diogenes--browser-corpus diogenes--browser-author
-               diogenes--browser-work)
-    (user-error "This browser does not say which work it is showing"))
+  (unless (diogenes-browser--knows-its-work-p)
+    (user-error
+     (concat "This browser does not record which work it is showing"
+             " -- the passage reference is not in this version")))
   (let* ((labels (and (boundp 'diogenes--browser-labels)
                       diogenes--browser-labels))
          (prompt (if labels
@@ -514,19 +528,23 @@ a Perl process on every page."
      (diogenes-browser--header-button
       "forward -->" "Load the next page (C-c C-n)"
       #'diogenes-browser-forward)
-     "   "
-     (diogenes-browser--header-button
-      "go to..." "Open this work at a citation"
-      #'diogenes-browser-goto-passage)
+     ;; Only where the browser records what it is showing.  Elsewhere there is
+     ;; nothing to open, and a button that answers a click with an explanation
+     ;; is worse than no button.
+     (if (diogenes-browser--knows-its-work-p)
+         (concat "   "
+                 (diogenes-browser--header-button
+                  "go to..." "Open this work at a citation"
+                  #'diogenes-browser-goto-passage))
+       "")
      ;; And what is being read, where the browser knows: a reader who has
      ;; several open should not have to look at the text to tell which is which.
-     (let ((where (and (boundp 'diogenes--browser-corpus)
-                       diogenes--browser-corpus
-                       (format "   %s %s/%s"
-                               diogenes--browser-corpus
-                               diogenes--browser-author
-                               diogenes--browser-work))))
-       (or where "")))))
+     (if (diogenes-browser--knows-its-work-p)
+         (format "   %s %s/%s"
+                 diogenes--browser-corpus
+                 diogenes--browser-author
+                 diogenes--browser-work)
+       ""))))
 
 (defvar diogenes-browser-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
