@@ -2053,29 +2053,78 @@ Returns a list with the form (lemma raw-lemma lemma-nr &rest analyses)"
 		   (cddr lemma)))))
 
 ;;; Parsing functions
+(defun diogenes--beta-drop-extra-accents (word)
+  "WORD with every accent after the first removed.
+A Greek word bears one accent of its own.  A second appears when an ENCLITIC
+follows: a proparoxytone takes an extra acute on its ultima, so the text prints
+`*bria/rew/n\=' where the analyses file has `*bria/rewn\=' -- and the search then
+looks for a key that cannot exist, lands on whatever sorts next to it, and shows
+that entry as though it had found something.  `Βριάρεών\=' answered with
+`Βρίακχος\='.
+
+The added accent is always the last, the rule putting it on the ultima, so the
+first is the word\='s own and the rest come off."
+  (let ((seen nil))
+    (apply #'string
+           (cl-loop for c across word
+                    if (memq c '(?/ ?\\ ?=))
+                    unless seen collect c and do (setq seen t)
+                    end
+                    else collect c))))
+
+(defun diogenes--parse-word-keys (normalized lang)
+  "The keys to try for NORMALIZED, in order.
+The form as it stands first, so nothing that works today stops working.  Then,
+for Greek, the form with an enclitic\='s accent taken off -- see
+`diogenes--beta-drop-extra-accents\='."
+  (let ((keys (list normalized)))
+    (when (string= lang "greek")
+      (let ((dropped (diogenes--beta-drop-extra-accents normalized)))
+        (unless (equal dropped normalized)
+          (setq keys (append keys (list dropped))))))
+    keys))
+
 (defun diogenes--parse-word (word lang)
   "Search the ananlyses file of lang for word using a binary search.
-Returns the nearest hit to the query."
+Returns the nearest hit to the query.
+
+Every key `diogenes--parse-word-keys\=' offers is tried before a miss is
+reported, so a word carrying an enclitic\='s second accent is found under its own
+spelling rather than answered with its alphabetical neighbour."
   (let* ((normalized (downcase (diogenes--beta-normalize-gravis
 				(diogenes--greek-ensure-beta word))))
 	 (analyses-file (file-name-concat (diogenes--perseus-path)
 					  (concat lang "-analyses.txt")))
 	 (index (diogenes--get-analyses-index lang))
-	 (key (if (> (length normalized) 3) (substring normalized 0 3) normalized))
-	 (start (let ((s (cdr (assoc key (plist-get index :index-start)))))
-		  (if s (- s 2) 0)))
-	 (end (or (cdr (assoc key (plist-get index :index-end)))
-		  (plist-get index :index-max))))
-    (let ((result (diogenes--binary-search analyses-file
-					   #'diogenes--c-sort-function
-					   #'diogenes--tab-key-fn
-					   normalized
-					   start end)))
-      (unless (nth 3 result)
-	(message "No result for %s! Showing nearest entry" word))
-      (cons (and (car result)
-		 (diogenes--process-parse-result (car result) lang))
-	    (cdr result)))))
+	 (keys (diogenes--parse-word-keys normalized lang))
+	 nearest)
+    (cl-loop for candidate in keys
+	     for key = (if (> (length candidate) 3)
+			   (substring candidate 0 3)
+			 candidate)
+	     for start = (let ((s (cdr (assoc key (plist-get index :index-start)))))
+			   (if s (- s 2) 0))
+	     for end = (or (cdr (assoc key (plist-get index :index-end)))
+			   (plist-get index :index-max))
+	     for result = (diogenes--binary-search analyses-file
+						   #'diogenes--c-sort-function
+						   #'diogenes--tab-key-fn
+						   candidate
+						   start end)
+	     ;; The first miss is kept: where every key misses, the nearest entry
+	     ;; to the word AS WRITTEN is the one to show, not the nearest to a
+	     ;; spelling the reader never typed.
+	     do (unless nearest (setq nearest result))
+	     when (nth 3 result) return (diogenes--parse-word-result result lang)
+	     finally return (progn
+			      (message "No result for %s! Showing nearest entry" word)
+			      (diogenes--parse-word-result nearest lang)))))
+
+(defun diogenes--parse-word-result (result lang)
+  "RESULT from the binary search, shaped as `diogenes--parse-word\=' returns it."
+  (cons (and (car result)
+	     (diogenes--process-parse-result (car result) lang))
+	(cdr result)))
 
 (let ((cache (make-hash-table :test 'equal)))
  (defun diogenes--all-matches-in-hashtable (query hash-table filter ignore-case no-diacritics)
