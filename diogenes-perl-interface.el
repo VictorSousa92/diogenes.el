@@ -444,12 +444,7 @@ lists of the citations and whose values are the lines.")
 	   (diogenes--list->perl option-plist))
    (format "($beg, $end) = $b->seek_passage(%s);"
 	   (diogenes--list->perl passage))
-   ;; BOTH values.  `browse_forward' returns the new beginning as well as the
-   ;; new end, and dropping the beginning left `$beg' at wherever the work was
-   ;; first opened: `browse_backward', which is told where it is rather than
-   ;; remembering, was then always asked for the lines before THAT.  Paging
-   ;; forward from line 1 to line 30 and then back went back to the beginning.
-   "($beg, $end) = $b->browse_forward( $beg, $end, $author, $work );"
+   "(undef, $end) = $b->browse_forward( $beg, $end, $author, $work );"
    "parse_capture;"
    "# When type is `phi', read_phi_biblio resets $/, so we have to correct it"
    "$/ = \"\\n\";"
@@ -458,11 +453,11 @@ lists of the citations and whose values are the lines.")
    "  if (s/^(\\d+)//) { $b->{browse_lines} = $1 - 1 }"
    "  if    (/^q$/) { last }"
    "  elsif (/^[nf]$/) {"
-   "    ($beg, $end) = $b->browse_forward( $beg, $end, $author, $work );"
+   "    (undef, $end) = $b->browse_forward( $beg, $end, $author, $work );"
    "    parse_capture;"
    "  }"
    "  elsif (/^[pb]$/)  {"
-   "    ($beg, $end) = $b->browse_backward( $beg, $end, $author, $work );"
+   "    ($beg, undef) = $b->browse_backward( $beg, $end, $author, $work );"
    "    parse_capture;"
    "  }"
    "}"))
