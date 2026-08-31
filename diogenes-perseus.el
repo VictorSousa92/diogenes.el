@@ -2181,6 +2181,28 @@ supplementary prefix entries -- and are captured, not discarded.")
   "\\`\\([0-9]+\\) \\([0-9]\\) \\([^\t]*\\)\t\\([^\t]*\\)\t\\(.*\\)\\'"
   "The fields inside one analysis: OFFSET CONF LEMMA<TAB>TRANS<TAB>INFO.")
 
+(defun diogenes--lemma-of-field (field)
+  "The lemma in FIELD, which the analyses file gives as FORM,LEMMA.
+
+    *bria/rew^n,bria/rews   ->  bria/rews
+    si_derum,sidus          ->  sidus
+    sidus                   ->  sidus
+
+The form comes first, carrying the vowel quantities the key has not got, and
+the lemma second.  `diogenes--process-parse-result' has always split it this
+way; the record parser did not, so the analysis header showed both joined by
+the comma -- and then asked the dictionary for that, which no dictionary has as
+a headword.
+
+Where there is no comma the field IS the lemma, so nothing is lost by asking.
+Where there are several, the second is taken and the rest left: a lemma may
+carry a comma of its own, as `a)mfi/,peri/-pla/zw' does for a pair of
+prefixes, and guessing which comma means what is beyond a display function."
+  (let ((parts (split-string (or field "") "," t "[ \t]+")))
+    (cond ((null parts) (or field ""))
+          ((cdr parts) (cadr parts))
+          (t (car parts)))))
+
 (defun diogenes--munge-ls-lemma (lemma lang)
   "Render a raw lemma from the analyses file for display.
 Mirrors Perl's $munge_ls_lemma for Latin -- the vowel-quantity markers
@@ -2248,7 +2270,8 @@ lemma a hand-picked dictionary is asked about alike."
 	    (push (list :offset offset
 			:conf conf
 			:lemma lemma
-			:display (diogenes--munge-ls-lemma lemma lang)
+			:display (diogenes--munge-ls-lemma
+				  (diogenes--lemma-of-field lemma) lang)
 			:trans trans
 			:info info)
 		  analyses)))
