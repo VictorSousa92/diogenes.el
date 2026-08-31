@@ -514,6 +514,11 @@ another must not grow, and counting what is shown each time made it grow -- `C-c
 C-n\=' adds to the buffer, so thirty-four lines became fifty-nine and every press
 asked for more than the last.")
 
+(defvar-local diogenes--browser-turned nil
+  "Whether the text now arriving replaced the buffer rather than adding to it.
+Read once, where point is placed: a page that was TURNED has no frontier -- the
+whole of it is new -- so there is nothing to mark and the top is where to be.")
+
 (defvar-local diogenes--browser-replace nil
   "Whether the next text to arrive should replace what is in the buffer.
 Set by the paging buttons, which turn the page where `C-c C-n\=' and `C-c C-p\='
@@ -523,6 +528,49 @@ A FLAG and not an `erase-buffer\=' in the command, because at the end of a work
 Diogenes answers with nothing: a buffer emptied when the button was pressed
 would leave a reader with neither the next page nor the one they were reading.
 The filter erases when it has something to put there.")
+
+(defface diogenes-browser-addition-face
+  '((t :inherit secondary-selection :extend t))
+  "Face for the lines `C-c C-n\=' or `C-c C-p\=' has just added.
+`secondary-selection\=' because that is what it is for -- a region marked for a
+moment, which every theme styles and none styles loudly.  `:extend\=' so the
+marking reaches the window\='s edge rather than the end of each line, several
+lines otherwise making a ragged block."
+  :group 'diogenes)
+
+(defvar-local diogenes--browser-addition nil
+  "The overlay marking what was last added, or nil.")
+
+(defun diogenes-browser--unmark-addition ()
+  "Take the marking off what was added.
+On `pre-command-hook\=', so the first thing a reader does -- a movement, a
+lookup, anything -- clears it."
+  (remove-hook 'pre-command-hook #'diogenes-browser--unmark-addition t)
+  (when (overlayp diogenes--browser-addition)
+    (delete-overlay diogenes--browser-addition))
+  (setq diogenes--browser-addition nil))
+
+(defun diogenes-browser--mark-addition (from to backwards)
+  "Put point at the frontier of the text between FROM and TO, and mark it.
+BACKWARDS says which side the new text came from, and so which side the frontier
+is on: reading forward, the join is at FROM and the new lines are below it;
+reading back, the join is at TO and the new lines are above.
+
+The marking goes at the next command.  A reader who has just asked for more text
+is about to move, so `pre-command-hook\=' is the moment -- and it costs nothing
+where a reader sits still and looks."
+  (diogenes-browser--unmark-addition)
+  (goto-char (if backwards to from))
+  ;; The new text on the side it came from: forward shows it below the frontier,
+  ;; backward above.
+  (condition-case nil
+      (recenter (if backwards -2 1))
+    (error nil))
+  (setq diogenes--browser-addition (make-overlay from to))
+  (overlay-put diogenes--browser-addition 'face
+               'diogenes-browser-addition-face)
+  (overlay-put diogenes--browser-addition 'evaporate t)
+  (add-hook 'pre-command-hook #'diogenes-browser--unmark-addition nil t))
 
 (defun diogenes-browser--page-size ()
   "How many lines a page is, for turning one.
@@ -807,7 +855,8 @@ If it is incomplete, buffer it and prepend it when called again."
 	 ;; where there is text to put in it, and not when the button was
 	 ;; pressed.  See `diogenes--browser-replace'.
 	 (when diogenes--browser-replace
-	   (setq diogenes--browser-replace nil)
+	   (setq diogenes--browser-replace nil
+		 diogenes--browser-turned t)
 	   (let ((inhibit-read-only t))
 	     (erase-buffer))
 	   (goto-char (point-min)))
@@ -836,10 +885,27 @@ If it is incomplete, buffer it and prepend it when called again."
 	     (insert (propertize (format "%s\n" (cdr alist))
 				 'cit (car alist))))
 	  (set-marker (process-mark proc) (point-max))
-	  (cond (diogenes-browser-first-insertion
+	  (cond (;; A page TURNED, which is tested FIRST: the paging buttons set
+		 ;; `diogenes-browser-first-insertion' as well, so a turned page
+		 ;; would take that branch and leave this flag standing -- to
+		 ;; misfire on the next ADDITION, sending point to the top and
+		 ;; marking nothing.
+		 ;;
+		 ;; The whole buffer is new, so there is no frontier and nothing to
+		 ;; mark; the top is where to be.
+		 diogenes--browser-turned
+		 (setq diogenes--browser-turned nil
+		       diogenes-browser-first-insertion nil)
+		 (goto-char (point-min)))
+		(diogenes-browser-first-insertion
 		 (setq diogenes-browser-first-insertion nil)
 		 (goto-char pos))
-		(t (recenter -1 t))))))))))
+		;; A page ADDED: point to the join, and the new lines marked until
+		;; the next keypress.
+		(t (diogenes-browser--mark-addition
+		    pos (point)
+		    (and (boundp 'diogenes--browser-backwards)
+			 diogenes--browser-backwards)))))))))))
 
 (defvar-local diogenes--browser-corpus nil
   "The corpus this browser buffer is reading -- `tlg\=', `phi\=', and the rest.
