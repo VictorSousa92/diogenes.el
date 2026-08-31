@@ -1503,7 +1503,11 @@ cannot."
   (let ((keys (mapcar (lambda (e) (nth 1 e)) diogenes-cheatsheet-prefixed)))
     (should (member "C-u L" keys))
     (should (member "C-u <letter>" keys))
-    (should (member "B, g, G" keys)))
+    ;; And NOT the bare letter.  `B, g, G' has no prefix in it -- it is
+    ;; what the letter does on its own, which the dictionary keys explain.
+    ;; A row in a table headed `With a prefix' that carries no prefix
+    ;; sends a reader looking for one to something else entirely.
+    (should-not (member "B, g, G" keys)))
   ;; And no prefixed row says a prefix opens the print, which it does not.
   (dolist (entry diogenes-cheatsheet-prefixed)
     (when (string-prefix-p "C-u" (nth 1 entry))
