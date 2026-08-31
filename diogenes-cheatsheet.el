@@ -416,13 +416,10 @@ first, so the panel answers \"what can I press HERE\" before anything else."
                          "its ROOT, for a badly-OCR\u2019d word -- and in tomes I-IV \
 of the TGL, an index reference such as `t.3 c.746\'")
     ;; One rule, said once: a prefixed letter looks a word up IN that
-    ;; dictionary, the XML where there is one.  Bare, the letter does that too
-    ;; -- except inside that dictionary's own entry, where it reaches the print.
+    ;; dictionary, the XML where there is one.  What the BARE letter does
+    ;; belongs to the dictionary keys, and is explained there.
     (diogenes-lookup-bailly "C-u <letter>"
                             "look a word up in that dictionary")
-    (diogenes-lookup-bailly "B, g, G"
-                            "inside that dictionary's own entry, the printed page")
-    (diogenes-browser-forward "C-c C-n" "the next page of the passage")
     (diogenes-browser-forward "C-u 5 C-c C-n" "five pages on")
     (diogenes-browser-backward "C-u 5 C-c C-p" "five pages back"))
   "Commands whose behaviour changes with a prefix argument.
