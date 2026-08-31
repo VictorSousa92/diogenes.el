@@ -53,7 +53,17 @@ for the line the measurement cannot foresee."
   :group 'diogenes)
 
 (defun diogenes-browser--lines-to-request ()
-  "How many TEXT lines to ask Diogenes for, to fill this window once.
+  "How many lines to advance, so that nothing goes past unseen.
+
+The number Diogenes is sent is an ADVANCE, and the page it answers with is its
+own size rather than that number: a window 52 lines tall asked for 49 and was
+given 34, and fifteen lines were skipped at every press.
+
+So the measure is WHAT WAS SHOWN -- the lines now in the buffer, less the
+overlap -- which cannot skip anything by construction.  The window is consulted
+only for the first page, there being nothing yet to count, and then divided by
+how much the text wraps, since a wrapped line takes more of the window than it
+gives of the text.
 The window\='s height less the overlap, divided by how much the text now in the
 buffer wraps: a page whose lines take an average of one and a half screen lines
 each should be asked for two thirds as many.
@@ -62,17 +72,20 @@ Measured from the buffer itself, so it follows the window\='s width, the font, a
 the length of the citations this work carries, none of which can be known in
 advance.  An empty buffer -- the first page -- has nothing to measure and is
 asked for the plain height."
-  (let* ((height (max 1 (- (floor (window-screen-lines))
-                           next-screen-context-lines
-                           diogenes-browser-page-margin)))
-         (text-lines (count-lines (point-min) (point-max)))
-         (screen-lines (if (> text-lines 0)
-                           (count-screen-lines (point-min) (point-max))
-                         0))
-         (factor (if (and (> text-lines 0) (> screen-lines text-lines))
-                     (/ (float screen-lines) text-lines)
-                   1.0)))
-    (max 1 (floor (/ height factor)))))
+  (let ((shown (count-lines (point-min) (point-max))))
+    (if (> shown 1)
+        ;; A page is what a page turned out to be.
+        (max 1 (- shown next-screen-context-lines
+                  diogenes-browser-page-margin))
+      ;; The first page: the window, less what wrapping will cost.
+      (let* ((height (max 1 (- (floor (window-screen-lines))
+                               next-screen-context-lines
+                               diogenes-browser-page-margin)))
+             (screen-lines (count-screen-lines (point-min) (point-max)))
+             (factor (if (and (> shown 0) (> screen-lines shown))
+                         (/ (float screen-lines) shown)
+                       1.0)))
+        (max 1 (floor (/ height factor)))))))
 
 (defun diogenes-browser-forward ()
   "Load the next page from the Diogenes browser.
