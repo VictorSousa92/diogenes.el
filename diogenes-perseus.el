@@ -3400,6 +3400,34 @@ The cruncher answers with the form, then its analyses run together:
 which is part of speech, then form and lemma, then the morphology, then
 dialect and stem-class fields separated by tabs.")
 
+(defcustom diogenes-morpheus-lemma-markers
+  '(("pl" . "lemma listed under the plural")
+    ("dual" . "lemma listed under the dual")
+    ("indecl" . "indeclinable"))
+  "What Morpheus\=' lemma markers mean, as (MARKER . WHAT-TO-SAY).
+Morpheus spells some lemmata with a marker after a hyphen -- `*bria/rews-pl\=' is
+Briareus, listed under the plural -- and the marker is no part of the name: left
+on, it is asked of the dictionary, matches no headword, and the search falls to
+whatever sorts first.
+
+So it is taken off the lemma and said in words beside the morphology.  A marker
+not listed here is shown as it stands, which is better than dropping it and
+better than pretending to translate it."
+  :type '(alist :key-type (string :tag "Marker")
+                :value-type (string :tag "What to say"))
+  :group 'diogenes)
+
+(defun diogenes--morpheus-lemma-marker (lemma)
+  "The marker at the end of LEMMA, or nil.
+Only what `diogenes-morpheus-lemma-markers\=' names.  A hyphen in a Morpheus
+lemma is usually a COMPOUND -- `a)mfi/-pla/ssw\=' is one word -- so a rule that
+took whatever followed the last hyphen would cut real lemmata in half wherever
+the second element happened to carry no accent.  Nothing comes off unless it is
+known to be a marker."
+  (when (and lemma (string-match-p "-" lemma))
+    (let ((tail (car (last (split-string lemma "-")))))
+      (and (assoc tail diogenes-morpheus-lemma-markers) tail))))
+
 (defun diogenes--morpheus-parse-output (output lang)
   "Turn Morpheus' OUTPUT into analyses shaped like an analyses record's.
 Each is a plist (:offset :conf :lemma :display :trans :info), the same
@@ -3430,10 +3458,29 @@ glosses."
 	     (lemma (if (string-match "," lemma-field)
 			(substring lemma-field (match-end 0))
 		      lemma-field))
+	     ;; And Morpheus marks some lemmata: `*bria/rews-pl' is Briareus
+	     ;; listed under the plural.  The marker is no part of the name, so
+	     ;; it cannot stay on a string that will be asked of a dictionary --
+	     ;; `Briareos-pl' matches no headword, and the search fell to the
+	     ;; dictionary's first entry with a note that it had found nothing.
+	     (marker (diogenes--morpheus-lemma-marker lemma))
+	     (lemma (if marker
+			(substring lemma 0 (- (length lemma) (length marker) 1))
+		      lemma))
 	     (extra (string-join
 		     (seq-remove #'string-empty-p
 				 (mapcar #'string-trim (cdr fields)))
-		     " ")))
+		     " "))
+	     ;; The marker is not discarded: that the lemma is listed under the
+	     ;; plural is worth a reader's knowing, and LSJ has such headwords.
+	     ;; It goes where Morpheus' other remarks go.
+	     (info (if marker
+		       (concat info " ("
+			       (or (cdr (assoc marker
+					       diogenes-morpheus-lemma-markers))
+				   marker)
+			       ")")
+		     info)))
 	(when (and lemma (not (string-empty-p lemma)))
 	  (push (list :offset 0
 		      :conf 5
