@@ -602,7 +602,10 @@ something to put in it."
         diogenes-browser-first-insertion t)
   (goto-char (point-max))
   (diogenes--send-cmd-to-browser
-   (concat (number-to-string (diogenes-browser--page-size)) "n")))
+   ;; `F' and not `n': see `diogenes--browse-interactively-script'.  Turning a
+   ;; page moves the beginning as well as the end, the first line of the work no
+   ;; longer being on the screen.
+   (concat (number-to-string (diogenes-browser--page-size)) "F")))
 
 (defun diogenes-browser-page-backward ()
   "Show the page before this one, in place of it.
@@ -613,7 +616,7 @@ The counterpart of `diogenes-browser-page-forward\='."
         diogenes-browser-first-insertion t)
   (goto-char (point-min))
   (diogenes--send-cmd-to-browser
-   (concat (number-to-string (diogenes-browser--page-size)) "p")))
+   (concat (number-to-string (diogenes-browser--page-size)) "B")))
 
 (defun diogenes-browser-goto-passage (&optional passage)
   "Open this work at PASSAGE, asking for it when not given.
