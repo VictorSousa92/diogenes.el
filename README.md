@@ -1112,13 +1112,60 @@ Getting between the states:
 because in Emacs state it does nothing else.
 
 - `diogenes-evil-emacs-state-modes` is the list: lookup, analysis, search, forms, corpora.
-- **The browser is not in it.** Its only single-letter key is `q`, so normal state costs almost nothing and buys evil's motions in a text you are reading. Almost: the browser loads the next page when you move past the last line, by remapping `next-line`, and evil's `j` is `evil-next-line` — so the arrow keys page and `j` does not. Add `diogenes-browser-mode` to the list if you would rather have the paging.
+- **The browser is not in it.** Its only single-letter key is `q`, so normal state costs almost nothing and buys evil's motions in a text you are reading. The browser loads the next page when you move past the last line, and it does so under evil as well: `j`, `k` and the arrow keys all page, `gg` and `G` reach the ends. Add `diogenes-browser-mode` to the list if you would rather have Emacs state there too.
 - `diogenes-corpus-edit-mode` is not in it either: it is the one buffer meant to be typed in.
 - A mode whose state you have set yourself is left alone — an explicit `evil-set-initial-state` in your config wins.
 - `diogenes-evil-manage-initial-states` nil disables the whole thing, for anyone who would rather bind the letters into normal state by hand. That costs `o d p b t g G` inside dictionary buffers and keeps `j` and `k`.
 
 The dictionaries have the single letters when you want a dictionary, and evil
 has the keyboard when you want to move about.
+
+## Clicking a word
+
+The web Diogenes looks a word up when you click it. The browser can too, and
+which gesture does it is yours to say:
+
+```elisp
+(setq diogenes-browser-mouse-keys
+      '(("<mouse-1>" . diogenes-browser-lookup)))
+(diogenes-browser-install-mouse-keys)
+```
+
+**Call the installer after setting it.** The option is read when the keys are
+bound, and that happens as Diogenes loads — before your configuration runs. So
+setting the option alone does nothing until something installs it, which is what
+that second line is for. Under Doom:
+
+```elisp
+(after! diogenes
+  (setq diogenes-browser-mouse-keys
+        '(("<mouse-1>" . diogenes-browser-lookup)))
+  (diogenes-browser-install-mouse-keys))
+```
+
+Off by default: a click producing a dictionary entry is not what a reader
+expects of an Emacs buffer.
+
+**`<mouse-1>` is safe to take.** Emacs fires it only on a click in place; a drag
+is `<drag-mouse-1>`, which is left alone. So you can still mark a passage by
+dragging, which matters because a marked region is how a stretch of lines is
+named.
+
+Any gesture, and any command:
+
+| Gesture | |
+| --- | --- |
+| `<mouse-1>` | a plain click, as the web interface has it |
+| `<double-mouse-1>` | a double click, leaving single clicks alone |
+| `<C-mouse-1>` | control-click |
+| `<C-S-mouse-1>` | control-shift-click |
+| `<mouse-3>` | the right button |
+
+`diogenes-browser-lookup` analyses the word and shows the entry;
+`diogenes-lookup-in-dictionary` asks which dictionary first. A command of your
+own works too — point is moved to the click before it runs, so anything that
+reads the word at point behaves as though you had put point there yourself.
+
 
 ## A frame with only a startup page in it
 
