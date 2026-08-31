@@ -358,6 +358,49 @@ presses on a passage -- calling `thing-at-point\=' as before, and looking up
 		(thing-at-point 'word)))))
 
 ;;; Browser Mode
+(defcustom diogenes-browser-mouse-keys nil
+  "Mouse gestures that look a word up, as (GESTURE . COMMAND).
+Nil by default and off: clicking a word and getting a dictionary entry is not
+what a reader expects of an Emacs buffer, and this is a package other people
+use.
+
+The mouse-1 gesture is safe to take.  Emacs fires it only on a click in place;
+a drag is drag-mouse-1, so marking a passage still works, which matters because
+a marked region is how a stretch of lines is named.
+
+Any gesture will do and any command.  Point is moved to the click first,
+whatever the command.  Call diogenes-browser-install-mouse-keys after changing
+this, or restart."
+  :type '(alist :key-type (string :tag "Gesture")
+                :value-type (function :tag "Command"))
+  :group 'diogenes)
+
+(defun diogenes-browser--at-click (command)
+  "COMMAND wrapped so that it acts on the word clicked.
+Point does not follow a click of its own accord: mouse-1 ordinarily runs
+mouse-drag-region, and that is what moves point.  Binding the gesture to
+something else takes it away, so a command would look a word up where point
+already was -- one clicks on a word and gets an entry for whatever one was
+reading before.
+
+Wrapped rather than asking each command to take an event, so that any command a
+reader names works unchanged."
+  (lambda (event)
+    (interactive "e")
+    (mouse-set-point event)
+    (call-interactively command)))
+
+;;;###autoload
+(defun diogenes-browser-install-mouse-keys ()
+  "Bind the gestures in diogenes-browser-mouse-keys in the browser.
+Called at load and again after changing the option."
+  (interactive)
+  (when (boundp 'diogenes-browser-mode-map)
+    (dolist (cell diogenes-browser-mouse-keys)
+      (when (and (car cell) (cdr cell))
+        (keymap-set diogenes-browser-mode-map (car cell)
+                    (diogenes-browser--at-click (cdr cell)))))))
+
 (defvar diogenes-browser-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
     ;; Overrides of movement keys.  A remap catches the command NAMED and

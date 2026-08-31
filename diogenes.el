@@ -628,6 +628,12 @@ user interface."
   ["CUSTOM CORPORA"
    ("c" "Manage custom search corpora" diogenes-manage-user-corpora)])
 
+
+;; And the mouse gestures a reader has asked for, which is nothing by default.
+(with-eval-after-load 'diogenes-browser
+  (when (fboundp 'diogenes-browser-install-mouse-keys)
+    (diogenes-browser-install-mouse-keys)))
+
 (provide 'diogenes)
 
 ;;; diogenes.el ends here
