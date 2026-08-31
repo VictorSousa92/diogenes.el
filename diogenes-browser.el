@@ -479,6 +479,51 @@ before they are read.  Everything that needs to name the work -- the header, and
        diogenes--browser-author
        diogenes--browser-work))
 
+(defvar-local diogenes--browser-replace nil
+  "Whether the next text to arrive should replace what is in the buffer.
+Set by the paging buttons, which turn the page where `C-c C-n\=' and `C-c C-p\='
+add to it, and read by the filter.
+
+A FLAG and not an `erase-buffer\=' in the command, because at the end of a work
+Diogenes answers with nothing: a buffer emptied when the button was pressed
+would leave a reader with neither the next page nor the one they were reading.
+The filter erases when it has something to put there.")
+
+(defun diogenes-browser--page-size ()
+  "How many lines a page is, for turning one.
+What is shown, which is what a page turned out to be -- no overlap: a page that
+is REPLACED wants the lines after the ones you read, not two of them again.  The
+window\='s height where there is nothing yet to count."
+  (let ((shown (count-lines (point-min) (point-max))))
+    (if (> shown 1)
+        shown
+      (max 1 (floor (window-screen-lines))))))
+
+(defun diogenes-browser-page-forward ()
+  "Show the page after this one, in place of it.
+Where `diogenes-browser-forward\=' adds the next lines below what is there, this
+replaces: the same number of lines, taken from after what is shown.  Nothing is
+lost where there is no more text -- the buffer is emptied only when there is
+something to put in it."
+  (interactive)
+  (setq diogenes--browser-backwards nil
+        diogenes--browser-replace t
+        diogenes-browser-first-insertion t)
+  (goto-char (point-max))
+  (diogenes--send-cmd-to-browser
+   (concat (number-to-string (diogenes-browser--page-size)) "n")))
+
+(defun diogenes-browser-page-backward ()
+  "Show the page before this one, in place of it.
+The counterpart of `diogenes-browser-page-forward\='."
+  (interactive)
+  (setq diogenes--browser-backwards t
+        diogenes--browser-replace t
+        diogenes-browser-first-insertion t)
+  (goto-char (point-min))
+  (diogenes--send-cmd-to-browser
+   (concat (number-to-string (diogenes-browser--page-size)) "p")))
+
 (defun diogenes-browser-goto-passage (&optional passage)
   "Open this work at PASSAGE, asking for it when not given.
 A citation as the work numbers itself -- `384a\=', `1.5.2\=', `1053a15\=' -- and not
@@ -535,12 +580,12 @@ a Perl process on every page."
     (concat
      " "
      (diogenes-browser--header-button
-      "<-- back" "Load the previous page (C-c C-p)"
-      #'diogenes-browser-backward)
+      "<-- back" "Turn back a page, replacing this one"
+      #'diogenes-browser-page-backward)
      "   "
      (diogenes-browser--header-button
-      "forward -->" "Load the next page (C-c C-n)"
-      #'diogenes-browser-forward)
+      "forward -->" "Turn forward a page, replacing this one"
+      #'diogenes-browser-page-forward)
      ;; Only where the browser records what it is showing.  Elsewhere there is
      ;; nothing to open, and a button that answers a click with an explanation
      ;; is worse than no button.
@@ -687,6 +732,14 @@ If it is incomplete, buffer it and prepend it when called again."
 		      (t (or (text-property-search-forward 'diogenes-header)
 			     (goto-char (point-min))))))
 	       (t (goto-char (point-max))))
+	 ;; A page turned rather than added to: the buffer is emptied HERE,
+	 ;; where there is text to put in it, and not when the button was
+	 ;; pressed.  See `diogenes--browser-replace'.
+	 (when diogenes--browser-replace
+	   (setq diogenes--browser-replace nil)
+	   (let ((inhibit-read-only t))
+	     (erase-buffer))
+	   (goto-char (point-min)))
 	 (when header
 	   ;; A HEADER ALREADY IN THE BUFFER, saying the same thing, is taken
 	   ;; out.  Diogenes prints the header with every stretch it fetches, and
