@@ -401,6 +401,101 @@ Called at load and again after changing the option."
         (keymap-set diogenes-browser-mode-map (car cell)
                     (diogenes-browser--at-click (cdr cell)))))))
 
+(defcustom diogenes-browser-header-line t
+  "Whether the browser carries a header line of its own.
+
+    <-- back    forward -->    go to...    Plato, Cratylus
+
+Clickable, and always visible: a header line does not scroll with the text, and
+the browser replaces its whole contents on every page, so anything written INTO
+the buffer would be swept away with it.  Which is why this is a header and not a
+row of widgets at the foot, as the application has.
+
+Nil for no header, and the keys do the same work: `C-c C-n\=' and `C-c C-p\=' page,
+and `diogenes-browser-goto-passage\=' asks where to go."
+  :type 'boolean
+  :group 'diogenes)
+
+(defface diogenes-browser-header-button
+  '((t :inherit link))
+  "Face for the clickable parts of the browser\='s header line."
+  :group 'diogenes)
+
+(defun diogenes-browser-goto-passage (&optional passage)
+  "Open this work at PASSAGE, asking for it when not given.
+A citation as the work numbers itself -- `384a\=', `1.5.2\=', `1053a15\=' -- and not
+a line of the buffer: the browser shows a stretch of a text, and where a reader
+wants to be is a place in the WORK.  The levels this work uses are named in the
+prompt where the corpus told us them.
+
+The same Perl request `diogenes-open-passage\=' makes, so the reader arrives with
+the passage at the top rather than paged to."
+  (interactive)
+  (unless (derived-mode-p 'diogenes-browser-mode)
+    (user-error "Not in a Diogenes browser"))
+  (unless (and diogenes--browser-corpus diogenes--browser-author
+               diogenes--browser-work)
+    (user-error "This browser does not say which work it is showing"))
+  (let* ((labels (and (boundp 'diogenes--browser-labels)
+                      diogenes--browser-labels))
+         (prompt (if labels
+                     (format "Go to (%s): "
+                             (string-join (mapcar #'string-trim labels) ", "))
+                   "Go to (levels separated by full stops): "))
+         (answer (or passage (read-string prompt)))
+         (levels (split-string (string-trim answer) "[.: ]+" t)))
+    (unless levels
+      (user-error "No passage given"))
+    ;; Outermost level first, as Diogenes takes them.
+    (diogenes-open-passage diogenes--browser-corpus
+                           diogenes--browser-author
+                           diogenes--browser-work
+                           levels)))
+
+(defun diogenes-browser--header-button (label help command)
+  "LABEL as a clickable piece of a header line, running COMMAND."
+  (let ((map (make-sparse-keymap)))
+    ;; `header-line-format\=' takes its clicks through `mouse-1\=' on the string
+    ;; itself; `follow-link\=' lets a reader who has `mouse-1-click-follows-link\='
+    ;; use a plain click, as they would on any other button.
+    (keymap-set map "<header-line> <mouse-1>" command)
+    (keymap-set map "<header-line> <mouse-2>" command)
+    (propertize label
+                'face 'diogenes-browser-header-button
+                'mouse-face 'highlight
+                'help-echo help
+                'follow-link t
+                'keymap map)))
+
+(defun diogenes-browser-header-line ()
+  "The browser\='s header line: where to go, and what is being read.
+Built afresh each time Emacs draws it, so it follows the buffer without anything
+having to remember to update it -- which matters, the contents being replaced by
+a Perl process on every page."
+  (when diogenes-browser-header-line
+    (concat
+     " "
+     (diogenes-browser--header-button
+      "<-- back" "Load the previous page (C-c C-p)"
+      #'diogenes-browser-backward)
+     "   "
+     (diogenes-browser--header-button
+      "forward -->" "Load the next page (C-c C-n)"
+      #'diogenes-browser-forward)
+     "   "
+     (diogenes-browser--header-button
+      "go to..." "Open this work at a citation"
+      #'diogenes-browser-goto-passage)
+     ;; And what is being read, where the browser knows: a reader who has
+     ;; several open should not have to look at the text to tell which is which.
+     (let ((where (and (boundp 'diogenes--browser-corpus)
+                       diogenes--browser-corpus
+                       (format "   %s %s/%s"
+                               diogenes--browser-corpus
+                               diogenes--browser-author
+                               diogenes--browser-work))))
+       (or where "")))))
+
 (defvar diogenes-browser-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
     ;; Overrides of movement keys.  A remap catches the command NAMED, and
@@ -442,6 +537,9 @@ Called at load and again after changing the option."
 
 (define-derived-mode diogenes-browser-mode text-mode "Diogenes Browser"
   "Major mode to browse Diogenes' databases."
+  ;; A line of its own, above the text: see
+  ;; `diogenes-browser-header-line'.
+  (setq header-line-format '(:eval (diogenes-browser-header-line)))
   (make-local-variable 'diogenes--browser-backwards)
   (make-local-variable 'diogenes--browser-language)
   (make-local-variable 'diogenes--browser-first-insertion))
