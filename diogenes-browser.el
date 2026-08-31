@@ -667,7 +667,18 @@ If it is incomplete, buffer it and prepend it when called again."
     (when-let* ((data (diogenes--read-browser-output string)))
      (with-current-buffer (process-buffer proc)
        (seq-let (cit header &rest lines) data
-	 (unless lines (error "No input received!"))
+	 ;; NOTHING THERE is a boundary and not an error.  Diogenes answers a
+	 ;; request that runs past the start or the end of a work with a header
+	 ;; and no lines, and a `error' here reached the reader as
+	 ;; `error in process filter' -- for the ordinary case of having asked to
+	 ;; go back further than the work goes.
+	 (unless lines
+	   (setq diogenes--browser-replace nil)
+	   (message "Nothing %s this passage"
+		    (if (and (boundp 'diogenes--browser-backwards)
+			     diogenes--browser-backwards)
+			"before" "after")))
+	 (when lines
 	 (cond ((and (boundp 'diogenes--browser-backwards)
 		     diogenes--browser-backwards)
 		(cond (header (goto-char (point-min))
@@ -687,7 +698,7 @@ If it is incomplete, buffer it and prepend it when called again."
 	  (cond (diogenes-browser-first-insertion
 		 (setq diogenes-browser-first-insertion nil)
 		 (goto-char pos))
-		(t (recenter -1 t)))))))))
+		(t (recenter -1 t))))))))))
 
 (defun diogenes--browse-work (options passage)
   "Function that browses a work from the Diogenes Databases.
