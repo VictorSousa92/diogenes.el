@@ -874,6 +874,7 @@ already have open and jumps to its page.
 - Works for every print dictionary above; it detects which one from the visited file (prompt names it).
 - Default is the word at point or the current PDF text selection. (In the Emacs Reader there is no text layer, so no default is offered and the prompt starts empty; you type the word, exactly as `L` expects anyway.)
 - For multi-file TLL/Passow/TGL, a word in another fascicle or volume opens that sibling PDF.
+
 | Key | Action |
 | --- | --- |
 | `L` | Exact lookup of a headword |
