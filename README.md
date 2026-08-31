@@ -1122,7 +1122,7 @@ has the keyboard when you want to move about.
 
 ## Clicking a word
 
-The web Diogenes looks a word up when you click it. The browser can too, and
+[Heslin's Diogenes](https://github.com/pjheslin/diogenes) looks a word up when you click it. The browser can too, and
 which gesture does it is yours to say:
 
 ```elisp
