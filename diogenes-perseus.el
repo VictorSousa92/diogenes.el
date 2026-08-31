@@ -3023,6 +3023,16 @@ it and as a wordlist keys it."
                            (diogenes--strip-diacritics word))))
     (delete-dups (delq nil candidates))))
 
+(defun diogenes--greek-parse-candidates (word)
+  "The Greek forms to try for WORD, in order.
+WORD as it stands first -- nothing that parses today may stop parsing -- and
+then, where it carries more than one accent, the form without the one an
+enclitic added.  See `diogenes--beta-drop-extra-accents\='."
+  (let ((dropped (diogenes--beta-drop-extra-accents word)))
+    (if (equal dropped word)
+        (list word)
+      (list word dropped))))
+
 (defun diogenes--do-parse (word lang)
   "Return the raw analyses record for WORD in LANG, or nil.
 `$do_parse': the form is tried as it stands and a capitalised Latin form
@@ -3039,7 +3049,17 @@ and i exchanged (see `diogenes--latin-form-variants')."
           (if (string= lang "latin")
               (cl-loop for base in (diogenes--latin-parse-candidates word)
                        append (diogenes--latin-form-variants base))
-            (list word))))
+            ;; Greek: the form as it stands, and then without the accent an
+            ;; ENCLITIC put on it.  A proparoxytone takes an extra acute on its
+            ;; ultima when an enclitic follows, so the text prints
+            ;; `*bria/rew/n' where the analyses file has `*bria/rewn' -- and the
+            ;; search then looked for a key that cannot exist, landed on
+            ;; whatever sorted next to it, and showed that entry: `Briareon'
+            ;; was answered with `Briakchos'.
+            ;;
+            ;; The word as written stays first, so nothing that parses today
+            ;; stops parsing.
+            (diogenes--greek-parse-candidates word))))
     (cl-loop for variant in (delete-dups variants)
              thereis (or (diogenes--try-parse variant lang)
                          (and (string-match-p "[[:upper:]]" variant)
