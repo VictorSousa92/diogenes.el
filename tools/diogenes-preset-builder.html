@@ -490,6 +490,32 @@
      mode of Diogenes' own, so an unrelated PDF keeps its own keys.</p>
   <div id="c-keys-scan"></div>
 
+  <h3>Turning a page</h3>
+  <p class="note">Two ways to read on. <code>C-c C-n</code> and
+     <code>C-c C-p</code> <b>add</b> text and keep what is there, for reading a
+     little further without losing your place. The keys below, and the header's
+     buttons, <b>turn</b> the page: the same number of lines, in place of what
+     was shown.</p>
+  <div class="field">
+    <span>Lines a page shows &mdash; <code>diogenes-browser-page-lines</code>.
+      Empty for as many as the first page came with, which Diogenes sizes to the
+      window.</span>
+    <input type="text" id="pagelines" value="" placeholder="as it comes">
+  </div>
+  <div class="field">
+    <span>Lines <code>C-c C-n</code> and <code>C-c C-p</code> add &mdash;
+      <code>diogenes-browser-add-lines</code>. Empty for half a page.</span>
+    <input type="text" id="addlines" value="" placeholder="half a page">
+  </div>
+  <div class="field">
+    <span>Key that turns a page forward</span>
+    <input type="text" id="turnforward" value="C-c C-&lt;next&gt;">
+  </div>
+  <div class="field">
+    <span>Key that turns a page back</span>
+    <input type="text" id="turnback" value="C-c C-&lt;prior&gt;">
+  </div>
+
   <h3>Clicking a word</h3>
   <p class="note">Heslin&rsquo;s Diogenes looks a word up when you click it, and
      the browser can too. Off unless you choose a gesture, an Emacs buffer
@@ -1965,6 +1991,34 @@ function configText() {
 
   out.push('');
   out.push('  :bind ("C-c d" . diogenes))');
+
+  // Turning a page.  Only what differs from the default: a page as long as the
+  // first Diogenes sent, half a page added by the keys, and C-c C-<next> and
+  // C-c C-<prior> for turning.
+  const pageLines = el('pagelines') ? el('pagelines').value.trim() : '';
+  const addLines  = el('addlines')  ? el('addlines').value.trim()  : '';
+  const turnFwd   = el('turnforward') ? el('turnforward').value.trim() : '';
+  const turnBack  = el('turnback') ? el('turnback').value.trim() : '';
+  const pagingBits = [];
+  if (pageLines && /^[0-9]+$/.test(pageLines))
+    pagingBits.push(`(setq diogenes-browser-page-lines ${pageLines})`);
+  if (addLines && /^[0-9]+$/.test(addLines))
+    pagingBits.push(`(setq diogenes-browser-add-lines ${addLines})`);
+  if (turnFwd !== 'C-c C-<next>' || turnBack !== 'C-c C-<prior>') {
+    const pairs = [];
+    if (turnFwd)  pairs.push(`("${turnFwd}" . diogenes-browser-page-forward)`);
+    if (turnBack) pairs.push(`("${turnBack}" . diogenes-browser-page-backward)`);
+    pagingBits.push(pairs.length
+      ? `(setq diogenes-browser-turn-keys '(${pairs.join(' ')}))`
+      : '(setq diogenes-browser-turn-keys nil)');
+    pagingBits.push("(with-eval-after-load 'diogenes-browser");
+    pagingBits.push('  (diogenes-browser-install-turn-keys))');
+  }
+  if (pagingBits.length) {
+    out.push('');
+    out.push(';; Turning a page, where C-c C-n and C-c C-p add to it.');
+    out.push(...pagingBits);
+  }
 
   // A click that looks a word up.  After the use-package form, not inside it:
   // the keys are bound when `diogenes-browser' loads, so the installer has to
