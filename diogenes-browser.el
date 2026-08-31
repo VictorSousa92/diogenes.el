@@ -511,9 +511,26 @@ the passage at the top rather than paged to."
                            diogenes--browser-work
                            levels)))
 
+(defun diogenes-browser--header-button-runner (command)
+  "COMMAND wrapped to run in the window whose header line was clicked.
+A header-line click does not select the window, so a command run from one acts
+on whatever buffer happened to be current: the paging buttons set their
+buffer-local flags in another buffer, the filter read nil for them in the
+browser, and the text arrived at the end as though `forward\=' had been pressed.
+
+The event says which window it came from, and that is the one to work in."
+  (lambda (event)
+    (interactive "e")
+    (let ((window (posn-window (event-start event))))
+      (if (window-live-p window)
+          (with-selected-window window
+            (call-interactively command))
+        (call-interactively command)))))
+
 (defun diogenes-browser--header-button (label help command)
   "LABEL as a clickable piece of a header line, running COMMAND."
-  (let ((map (make-sparse-keymap)))
+  (let ((map (make-sparse-keymap))
+        (command (diogenes-browser--header-button-runner command)))
     ;; `header-line-format\=' takes its clicks through `mouse-1\=' on the string
     ;; itself; `follow-link\=' lets a reader who has `mouse-1-click-follows-link\='
     ;; use a plain click, as they would on any other button.
