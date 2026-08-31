@@ -491,13 +491,19 @@ The filter erases when it has something to put there.")
 
 (defun diogenes-browser--page-size ()
   "How many lines a page is, for turning one.
-What is shown, which is what a page turned out to be -- no overlap: a page that
-is REPLACED wants the lines after the ones you read, not two of them again.  The
-window\='s height where there is nothing yet to count."
-  (let ((shown (count-lines (point-min) (point-max))))
-    (if (> shown 1)
-        shown
-      (max 1 (floor (window-screen-lines))))))
+The WINDOW\='s height, less `diogenes-browser-page-margin\=', and no overlap: a page
+that is REPLACED wants the lines after the ones you read, not two of them again.
+
+Not what is shown, which was the first answer and made the request GROW: `C-c
+C-n\=' adds to the buffer, so thirty-four lines became fifty-nine, every press
+asked for more than the last, and the start or the end of a work came sooner each
+time.  A window does not drift."
+  ;; The WINDOW, not what is shown.  Counting the lines shown made the request
+  ;; grow: `C-c C-n' adds to the buffer, so thirty-four lines became fifty-nine
+  ;; and every press of the button asked for more than the last -- reaching the
+  ;; start or the end of a work sooner each time.  A window does not drift.
+  (max 1 (- (floor (window-screen-lines))
+            diogenes-browser-page-margin)))
 
 (defun diogenes-browser-page-forward ()
   "Show the page after this one, in place of it.
@@ -740,7 +746,18 @@ If it is incomplete, buffer it and prepend it when called again."
     (when-let* ((data (diogenes--read-browser-output string)))
      (with-current-buffer (process-buffer proc)
        (seq-let (cit header &rest lines) data
-	 (unless lines (error "No input received!"))
+	 ;; NOTHING THERE is a boundary and not an error.  Diogenes answers a
+	 ;; request that runs past the start or the end of a work with a header
+	 ;; and no lines, and a `error' here reached the reader as
+	 ;; `error in process filter' -- for the ordinary case of having asked to
+	 ;; go back further than the work goes.
+	 (unless lines
+	   (setq diogenes--browser-replace nil)
+	   (message "Nothing %s this passage"
+		    (if (and (boundp 'diogenes--browser-backwards)
+			     diogenes--browser-backwards)
+			"before" "after")))
+	 (when lines
 	 (cond ((and (boundp 'diogenes--browser-backwards)
 		     diogenes--browser-backwards)
 		(cond (header (goto-char (point-min))
@@ -781,7 +798,7 @@ If it is incomplete, buffer it and prepend it when called again."
 	  (cond (diogenes-browser-first-insertion
 		 (setq diogenes-browser-first-insertion nil)
 		 (goto-char pos))
-		(t (recenter -1 t)))))))))
+		(t (recenter -1 t))))))))))
 
 (defvar-local diogenes--browser-corpus nil
   "The corpus this browser buffer is reading -- `tlg\=', `phi\=', and the rest.
