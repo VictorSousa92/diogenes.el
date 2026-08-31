@@ -479,6 +479,18 @@ before they are read.  Everything that needs to name the work -- the header, and
        diogenes--browser-author
        diogenes--browser-work))
 
+(defvar-local diogenes--browser-page-lines nil
+  "How many lines the first page of this browser held.
+The number to ask for when a page is turned: Diogenes chose the size of the
+first page, it fitted the window, and what it held can be counted -- where the
+window\='s own height cannot account for the three lines of header printed with
+every fetch, nor for the lines that wrap because a citation precedes them.
+
+Set once, when the first page arrives, and not again: a page that REPLACES
+another must not grow, and counting what is shown each time made it grow -- `C-c
+C-n\=' adds to the buffer, so thirty-four lines became fifty-nine and every press
+asked for more than the last.")
+
 (defvar-local diogenes--browser-replace nil
   "Whether the next text to arrive should replace what is in the buffer.
 Set by the paging buttons, which turn the page where `C-c C-n\=' and `C-c C-p\='
@@ -498,12 +510,14 @@ Not what is shown, which was the first answer and made the request GROW: `C-c
 C-n\=' adds to the buffer, so thirty-four lines became fifty-nine, every press
 asked for more than the last, and the start or the end of a work came sooner each
 time.  A window does not drift."
-  ;; The WINDOW, not what is shown.  Counting the lines shown made the request
-  ;; grow: `C-c C-n' adds to the buffer, so thirty-four lines became fifty-nine
-  ;; and every press of the button asked for more than the last -- reaching the
-  ;; start or the end of a work sooner each time.  A window does not drift.
-  (max 1 (- (floor (window-screen-lines))
-            diogenes-browser-page-margin)))
+  ;; What the FIRST page held, which Diogenes sized and which fitted.  Neither
+  ;; the window's height nor the lines now shown will do: the height ignores the
+  ;; three lines of header printed with every fetch and the lines that wrap
+  ;; behind a citation, and the count of what is shown grows, `C-c C-n' adding
+  ;; to the buffer until every press asked for more than the last.
+  (max 1 (or diogenes--browser-page-lines
+             (- (floor (window-screen-lines))
+                diogenes-browser-page-margin))))
 
 (defun diogenes-browser-page-forward ()
   "Show the page after this one, in place of it.
@@ -788,6 +802,10 @@ If it is incomplete, buffer it and prepend it when called again."
 	   (diogenes--browser-remove-duplicate-header
 	    (diogenes--browser-format-header header))
 	   (insert (diogenes--browser-format-header header)))
+	 ;; The size of the first page, for turning one later.  Set once: see
+	 ;; `diogenes--browser-page-lines'.
+	 (unless diogenes--browser-page-lines
+	   (setq diogenes--browser-page-lines (length lines)))
 	 (let ((pos (point)))
 	   (dolist (alist lines)
 	     (when diogenes-browser-show-citations
