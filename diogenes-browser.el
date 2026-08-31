@@ -87,16 +87,39 @@ asked for the plain height."
                        1.0)))
         (max 1 (floor (/ height factor)))))))
 
+(defcustom diogenes-browser-key-page-fraction 0.5
+  "How much of a page `C-c C-n\=' and `C-c C-p\=' add.
+Half by default: the keys ADD to the buffer where the header\='s buttons replace,
+and half a page read on into leaves the other half in view.  A whole page added
+at once is more than a reader asked for.
+
+Of the FIRST page\='s length, which `diogenes--browser-page-lines\=' records --
+Diogenes chose that size and it fitted the window.  1.0 for a whole page, which
+is what the keys did before."
+  :type 'number
+  :group 'diogenes)
+
+(defun diogenes-browser--lines-to-add ()
+  "How many lines `C-c C-n\=' and `C-c C-p\=' should ask for.
+`diogenes-browser-key-page-fraction\=' of the first page, and never less than
+one."
+  (max 1 (round (* diogenes-browser-key-page-fraction
+                   (or diogenes--browser-page-lines
+                       (max 1 (- (floor (window-screen-lines))
+                                 next-screen-context-lines)))))))
+
 (defun diogenes-browser-forward ()
-  "Load the next page from the Diogenes browser.
-Takes no prefix argument: how much to advance is what fills the window once,
-which `diogenes-browser--lines-to-request\=' works out from the window\='s height
-and how much the text is wrapping."
+  "Add the next half-page to what is shown.
+Takes no prefix argument: how much to add is
+`diogenes-browser-key-page-fraction\=' of the first page, half of it by
+default.  The text already there is kept -- this is for reading on without
+losing your place, where the header\='s `forward\=' button turns the page
+instead."
   (interactive)
   (setq diogenes--browser-backwards nil)
   (goto-char (point-max))
   (diogenes--send-cmd-to-browser
-   (concat (number-to-string (diogenes-browser--lines-to-request))
+   (concat (number-to-string (diogenes-browser--lines-to-add))
 	   "n")))
 
 (defun diogenes-browser-backward ()
@@ -106,7 +129,7 @@ Takes no prefix argument, as `diogenes-browser-forward\=' takes none."
   (setq diogenes--browser-backwards t)
   (goto-char (point-min))
   (diogenes--send-cmd-to-browser
-   (concat (number-to-string (diogenes-browser--lines-to-request))
+   (concat (number-to-string (diogenes-browser--lines-to-add))
 	   "p")))
 
 (defun diogenes-browser-quit ()
