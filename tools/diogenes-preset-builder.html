@@ -503,9 +503,22 @@
     <input type="text" id="pagelines" value="" placeholder="as it comes">
   </div>
   <div class="field">
-    <span>Lines <code>C-c C-n</code> and <code>C-c C-p</code> add &mdash;
-      <code>diogenes-browser-add-lines</code>. Empty for half a page.</span>
-    <input type="text" id="addlines" value="" placeholder="half a page">
+    <span>What <code>C-c C-n</code> and <code>C-c C-p</code> add &mdash;
+      <code>diogenes-browser-add-lines</code></span>
+    <select id="addhow">
+      <option value="0.5">Half a page &mdash; the other half stays in view</option>
+      <option value="1.0">A whole page &mdash; as much as the buttons turn</option>
+      <option value="fraction">A fraction of a page&hellip;</option>
+      <option value="lines">A number of lines&hellip;</option>
+    </select>
+  </div>
+  <div class="field" id="addfractionrow" hidden>
+    <span>The fraction &mdash; 0.25 for a quarter of a page</span>
+    <input type="text" id="addfraction" value="0.25">
+  </div>
+  <div class="field" id="addlinesrow" hidden>
+    <span>The number of lines, whatever a page happens to be</span>
+    <input type="text" id="addlines" value="15">
   </div>
   <div class="field">
     <span>Key that turns a page forward</span>
@@ -1751,6 +1764,35 @@ document.addEventListener('change', e => {
 // state is meaningless without evil, and offering it would invite a reader to
 // set something that can never fire -- the same reasoning that keeps an
 // unconfigured dictionary out of an entry's banner.
+// The box for a number appears only where the menu asks for one.
+function renderAddHow() {
+  const how = el('addhow') ? el('addhow').value : '0.5';
+  const fractionRow = el('addfractionrow');
+  const linesRow = el('addlinesrow');
+  if (fractionRow) fractionRow.hidden = (how !== 'fraction');
+  if (linesRow) linesRow.hidden = (how !== 'lines');
+}
+
+// What to write for `diogenes-browser-add-lines': a FLOAT is a share of a page
+// and an INTEGER a count, which is how the option tells them apart -- so a
+// fraction keeps its point and a line count must not have one.
+function addLinesValue() {
+  const how = el('addhow') ? el('addhow').value : '0.5';
+  if (how === 'fraction') {
+    const raw = (el('addfraction') ? el('addfraction').value : '').trim();
+    const n = parseFloat(raw);
+    if (!isFinite(n) || n <= 0) return null;
+    // A point, always: `1' would mean one line where `1.0' means a page.
+    return Number.isInteger(n) ? n.toFixed(1) : String(n);
+  }
+  if (how === 'lines') {
+    const raw = (el('addlines') ? el('addlines').value : '').trim();
+    if (!/^[0-9]+$/.test(raw) || raw === '0') return null;
+    return raw;
+  }
+  return how;                   // `0.5' or `1.0', straight from the menu.
+}
+
 function renderEvilGroup() {
   const group = el('c-keys-evil-group');
   if (group) group.hidden = !el('c-evil').checked;
@@ -1996,13 +2038,14 @@ function configText() {
   // first Diogenes sent, half a page added by the keys, and C-c C-<next> and
   // C-c C-<prior> for turning.
   const pageLines = el('pagelines') ? el('pagelines').value.trim() : '';
-  const addLines  = el('addlines')  ? el('addlines').value.trim()  : '';
+  const addLines  = addLinesValue();
   const turnFwd   = el('turnforward') ? el('turnforward').value.trim() : '';
   const turnBack  = el('turnback') ? el('turnback').value.trim() : '';
   const pagingBits = [];
   if (pageLines && /^[0-9]+$/.test(pageLines))
     pagingBits.push(`(setq diogenes-browser-page-lines ${pageLines})`);
-  if (addLines && /^[0-9]+$/.test(addLines))
+  // Only where it differs from half a page, which is the default.
+  if (addLines && addLines !== '0.5')
     pagingBits.push(`(setq diogenes-browser-add-lines ${addLines})`);
   if (turnFwd !== 'C-c C-<next>' || turnBack !== 'C-c C-<prior>') {
     const pairs = [];
@@ -2787,6 +2830,7 @@ function renderConfig() {
   fitKeyBoxes();
   renderEvilNote();
   renderEvilGroup();
+  renderAddHow();
 }
 
 // A tab is reachable by its own URL, so the README can link to whichever half
