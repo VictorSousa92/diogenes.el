@@ -522,11 +522,11 @@
   </div>
   <div class="field">
     <span>Key that turns a page forward</span>
-    <input type="text" id="turnforward" value="C-c C-&lt;next&gt;">
+    <input type="text" id="turnforward" value="C-c C-&lt;right&gt;">
   </div>
   <div class="field">
     <span>Key that turns a page back</span>
-    <input type="text" id="turnback" value="C-c C-&lt;prior&gt;">
+    <input type="text" id="turnback" value="C-c C-&lt;left&gt;">
   </div>
 
   <h3>Clicking a word</h3>
@@ -2035,8 +2035,8 @@ function configText() {
   out.push('  :bind ("C-c d" . diogenes))');
 
   // Turning a page.  Only what differs from the default: a page as long as the
-  // first Diogenes sent, half a page added by the keys, and C-c C-<next> and
-  // C-c C-<prior> for turning.
+  // first Diogenes sent, half a page added by the keys, and C-c C-<right> and
+  // C-c C-<left> for turning -- the arrows, which every keyboard has.
   const pageLines = el('pagelines') ? el('pagelines').value.trim() : '';
   const addLines  = addLinesValue();
   const turnFwd   = el('turnforward') ? el('turnforward').value.trim() : '';
@@ -2047,7 +2047,7 @@ function configText() {
   // Only where it differs from half a page, which is the default.
   if (addLines && addLines !== '0.5')
     pagingBits.push(`(setq diogenes-browser-add-lines ${addLines})`);
-  if (turnFwd !== 'C-c C-<next>' || turnBack !== 'C-c C-<prior>') {
+  if (turnFwd !== 'C-c C-<right>' || turnBack !== 'C-c C-<left>') {
     const pairs = [];
     if (turnFwd)  pairs.push(`("${turnFwd}" . diogenes-browser-page-forward)`);
     if (turnBack) pairs.push(`("${turnBack}" . diogenes-browser-page-backward)`);

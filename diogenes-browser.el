@@ -75,15 +75,22 @@ your place on the screen, which is what they are for."
   :group 'diogenes)
 
 (defcustom diogenes-browser-turn-keys
-  '(("C-c C-<next>" . diogenes-browser-page-forward)
-    ("C-c C-<prior>" . diogenes-browser-page-backward))
+  '(("C-c C-<right>" . diogenes-browser-page-forward)
+    ("C-c C-<left>" . diogenes-browser-page-backward))
   "Keys that TURN a page, as (KEY . COMMAND).
 Turning replaces what is shown; `C-c C-n\=' and `C-c C-p\=' add to it.  Until these
 existed a page could only be turned by clicking the header, which is no use to a
 reader who does not use a mouse.
 
-`C-c C-<next>\=' and `C-c C-<prior>\=' by default -- what PageDown and PageUp are
-called, and a page is what they turn.  Set to nil to bind nothing.
+`C-c C-<right>\=' and `C-c C-<left>\=' by default.  The arrows are on every
+keyboard, where PageDown and PageUp -- `<next>\=' and `<prior>\=', which came
+first -- are not, or want a modifier of their own and make the sequence four keys
+deep.
+
+And they read well beside the keys that ADD: `C-c C-n\=' and `C-c C-p\=' go along
+the text, `C-c C-<right>\=' and `C-c C-<left>\=' turn across it.
+
+Set to nil to bind nothing.
 
 `diogenes-browser-install-turn-keys\=' after changing it, or restart."
   :type '(alist :key-type (string :tag "Key")
