@@ -522,11 +522,19 @@
   </div>
   <div class="field">
     <span>Key that turns a page forward</span>
-    <input type="text" id="turnforward" value="C-c C-&lt;right&gt;">
+    <div class="keybox">
+      <input type="text" id="turnforward" value="C-c C-&lt;right&gt;">
+      <button data-record="1"
+              title="Press the keys instead of typing them">&#8984;</button>
+    </div>
   </div>
   <div class="field">
     <span>Key that turns a page back</span>
-    <input type="text" id="turnback" value="C-c C-&lt;left&gt;">
+    <div class="keybox">
+      <input type="text" id="turnback" value="C-c C-&lt;left&gt;">
+      <button data-record="1"
+              title="Press the keys instead of typing them">&#8984;</button>
+    </div>
   </div>
 
   <h3>Clicking a word</h3>
@@ -553,6 +561,19 @@
     <select id="mousecommand">
       <option value="diogenes-browser-lookup">Analyse the word and show the entry</option>
       <option value="diogenes-lookup-in-dictionary">Ask which dictionary first</option>
+    </select>
+  </div>
+  <div class="field" id="mousesecondrow" hidden>
+    <span>A second gesture, for <span id="mousesecondwhat">the other</span>
+      &mdash; leave it as None to bind only the one above</span>
+    <select id="mousegesture2">
+      <option value="">None</option>
+      <option value="&lt;mouse-1&gt;">A plain click</option>
+      <option value="&lt;double-mouse-1&gt;">A double click</option>
+      <option value="&lt;C-mouse-1&gt;">Control-click</option>
+      <option value="&lt;C-S-mouse-1&gt;">Control-shift-click</option>
+      <option value="&lt;S-mouse-1&gt;">Shift-click</option>
+      <option value="&lt;mouse-3&gt;">The right button</option>
     </select>
   </div>
 
@@ -1765,6 +1786,30 @@ document.addEventListener('change', e => {
 // set something that can never fire -- the same reasoning that keeps an
 // unconfigured dictionary out of an entry's banner.
 // The box for a number appears only where the menu asks for one.
+// The second gesture is offered only once a first is chosen, and it is for
+// whichever command the first did not take -- so the label says which.
+function renderMouseSecond() {
+  const row = el('mousesecondrow');
+  if (!row) return;
+  const first = el('mousegesture') ? el('mousegesture').value : '';
+  row.hidden = !first;
+  const what = el('mousesecondwhat');
+  if (what) {
+    const chosen = el('mousecommand') ? el('mousecommand').value : '';
+    what.textContent = (chosen === 'diogenes-browser-lookup')
+      ? 'asking which dictionary first'
+      : 'analysing the word and showing the entry';
+  }
+}
+
+// The other command: what a second gesture will run.
+function mouseOtherCommand() {
+  const chosen = el('mousecommand') ? el('mousecommand').value : '';
+  return (chosen === 'diogenes-browser-lookup')
+    ? 'diogenes-lookup-in-dictionary'
+    : 'diogenes-browser-lookup';
+}
+
 function renderAddHow() {
   const how = el('addhow') ? el('addhow').value : '0.5';
   const fractionRow = el('addfractionrow');
@@ -2069,10 +2114,14 @@ function configText() {
   // does nothing, and why this writes both.
   const clickGesture = el('mousegesture') ? el('mousegesture').value.trim() : '';
   if (clickGesture) {
-    const clickCommand = el('mousecommand').value;
+    const clickPairs = [`("${clickGesture}" . ${el('mousecommand').value})`];
+    // And a second gesture, where one was given, for the other command.
+    const second = el('mousegesture2') ? el('mousegesture2').value.trim() : '';
+    if (second && second !== clickGesture)
+      clickPairs.push(`("${second}" . ${mouseOtherCommand()})`);
     out.push('');
     out.push(';; A click looks a word up in the browser.');
-    out.push(`(setq diogenes-browser-mouse-keys '(("${clickGesture}" . ${clickCommand})))`);
+    out.push(`(setq diogenes-browser-mouse-keys '(${clickPairs.join(' ')}))`);
     out.push("(with-eval-after-load 'diogenes-browser");
     out.push('  (diogenes-browser-install-mouse-keys))');
   }
@@ -2831,6 +2880,7 @@ function renderConfig() {
   renderEvilNote();
   renderEvilGroup();
   renderAddHow();
+  renderMouseSecond();
 }
 
 // A tab is reachable by its own URL, so the README can link to whichever half
