@@ -54,12 +54,24 @@ page whatever window the browser happens to be in."
                  (integer :tag "This many lines"))
   :group 'diogenes)
 
-(defcustom diogenes-browser-add-lines nil
-  "How many lines `C-c C-n\=' and `C-c C-p\=' add.
-Nil for `diogenes-browser-key-page-fraction\=' of a page -- half of it by default,
-which leaves the other half in view.  A number to say it outright."
-  :type '(choice (const :tag "A fraction of a page" nil)
-                 (integer :tag "This many lines"))
+(defcustom diogenes-browser-add-lines 0.5
+  "How much `C-c C-n\=' and `C-c C-p\=' add, as a fraction of a page or a count.
+
+    0.5   half a page, which leaves the other half in view
+    1.0   a whole page, the same as the header\='s buttons fetch
+    15    fifteen lines, whatever a page happens to be
+
+A FLOAT is a fraction and an INTEGER a count: `1.0\=' is a whole page and `1\=' is
+one line.  Write the point where you mean a share of a page.
+
+Of the page `diogenes-browser-page-lines\=' gives, or of the first page Diogenes
+sent where that is nil.  TRUNCATED, so a page of 33 halved adds 16 and the halves
+meet -- rounding sent .5 up and added one line more than half.
+
+The keys ADD where the header\='s buttons replace: half a page read on into keeps
+your place on the screen, which is what they are for."
+  :type '(choice (number :tag "A fraction of a page (below 1)")
+                 (integer :tag "This many lines (1 or more)"))
   :group 'diogenes)
 
 (defcustom diogenes-browser-turn-keys
@@ -136,28 +148,34 @@ asked for the plain height."
                        1.0)))
         (max 1 (floor (/ height factor)))))))
 
-(defcustom diogenes-browser-key-page-fraction 0.5
-  "How much of a page `C-c C-n\=' and `C-c C-p\=' add.
-Half by default: the keys ADD to the buffer where the header\='s buttons replace,
-and half a page read on into leaves the other half in view.  A whole page added
-at once is more than a reader asked for.
+(defvar diogenes-browser-key-page-fraction nil
+  "Obsolete.  Use `diogenes-browser-add-lines\=', which takes a fraction too.
+Read where it is set, so a configuration written against it goes on working.")
 
-Of the FIRST page\='s length, which `diogenes--browser-page-lines\=' records --
-Diogenes chose that size and it fitted the window.  1.0 for a whole page, which
-is what the keys did before."
-  :type 'number
-  :group 'diogenes)
+(make-obsolete-variable 'diogenes-browser-key-page-fraction
+                        'diogenes-browser-add-lines "diogenes.el 2026-08")
 
 (defun diogenes-browser--lines-to-add ()
   "How many lines `C-c C-n\=' and `C-c C-p\=' should ask for.
 `diogenes-browser-key-page-fraction\=' of the first page, and never less than
 one."
-  (or diogenes-browser-add-lines
-      (max 1 (round (* diogenes-browser-key-page-fraction
-                       (or diogenes-browser-page-lines
-                           diogenes--browser-page-lines
-                           (max 1 (- (floor (window-screen-lines))
-                                     next-screen-context-lines))))))))
+  (let* ((page (or diogenes-browser-page-lines
+                   diogenes--browser-page-lines
+                   (max 1 (- (floor (window-screen-lines))
+                             next-screen-context-lines))))
+         ;; The obsolete option still answers where somebody set it.
+         (how (or diogenes-browser-key-page-fraction
+                  diogenes-browser-add-lines
+                  0.5)))
+    (max 1 (if (floatp how)
+               ;; A FLOAT is a share of a page, an INTEGER a number of lines.
+               ;; Not `(< how 1)': that made `1.0' -- a whole page -- into a
+               ;; single line.
+               ;;
+               ;; TRUNCATED and not rounded: 33 halved is 16, and the halves
+               ;; meet.  Rounding sent .5 up and added a line more than half.
+               (truncate (* how page))
+             (truncate how)))))
 
 (defun diogenes-browser-forward ()
   "Add the next half-page to what is shown.
