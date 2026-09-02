@@ -281,6 +281,56 @@ FILE defaults to `diogenes-montanari-pdf-file'."
 ;;;; HEADWORD -> PAGE
 ;;;; --------------------------------------------------------------------
 
+(defun diogenes-montanari--fragment-pages (low)
+  "The pages in LOW whose first headword the OCR damaged.
+A page whose letter differs from BOTH neighbours: a genuine letter boundary
+differs from the page before it and AGREES with the page after, so only damage
+stands alone.  113 of them in the eleventh edition -- `τρωτοσ\=' on a page of
+`ευφημεω\=', `αυματοποιεω\=' with its theta gone -- and each sorts in the wrong
+part of the alphabet, taking its page with it.
+
+Returned as a hash of page numbers, the caller asking about one page at a time."
+  (let* ((by-page (sort (copy-sequence low)
+                        (lambda (a b) (< (cdr a) (cdr b)))))
+         (bad (make-hash-table :test 'eql)))
+    (cl-loop for (before this after) on by-page
+             while after
+             do (let ((p0 (cdr before)) (p1 (cdr this)) (p2 (cdr after))
+                      (k0 (car before)) (k1 (car this)) (k2 (car after)))
+                  (when (and (= p1 (1+ p0)) (= p2 (1+ p1))
+                             (> (length k0) 0) (> (length k1) 0)
+                             (> (length k2) 0)
+                             (not (eq (aref k1 0) (aref k0 0)))
+                             (eq (aref k2 0) (aref k0 0)))
+                    (puthash p1 t bad))))
+    bad))
+
+(defun diogenes-montanari--key-value (key)
+  "KEY as a number, so two keys can be interpolated between.
+The first six letters, each in its own place: enough to tell `ευφημεω\=' from
+`ευφημια\=', which is what the interpolation needs, and short enough that the
+arithmetic stays exact."
+  (let ((value 0.0))
+    (dotimes (i 6)
+      (setq value (+ (* value 1024)
+                     (if (< i (length key)) (aref key i) 0))))
+    value))
+
+(defun diogenes-montanari--interpolate (key lo-key lo-page hi-key hi-page)
+  "Where KEY falls between LO-PAGE and HI-PAGE, by its place in the alphabet.
+The pages between are the ones whose own bookmarks are damaged, so nothing but
+the word\\='s alphabetical position can place it.  `ευφημεω\=' sorts almost at
+`ευφημια\=', and lands on the page before it.
+
+Never HI-PAGE itself: KEY sorts before HI-KEY, which is where that page begins."
+  (let* ((a (diogenes-montanari--key-value lo-key))
+         (b (diogenes-montanari--key-value hi-key))
+         (k (diogenes-montanari--key-value key))
+         (span (- hi-page lo-page))
+         (fraction (if (> b a) (/ (- k a) (- b a)) 0.0))
+         (page (+ lo-page (round (* fraction span)))))
+    (max lo-page (min page (1- hi-page)))))
+
 (defun diogenes-montanari--page-after (page low)
   "The (KEY . PAGE) in LOW for the first page after PAGE, or nil.
 LOW is in order, so this is the entry following the one whose page is PAGE --
@@ -309,20 +359,41 @@ word is itself garbled can be off by a page or two; adjust
          (low (plist-get index :low))
          (straddle (plist-get index :straddle))
          (key (diogenes-montanari--greek-key word))
-         (best nil))
+         (best nil) (best-key nil)
+         (next-key nil) (next-page nil)
+         (fragments (make-hash-table :test 'eql)))
     (when (> (length key) 0)
+      ;; The pages whose bookmark the OCR destroyed, which are not to be
+      ;; believed: see `diogenes-montanari--fragment-pages'.
+      (setq fragments (diogenes-montanari--fragment-pages low))
       ;; Low-bound guide: last page whose first-word key sorts <= KEY.
       ;; This is the page whose running head has reached WORD -- how one
       ;; uses the guide words of a printed dictionary.  The high bound is
       ;; ignored because Montanari's OCR corrupts it.
       (cl-loop for (lo . page) in low
                while (or (string< lo key) (string= lo key))
-               do (setq best page))
+               unless (gethash page fragments)
+               do (setq best page best-key lo)
+               end)
+      ;; And the first good page AFTER the word, so a word falling in a gap of
+      ;; damaged pages can be placed between the two that bound it.
+      (cl-loop for (lo . page) in low
+               when (and (string< key lo) (not (gethash page fragments)))
+               do (setq next-key lo next-page page)
+               and return nil)
       ;; If WORD is exactly a page's first word AND that headword also ends
       ;; the previous page (a straddling multi-page entry), the entry began
       ;; on that earlier page -- jump there.  Restricting the step-back to
       ;; the straddle signature keeps ordinary entries (and homographs like
       ;; Δία vs διά, where no straddle holds) on their low-bound page.
+      ;; A GAP: damaged pages between the good one chosen and the good one
+      ;; after it, and the word may be on any of them.  Placed by where it
+      ;; sorts between the two -- `ευφημεω' sorts almost at `ευφημια', so it
+      ;; lands on the page before it, which is the damaged 935.
+      (when (and best best-key next-page next-key
+                 (> next-page (1+ best)))
+        (setq best (diogenes-montanari--interpolate
+                    key best-key best next-key next-page)))
       (let ((start (gethash key straddle)))
         (when (and start (or (null best) (< start best)))
           (setq best start)))
