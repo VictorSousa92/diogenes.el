@@ -3073,8 +3073,14 @@ caps-opening hit.  Honours `diogenes-tgl-morph-fallback'."
             (when hit
               (cl-destructuring-bind (vol page col letter kind) hit
                 (ignore kind)
-                (setq result (list vol page col letter cand))
-                (cl-return))))))
+                ;; CHECKED against the page.  The index gives the relative
+                ;; pronoun a column on a page of `ὄρος' -- the rho lost to the
+                ;; OCR leaves a key that still looks like a word -- and an
+                ;; unchecked hit is definitive, so it won.  A page whose own
+                ;; range is nowhere near the key cannot hold it.
+                (when (diogenes-tgl--page-holds-key-p vol page cand)
+                  (setq result (list vol page col letter cand))
+                  (cl-return)))))))
       ;; Pass 1.5: denominative reduction (Smyth Section 866).  If no prefix
       ;; candidate resolved, try the noun/adjective a denominative verb was
       ;; built from (μεστόω -> μεστός, δηλόω -> δῆλος), resolving each parent
@@ -3090,8 +3096,14 @@ caps-opening hit.  Honours `diogenes-tgl-morph-fallback'."
             (when hit
               (cl-destructuring-bind (vol page col letter kind) hit
                 (ignore kind)
-                (setq result (list vol page col letter cand))
-                (cl-return))))))
+                ;; CHECKED against the page.  The index gives the relative
+                ;; pronoun a column on a page of `ὄρος' -- the rho lost to the
+                ;; OCR leaves a key that still looks like a word -- and an
+                ;; unchecked hit is definitive, so it won.  A page whose own
+                ;; range is nowhere near the key cannot hold it.
+                (when (diogenes-tgl--page-holds-key-p vol page cand)
+                  (setq result (list vol page col letter cand))
+                  (cl-return)))))))
       ;; Pass 2: only if nothing definitive, allow a volume-consistent fuzzy
       ;; index hit on a candidate (`index-locate-key' without EXACT-ONLY
       ;; still applies the own-letter-volume filter, so a fuzzy hit is
@@ -3105,6 +3117,39 @@ caps-opening hit.  Honours `diogenes-tgl-morph-fallback'."
                 (setq result (list vol page col letter cand))
                 (cl-return))))))
       result)))
+
+(defun diogenes-tgl--page-holds-key-p (tomus page key)
+  "Whether PAGE of TOMUS plausibly holds KEY, by the page\='s own key range.
+The body index records what each page begins and ends with, `:lo\=' and `:hi\=',
+and a page whose range is nowhere near KEY cannot hold it however confidently an
+index says so.
+
+Compared on the first TWO letters, not the whole key: a page\='s range is read
+from its running heads, which are abbreviated -- `ΟΡΟ\=' for a page of `ὄρος\=' --
+so a stricter comparison would reject good pages, and a looser one (the first
+letter alone) would accept the whole of a letter\='s hundreds of pages.
+
+Nil where there is no body index for the volume, in which case nothing can be
+checked and the caller should trust what it has."
+  (let* ((body (diogenes-tgl--body tomus))
+         (pages (and body (plist-get body :pages))))
+    (if (or (null pages) (zerop (length pages)))
+        t                               ; nothing to check against
+      (let* ((want (substring key 0 (min 2 (length key))))
+             (pg (cl-loop for p across pages
+                          when (equal (plist-get p :page) page)
+                          return p)))
+        (if (null pg)
+            t                           ; the page is not in the index either
+          (let* ((lo (or (plist-get pg :lo) ""))
+                 (hi (or (plist-get pg :hi) ""))
+                 (lo2 (substring lo 0 (min 2 (length lo))))
+                 (hi2 (substring hi 0 (min 2 (length hi)))))
+            ;; Within the page\='s own two-letter span, inclusive, and in either
+            ;; order: a page\='s `:lo\=' and `:hi\=' come from the OCR and are not
+            ;; always the right way round.
+            (or (and (not (string< want lo2)) (not (string< hi2 want)))
+                (and (not (string< want hi2)) (not (string< lo2 want))))))))))
 
 (defun diogenes-tgl--index-locate-key (key index &optional exact-only)
   "Resolve collation KEY through parsed INDEX, or nil.
