@@ -2943,13 +2943,19 @@ spurious short stem simply fails to resolve and does no harm."
     ;; which leaves the word unplaced; this puts it where the index says.
     ("\u03bf\u03c3"                                     ; οσ (ὅς, Qui)
      . (:page 2 765))                                        ; index p799: t.2 c.1502
-    ;; ἕ (Se, the reflexive) is at t.1 c.1068 by the same index -- volume V
-    ;; p412, "E, pronome, Se, t.1, c.1068, b" -- and is NOT entered here,
-    ;; because a column is not a page and volume 1's conversion is not known.
-    ;; Volume 2's was got from two observed pairs, c.1458 on p743 and c.1470 on
-    ;; p749; the same for volume 1 would place this one, and a guess would
-    ;; place it wrongly with an air of authority.
-    )
+    ;; ἕ (Se, the reflexive) -- volume V index p412: "E, pronome, Se, t.1,
+    ;; c.1068, b".  Volume 1's column-to-page conversion was measured from its
+    ;; own running heads: 801 pages carry a clean pair of column numbers and 797
+    ;; of them agree that the even column is twice the scan page less 112.  So
+    ;; c.1068 is p590 -- which the page itself confirms, its head reading
+    ;; `1067 1068 E' and `Οἱ πόσιν, Suum maritum. Et pro σφέτερος' running on
+    ;; into 591: the reflexive's article.
+    ;;
+    ;; An override rather than an index key, because a single letter as a key
+    ;; matches almost anything the OCR has truncated -- which is how `οσ' came
+    ;; to mean a page of `ὄρος'.
+    ("\u03b5"                                              ; ε (ἕ, Se)
+     . (:page 1 590)))                                       ; index p412: t.1 c.1068
   "Hand-curated overrides for entries the OCR corrupts beyond automatic reach.
 See the source comment for the entry format and rationale.  Extend one
 line at a time; each entry affects only the exact word-key it lists.")
