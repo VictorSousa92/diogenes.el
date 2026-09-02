@@ -738,6 +738,14 @@ Also:
 
 - Articles are large — `ἐπί` alone is 431 KB — and an entry is parsed in Lisp before display, so the prepositions and commonest verbs take a few seconds where an ordinary entry is instantaneous.
 - Epigraphic letterforms are set in the private-use area of New Athena Unicode. Entries keep them as published, so install that font to see them rather than boxes; they are spelled out for sorting only (`diogenes-dge-epichoric-substitutions`).
+
+  Install it, and tell Emacs to use it for that range, since a Greek font is
+  not consulted for private-use characters:
+
+  ```elisp
+  (set-fontset-font t '(#xE000 . #xF8FF)
+                    (font-spec :family "New Athena Unicode"))
+  ```
 - Etymologies get a labelled block of their own, since in a reflowed paragraph they would run on from the last citation. The label (`diogenes-dge-etymology-label`, "Etim.") is ours: the print sets them off by position alone.
 
 ### Dictionaries as pages (scans)
