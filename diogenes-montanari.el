@@ -174,7 +174,23 @@ Recognises both the \"<n>: A – B\" interval form and the single
         (cons lo (if (> (length hi) 0) hi lo)))))
    ((string-match diogenes-montanari-single-regexp title)
     (let* ((raw (match-string 1 title))
-           (w (diogenes-montanari--greek-key raw)))
+           (w (diogenes-montanari--greek-key raw))
+           ;; A LETTER HEADING.  The first page of each letter is bookmarked
+           ;; with the letter in both cases -- `Ε, ε' -- and the key keeps only
+           ;; Greek letters, so it comes out `εε': which sorts after `εα' and
+           ;; puts the letter's own page among its words rather than at their
+           ;; head.  A reader asking for the letter was sent to the letter's
+           ;; second page, or before this was noticed to the previous letter's
+           ;; last.
+           ;;
+           ;; One letter repeated is that letter.  No Greek headword is a letter
+           ;; written twice, so nothing else is caught -- and the page then
+           ;; sorts where it belongs, the ordinary rule finding it with no
+           ;; special case anywhere else.
+           (w (if (and (> (length w) 1)
+                       (cl-every (lambda (c) (eq c (aref w 0))) w))
+                  (substring w 0 1)
+                w)))
       (when (> (length w) 0) (cons w w))))))
 
 (defun diogenes-montanari--build-index (file)
