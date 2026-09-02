@@ -3023,15 +3023,45 @@ it and as a wordlist keys it."
                            (diogenes--strip-diacritics word))))
     (delete-dups (delq nil candidates))))
 
+(defun diogenes--beta-drop-capital-marker (word)
+  "WORD without the leading asterisk beta code marks a capital with.
+`Εὐφήμει\=' is `*eu)fh/mei\=', and the analyses file keeps proper names under the
+asterisk and everything else without it -- so a word capitalised only because
+it opens a sentence is looked for among the names and not found.
+
+The asterisk sits before the letter and before its breathing, so removing it is
+removing the first character; nothing else moves."
+  (if (and (> (length word) 1) (eq (aref word 0) ?*))
+      (substring word 1)
+    word))
+
 (defun diogenes--greek-parse-candidates (word)
   "The Greek forms to try for WORD, in order.
-WORD as it stands first -- nothing that parses today may stop parsing -- and
-then, where it carries more than one accent, the form without the one an
-enclitic added.  See `diogenes--beta-drop-extra-accents\='."
-  (let ((dropped (diogenes--beta-drop-extra-accents word)))
-    (if (equal dropped word)
-        (list word)
-      (list word dropped))))
+
+WORD as it stands first: nothing that parses today may stop parsing, and a
+genuine proper name -- `Εὐφράτης\=', which the file really does keep under the
+asterisk -- must find itself before anything else is tried.
+
+Then, on a miss:
+
+  * without the CAPITAL MARKER, for a word capitalised because it opens a
+    sentence.  Latin has had this since Diogenes\=' own \"Fixed parsing of
+    capitalized Latin words\"; Greek had not, and `Εὐφήμει\=' answered with
+    `εὐφαής\=' -- the nearest name in `*eu)-\=' -- where `εὐφήμει\=' finds
+    `εὐφημέω\='.  See `diogenes--beta-drop-capital-marker\='.
+
+  * without the accent an ENCLITIC added, where the form carries more than
+    one.  See `diogenes--beta-drop-extra-accents\='.
+
+  * and without either, since a capitalised word may also carry an enclitic\='s
+    accent.
+
+`delete-dups\=' in the caller removes the repetitions this leaves when a form
+needs only one of the two."
+  (let* ((plain (diogenes--beta-drop-capital-marker word))
+         (dropped (diogenes--beta-drop-extra-accents word))
+         (both (diogenes--beta-drop-extra-accents plain)))
+    (delete-dups (list word plain dropped both))))
 
 (defun diogenes--do-parse (word lang)
   "Return the raw analyses record for WORD in LANG, or nil.
