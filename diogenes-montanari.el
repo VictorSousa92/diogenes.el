@@ -130,13 +130,29 @@ reads several `match-string' groups around a call to this)."
                                            ?\N{GREEK SMALL LETTER SIGMA}
                                          c))
                            chars)))
-      (apply #'string
-             (cl-remove-if-not
-              (lambda (c)
-                (let ((o (if (characterp c) c 0)))
-                  (or (<= #x0391 o #x03a9)    ; Greek capital letters
-                      (<= #x03b1 o #x03c9)))) ; Greek small letters
-              folded))))))
+      (let ((key (apply #'string
+                        (cl-remove-if-not
+                         (lambda (c)
+                           (let ((o (if (characterp c) c 0)))
+                             (or (<= #x0391 o #x03a9)    ; Greek capitals
+                                 (<= #x03b1 o #x03c9)))) ; Greek smalls
+                         folded))))
+        ;; A LETTER HEADING is one letter, however many times it is written.
+        ;; The first page of a letter is bookmarked with the letter in both
+        ;; cases -- `Ε, ε' -- and everything but the letters is dropped, so the
+        ;; key came out `εε': which sorts after `εα' and files the letter's own
+        ;; page among its words rather than at their head.  A reader asking for
+        ;; the letter, or for a word whose key is just the letter, was sent to
+        ;; the letter's second page.
+        ;;
+        ;; Here rather than in one dictionary's title parser, because BDAG has
+        ;; a parser of its own and calls this, and so will the next dictionary
+        ;; bookmarked the same way.  No Greek headword is a letter written
+        ;; twice, so nothing else is caught.
+        (if (and (> (length key) 1)
+                 (cl-every (lambda (c) (eq c (aref key 0))) key))
+            (substring key 0 1)
+          key))))))
 
 (defun diogenes-montanari--key< (a b)
   "Non-nil if Greek collation key A sorts before B."
@@ -175,22 +191,9 @@ Recognises both the \"<n>: A – B\" interval form and the single
    ((string-match diogenes-montanari-single-regexp title)
     (let* ((raw (match-string 1 title))
            (w (diogenes-montanari--greek-key raw))
-           ;; A LETTER HEADING.  The first page of each letter is bookmarked
-           ;; with the letter in both cases -- `Ε, ε' -- and the key keeps only
-           ;; Greek letters, so it comes out `εε': which sorts after `εα' and
-           ;; puts the letter's own page among its words rather than at their
-           ;; head.  A reader asking for the letter was sent to the letter's
-           ;; second page, or before this was noticed to the previous letter's
-           ;; last.
-           ;;
-           ;; One letter repeated is that letter.  No Greek headword is a letter
-           ;; written twice, so nothing else is caught -- and the page then
-           ;; sorts where it belongs, the ordinary rule finding it with no
-           ;; special case anywhere else.
-           (w (if (and (> (length w) 1)
-                       (cl-every (lambda (c) (eq c (aref w 0))) w))
-                  (substring w 0 1)
-                w)))
+           ;; The letter headings are collapsed in
+           ;; `diogenes-montanari--greek-key', which BDAG shares.
+           )
       (when (> (length w) 0) (cons w w))))))
 
 (defun diogenes-montanari--build-index (file)
