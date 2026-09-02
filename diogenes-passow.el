@@ -573,11 +573,31 @@ KEY's initial letter, ignoring OCR-fragment keys entirely."
                do (push pg hits)))
     (nreverse hits)))
 
+(defun diogenes-passow--headword-keys (pg)
+  "The keys of page PG that are HEADWORDS, not OCR fragments.
+A page\='s key list often opens with the tail of a line carried over from the page
+before -- `δωροισ\=', `γνυμι\=', `βιοτοιο\=' -- which begins with another letter
+altogether.  `diogenes-passow--stage1\=' already ignores such keys when it picks
+the block of pages for a letter; everything that then places a word WITHIN that
+block must ignore them too, or a fragment makes a page look as though it
+bracketed a word it is nowhere near.
+
+Kept by the page\='s own majority letter, which is what `:maj\=' records.  Where
+filtering would leave nothing, the list is returned whole: a page of fragments
+tells us little, and guessing is worse than the little."
+  (let* ((keys (plist-get pg :keys))
+         (maj (plist-get pg :maj))
+         (kept (and maj (cl-remove-if-not
+                         (lambda (k) (and (> (length k) 0)
+                                          (eql (aref k 0) maj)))
+                         keys))))
+    (if (and kept (> (length kept) 0)) kept keys)))
+
 (defun diogenes-passow--page-gap (key pg)
   "Classify how KEY sits among PG's entry keys.
 0 = KEY equals an entry on the page; 1 = KEY lies strictly between
 two entries on the page; 2 = KEY is at/beyond an end of the page."
-  (let* ((keys (plist-get pg :keys))
+  (let* ((keys (diogenes-passow--headword-keys pg))
          (n (length keys)))
     (if (zerop n)
         2
@@ -616,8 +636,8 @@ wins over a page that merely happens to straddle KEY."
                   ((= ga 0) (< (plist-get a :scan) (plist-get b :scan)))
                   ;; between-entries match: tightest bracket.
                   (t
-                   (let* ((ka (aref (plist-get a :keys) 0))
-                          (kb (aref (plist-get b :keys) 0))
+                   (let* ((ka (aref (diogenes-passow--headword-keys a) 0))
+                          (kb (aref (diogenes-passow--headword-keys b) 0))
                           (a-le (not (string< key ka)))
                           (b-le (not (string< key kb))))
                      (cond
@@ -650,7 +670,8 @@ then choose the page on which WORD actually sits."
              ((> (length pages) 0)
               (let ((best (aref pages 0)))
                 (cl-loop for pg across pages
-                         when (not (string< key (aref (plist-get pg :keys) 0)))
+                         when (not (string< key
+                                            (aref (diogenes-passow--headword-keys pg) 0)))
                          do (setq best pg))
                 (cons vol best))))))))))
 
