@@ -3597,9 +3597,14 @@ none of these and its volume/letter is uninstalled."
        (let ((c (diogenes-tgl--caps-locate key)))
          (when c
            (list :via 'caps :tomus (car c) :page (cdr c))))
-       ;; 2. Direct EXACT index hit in the word's own volume.
+       ;; 2. Direct EXACT index hit in the word's own volume -- CHECKED
+       ;;    against the page it names.  The index gives the relative pronoun
+       ;;    column 1470, page 749, whose running heads read `ΟΡΟ': `ὄρος' on
+       ;;    those pages, its rho lost to the OCR, leaves the key `οσ'.  Short
+       ;;    keys suffer this most, so it is a class and not a one-off.
        (let ((hit (diogenes-tgl--index-locate-key key index 'exact-only)))
-         (when hit
+         (when (and hit
+                    (diogenes-tgl--page-holds-key-p (nth 0 hit) (nth 1 hit) key))
            (cl-destructuring-bind (tomus page col letter kind) hit
              (list :via 'index :tomus tomus :page page
                    :column col :letter letter :match kind))))
@@ -3617,7 +3622,8 @@ none of these and its volume/letter is uninstalled."
        ;;    so per the index principle it outranks any cross-reference or
        ;;    prefix-analysis, which only infer where a *related* root sits.
        (let ((hit (diogenes-tgl--index-locate-key key index nil)))
-         (when hit
+         (when (and hit
+                    (diogenes-tgl--page-holds-key-p (nth 0 hit) (nth 1 hit) key))
            (cl-destructuring-bind (tomus page col letter kind) hit
              (list :via 'index :tomus tomus :page page
                    :column col :letter letter :match kind))))
