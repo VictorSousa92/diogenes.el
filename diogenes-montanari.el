@@ -342,7 +342,18 @@ word is itself garbled can be off by a page or two; adjust
              (next (diogenes-montanari--page-after best low)))
         (when (and next
                    (not (and here (string-prefix-p key here)))
-                   (string-prefix-p key (car next)))
+                   (string-prefix-p key (car next))
+                   ;; And STRICTLY longer.  A key equal to the next page's own
+                   ;; key means a multi-page entry, whose headword repeats as
+                   ;; the running head of every page it covers -- `ἐπί' heads
+                   ;; 817, 818 and 859 -- and there the straddle rule above has
+                   ;; already stepped back to where the entry begins, the foot
+                   ;; of 816.  Stepping forward again would undo it, which is
+                   ;; what it did.
+                   ;;
+                   ;; A bare letter is unaffected: `εα' really is longer than
+                   ;; `ε', which is the case this step was written for.
+                   (> (length (car next)) (length key)))
           (setq best (cdr next)))))
     (let ((page (or best (cdr (car low)))))
       (when page
