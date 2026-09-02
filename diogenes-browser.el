@@ -41,6 +41,74 @@
   (interactive "NLines to display: ")
   (diogenes--send-cmd-to-browser (number-to-string height)))
 
+(defcustom diogenes-browser-page-lines nil
+  "How many lines a page shows, and so when a page is turned.
+Nil for as many as the first page Diogenes sent, which it sized to the window --
+that being the honest measure, since the window\='s own height cannot account for
+the three lines of header printed with every fetch nor for the lines that wrap
+behind a citation.
+
+A number to say it outright, which is worth doing where a reader wants the same
+page whatever window the browser happens to be in."
+  :type '(choice (const :tag "As long as the first page came" nil)
+                 (integer :tag "This many lines"))
+  :group 'diogenes)
+
+(defcustom diogenes-browser-add-lines 0.5
+  "How much `C-c C-n\=' and `C-c C-p\=' add, as a fraction of a page or a count.
+
+    0.5   half a page, which leaves the other half in view
+    1.0   a whole page, the same as the header\='s buttons fetch
+    15    fifteen lines, whatever a page happens to be
+
+A FLOAT is a fraction and an INTEGER a count: `1.0\=' is a whole page and `1\=' is
+one line.  Write the point where you mean a share of a page.
+
+Of the page `diogenes-browser-page-lines\=' gives, or of the first page Diogenes
+sent where that is nil.  TRUNCATED, so a page of 33 halved adds 16 and the halves
+meet -- rounding sent .5 up and added one line more than half.
+
+The keys ADD where the header\='s buttons replace: half a page read on into keeps
+your place on the screen, which is what they are for."
+  :type '(choice (number :tag "A fraction of a page (below 1)")
+                 (integer :tag "This many lines (1 or more)"))
+  :group 'diogenes)
+
+(defcustom diogenes-browser-turn-keys
+  '(("C-c C-<right>" . diogenes-browser-page-forward)
+    ("C-c C-<left>" . diogenes-browser-page-backward))
+  "Keys that TURN a page, as (KEY . COMMAND).
+Turning replaces what is shown; `C-c C-n\=' and `C-c C-p\=' add to it.  Until these
+existed a page could only be turned by clicking the header, which is no use to a
+reader who does not use a mouse.
+
+`C-c C-<right>\=' and `C-c C-<left>\=' by default.  The arrows are on every
+keyboard, where PageDown and PageUp -- `<next>\=' and `<prior>\=', which came
+first -- are not, or want a modifier of their own and make the sequence four keys
+deep.
+
+And they read well beside the keys that ADD: `C-c C-n\=' and `C-c C-p\=' go along
+the text, `C-c C-<right>\=' and `C-c C-<left>\=' turn across it.
+
+Set to nil to bind nothing.
+
+`diogenes-browser-install-turn-keys\=' after changing it, or restart."
+  :type '(alist :key-type (string :tag "Key")
+                :value-type (function :tag "Command"))
+  :group 'diogenes)
+
+;;;###autoload
+(defun diogenes-browser-install-turn-keys ()
+  "Bind `diogenes-browser-turn-keys\=' in the browser."
+  (interactive)
+  (when (boundp 'diogenes-browser-mode-map)
+    (dolist (cell diogenes-browser-turn-keys)
+      (when (and (car cell) (cdr cell))
+        (condition-case error
+            (keymap-set diogenes-browser-mode-map (car cell) (cdr cell))
+          (error (message "Diogenes: cannot bind %s: %s"
+                          (car cell) (error-message-string error))))))))
+
 (defcustom diogenes-browser-page-margin 1
   "Lines held back when paging, beyond what wrapping accounts for.
 The browser asks Diogenes for a number of TEXT lines, and what a reader sees is
@@ -87,16 +155,47 @@ asked for the plain height."
                        1.0)))
         (max 1 (floor (/ height factor)))))))
 
+(defvar diogenes-browser-key-page-fraction nil
+  "Obsolete.  Use `diogenes-browser-add-lines\=', which takes a fraction too.
+Read where it is set, so a configuration written against it goes on working.")
+
+(make-obsolete-variable 'diogenes-browser-key-page-fraction
+                        'diogenes-browser-add-lines "diogenes.el 2026-08")
+
+(defun diogenes-browser--lines-to-add ()
+  "How many lines `C-c C-n\=' and `C-c C-p\=' should ask for.
+`diogenes-browser-key-page-fraction\=' of the first page, and never less than
+one."
+  (let* ((page (or diogenes-browser-page-lines
+                   diogenes--browser-page-lines
+                   (max 1 (- (floor (window-screen-lines))
+                             next-screen-context-lines))))
+         ;; The obsolete option still answers where somebody set it.
+         (how (or diogenes-browser-key-page-fraction
+                  diogenes-browser-add-lines
+                  0.5)))
+    (max 1 (if (floatp how)
+               ;; A FLOAT is a share of a page, an INTEGER a number of lines.
+               ;; Not `(< how 1)': that made `1.0' -- a whole page -- into a
+               ;; single line.
+               ;;
+               ;; TRUNCATED and not rounded: 33 halved is 16, and the halves
+               ;; meet.  Rounding sent .5 up and added a line more than half.
+               (truncate (* how page))
+             (truncate how)))))
+
 (defun diogenes-browser-forward ()
-  "Load the next page from the Diogenes browser.
-Takes no prefix argument: how much to advance is what fills the window once,
-which `diogenes-browser--lines-to-request\=' works out from the window\='s height
-and how much the text is wrapping."
+  "Add the next half-page to what is shown.
+Takes no prefix argument: how much to add is
+`diogenes-browser-key-page-fraction\=' of the first page, half of it by
+default.  The text already there is kept -- this is for reading on without
+losing your place, where the header\='s `forward\=' button turns the page
+instead."
   (interactive)
   (setq diogenes--browser-backwards nil)
   (goto-char (point-max))
   (diogenes--send-cmd-to-browser
-   (concat (number-to-string (diogenes-browser--lines-to-request))
+   (concat (number-to-string (diogenes-browser--lines-to-add))
 	   "n")))
 
 (defun diogenes-browser-backward ()
@@ -106,7 +205,7 @@ Takes no prefix argument, as `diogenes-browser-forward\=' takes none."
   (setq diogenes--browser-backwards t)
   (goto-char (point-min))
   (diogenes--send-cmd-to-browser
-   (concat (number-to-string (diogenes-browser--lines-to-request))
+   (concat (number-to-string (diogenes-browser--lines-to-add))
 	   "p")))
 
 (defun diogenes-browser-quit ()
@@ -479,6 +578,116 @@ before they are read.  Everything that needs to name the work -- the header, and
        diogenes--browser-author
        diogenes--browser-work))
 
+(defvar-local diogenes--browser-turned nil
+  "Whether the text now arriving replaced the buffer rather than adding to it.
+Read once, where point is placed: a page that was TURNED has no frontier -- the
+whole of it is new -- so there is nothing to mark and the top is where to be.")
+
+(defvar-local diogenes--browser-page-lines nil
+  "How many lines the first page of this browser held.
+The number to ask for when a page is turned: Diogenes chose the size of the
+first page, it fitted the window, and what it held can be counted -- where the
+window\='s own height cannot account for the three lines of header printed with
+every fetch, nor for the lines that wrap because a citation precedes them.
+
+Set once, when the first page arrives, and not again: a page that REPLACES
+another must not grow, and counting what is shown each time made it grow -- `C-c
+C-n\=' adds to the buffer, so thirty-four lines became fifty-nine and every press
+asked for more than the last.")
+
+(defvar-local diogenes--browser-replace nil
+  "Whether the next text to arrive should replace what is in the buffer.
+Set by the paging buttons, which turn the page where `C-c C-n\=' and `C-c C-p\='
+add to it, and read by the filter.
+
+A FLAG and not an `erase-buffer\=' in the command, because at the end of a work
+Diogenes answers with nothing: a buffer emptied when the button was pressed
+would leave a reader with neither the next page nor the one they were reading.
+The filter erases when it has something to put there.")
+
+(defface diogenes-browser-addition-face
+  '((t :inherit secondary-selection :extend t))
+  "Face for the lines `C-c C-n\=' or `C-c C-p\=' has just added.
+`secondary-selection\=' because that is what it is for -- a region marked for a
+moment, which every theme styles and none styles loudly.  `:extend\=' so the
+marking reaches the window\='s edge rather than the end of each line, several
+lines otherwise making a ragged block."
+  :group 'diogenes)
+
+(defvar-local diogenes--browser-addition nil
+  "The overlay marking what was last added, or nil.")
+
+(defun diogenes-browser--unmark-addition ()
+  "Take the marking off what was added.
+On `pre-command-hook\=', so the first thing a reader does -- a movement, a
+lookup, anything -- clears it."
+  (remove-hook 'pre-command-hook #'diogenes-browser--unmark-addition t)
+  (when (overlayp diogenes--browser-addition)
+    (delete-overlay diogenes--browser-addition))
+  (setq diogenes--browser-addition nil))
+
+(defun diogenes-browser--mark-addition (from to backwards)
+  "Put point at the frontier of the text between FROM and TO, and mark it.
+BACKWARDS says which side the new text came from, and so which side the frontier
+is on: reading forward, the join is at FROM and the new lines are below it;
+reading back, the join is at TO and the new lines are above.
+
+The marking goes at the next command.  A reader who has just asked for more text
+is about to move, so `pre-command-hook\=' is the moment -- and it costs nothing
+where a reader sits still and looks."
+  (diogenes-browser--unmark-addition)
+  (goto-char (if backwards to from))
+  ;; The new text on the side it came from: forward shows it below the frontier,
+  ;; backward above.
+  (condition-case nil
+      (recenter (if backwards -2 1))
+    (error nil))
+  (setq diogenes--browser-addition (make-overlay from to))
+  (overlay-put diogenes--browser-addition 'face
+               'diogenes-browser-addition-face)
+  (overlay-put diogenes--browser-addition 'evaporate t)
+  (add-hook 'pre-command-hook #'diogenes-browser--unmark-addition nil t))
+
+(defun diogenes-browser--page-size ()
+  "How many lines a page is, for turning one.
+What is shown, which is what a page turned out to be -- no overlap: a page that
+is REPLACED wants the lines after the ones you read, not two of them again.  The
+window\='s height where there is nothing yet to count."
+  ;; What the FIRST page held, which Diogenes sized and which fitted.  Neither
+  ;; the window's height nor the lines now shown will do: the height ignores the
+  ;; three lines of header printed with every fetch and the lines that wrap
+  ;; behind a citation, and the count of what is shown grows, `C-c C-n' adding
+  ;; to the buffer until every press asked for more than the last.
+  (max 1 (or diogenes-browser-page-lines
+             diogenes--browser-page-lines
+             (- (floor (window-screen-lines))
+                diogenes-browser-page-margin))))
+
+(defun diogenes-browser-page-forward ()
+  "Show the page after this one, in place of it.
+Where `diogenes-browser-forward\=' adds the next lines below what is there, this
+replaces: the same number of lines, taken from after what is shown.  Nothing is
+lost where there is no more text -- the buffer is emptied only when there is
+something to put in it."
+  (interactive)
+  (setq diogenes--browser-backwards nil
+        diogenes--browser-replace t
+        diogenes-browser-first-insertion t)
+  (goto-char (point-max))
+  (diogenes--send-cmd-to-browser
+   (concat (number-to-string (diogenes-browser--page-size)) "n")))
+
+(defun diogenes-browser-page-backward ()
+  "Show the page before this one, in place of it.
+The counterpart of `diogenes-browser-page-forward\='."
+  (interactive)
+  (setq diogenes--browser-backwards t
+        diogenes--browser-replace t
+        diogenes-browser-first-insertion t)
+  (goto-char (point-min))
+  (diogenes--send-cmd-to-browser
+   (concat (number-to-string (diogenes-browser--page-size)) "p")))
+
 (defun diogenes-browser-goto-passage (&optional passage)
   "Open this work at PASSAGE, asking for it when not given.
 A citation as the work numbers itself -- `384a\=', `1.5.2\=', `1053a15\=' -- and not
@@ -552,12 +761,12 @@ a Perl process on every page."
     (concat
      " "
      (diogenes-browser--header-button
-      "<-- back" "Load the previous page (C-c C-p)"
-      #'diogenes-browser-backward)
+      "<-- back" "Turn back a page, replacing this one"
+      #'diogenes-browser-page-backward)
      "   "
      (diogenes-browser--header-button
-      "forward -->" "Load the next page (C-c C-n)"
-      #'diogenes-browser-forward)
+      "forward -->" "Turn forward a page, replacing this one"
+      #'diogenes-browser-page-forward)
      ;; Only where the browser records what it is showing.  Elsewhere there is
      ;; nothing to open, and a button that answers a click with an explanation
      ;; is worse than no button.
@@ -687,7 +896,20 @@ If it is incomplete, buffer it and prepend it when called again."
 		      (t (or (text-property-search-forward 'diogenes-header)
 			     (goto-char (point-min))))))
 	       (t (goto-char (point-max))))
+	 ;; A page turned rather than added to: the buffer is emptied HERE,
+	 ;; where there is text to put in it, and not when the button was
+	 ;; pressed.  See `diogenes--browser-replace'.
+	 (when diogenes--browser-replace
+	   (setq diogenes--browser-replace nil
+		 diogenes--browser-turned t)
+	   (let ((inhibit-read-only t))
+	     (erase-buffer))
+	   (goto-char (point-min)))
 	 (when header (insert (diogenes--browser-format-header header)))
+	 ;; The size of the first page, for turning one later.  Set once: see
+	 ;; `diogenes--browser-page-lines'.
+	 (unless diogenes--browser-page-lines
+	   (setq diogenes--browser-page-lines (length lines)))
 	 (let ((pos (point)))
 	   (dolist (alist lines)
 	     (when diogenes-browser-show-citations
@@ -695,10 +917,27 @@ If it is incomplete, buffer it and prepend it when called again."
 	     (insert (propertize (format "%s\n" (cdr alist))
 				 'cit (car alist))))
 	  (set-marker (process-mark proc) (point-max))
-	  (cond (diogenes-browser-first-insertion
+	  (cond (;; A page TURNED, which is tested FIRST: the paging buttons set
+		 ;; `diogenes-browser-first-insertion' as well, so a turned page
+		 ;; would take that branch and leave this flag standing -- to
+		 ;; misfire on the next ADDITION, sending point to the top and
+		 ;; marking nothing.
+		 ;;
+		 ;; The whole buffer is new, so there is no frontier and nothing to
+		 ;; mark; the top is where to be.
+		 diogenes--browser-turned
+		 (setq diogenes--browser-turned nil
+		       diogenes-browser-first-insertion nil)
+		 (goto-char (point-min)))
+		(diogenes-browser-first-insertion
 		 (setq diogenes-browser-first-insertion nil)
 		 (goto-char pos))
-		(t (recenter -1 t))))))))))
+		;; A page ADDED: point to the join, and the new lines marked until
+		;; the next keypress.
+		(t (diogenes-browser--mark-addition
+		    pos (point)
+		    (and (boundp 'diogenes--browser-backwards)
+			 diogenes--browser-backwards)))))))))))
 
 (defun diogenes--browse-work (options passage)
   "Function that browses a work from the Diogenes Databases.

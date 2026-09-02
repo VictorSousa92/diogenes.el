@@ -636,6 +636,23 @@ Eleven of them, in two kinds — and three exist as both.
 | Pape | Gr | `diogenes-pape-source-file` | `diogenes-pape-file` | complete | — |
 | DGE | Gr | `diogenes-dge-source-file` | `diogenes-dge-file` | α–ἐπισκήπτω | — |
 
+**What each path takes.** The two columns are not alike, and the docstrings say
+so where a reader may not look.
+
+- **`-source-file`** takes a single file, a **directory** — every `*.xml` in it,
+  read in name order — or an explicit list of files. Which you want depends on
+  how the source was published: the DGE comes as eight volume documents
+  (`xdge1.xml` to `xdge8.xml`), so a directory is the usual answer there, while
+  Bailly is one file. All of them go into the one converted dictionary.
+- **`-file`** is a single file, and the build command writes it. It is not the
+  source: `diogenes-dge-file` is the converted 80 MB dictionary, one entry per
+  line, and `diogenes-dge-source-file` is the TEI you downloaded. Naming the
+  same path for both would overwrite the source.
+- **The print column** is a single PDF except for Georges, which is a folder of
+  two volume PDFs. The scans table below gives the layout of each.
+
+A source may be deleted once converted; the built file is what lookups read.
+
 Where the sources came from:
 
 - **Pape, Gaffiot and Georges** are built from the FDB databases published by the Institut für Klassische Philologie at Zürich: <https://www.iaka.uzh.ch/de/klph/it/mls.html>. Those are databases rather than TEI, so they need converting first — and the Gaffiot among them is **complete**.

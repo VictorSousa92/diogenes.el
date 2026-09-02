@@ -627,7 +627,9 @@ user interface."
 ;; And the mouse gestures a reader has asked for, which is nothing by default.
 (with-eval-after-load 'diogenes-browser
   (when (fboundp 'diogenes-browser-install-mouse-keys)
-    (diogenes-browser-install-mouse-keys)))
+    (diogenes-browser-install-mouse-keys))
+  (when (fboundp 'diogenes-browser-install-turn-keys)
+    (diogenes-browser-install-turn-keys)))
 
 (provide 'diogenes)
 
