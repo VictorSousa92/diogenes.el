@@ -2928,7 +2928,28 @@ spurious short stem simply fails to resolve and does no harm."
     ("\u03c8\u03c5\u03bb\u03bb\u03bf\u03c3"                                ; ψυλλος (Pulex, the flea)
      . (:page 5 996))                                        ; supplementary entry, t.V p996
     ("\u03c8\u03c9\u03b1"                                    ; ψωα (Ψώα, Fœtor -- a stench)
-     . (:page 5 996)))                                       ; entry OCR'd "Iwa"; t.V p996
+     . (:page 5 996))                                        ; entry OCR'd "Iwa"; t.V p996
+    ;; The two pronouns the index carries and the OCR hides.
+    ;;
+    ;; ὅς (Qui) -- volume V index p799 reads "fos, Qui, t.2, c.1502, a": the
+    ;; headword is gone, so no key was ever captured, and the line sits between
+    ;; `Ορώρω' and `Ora, aduerb.' -- the latter being `ὅσα' misread.  Column
+    ;; 1502 is page 765: `ὀρός' is at c.1458 on p743 and c.1470 is p749, so two
+    ;; columns to the page.
+    ;;
+    ;; Without this the key `οσ' matched a DIFFERENT index line altogether --
+    ;; `ὄρος' on the ORO pages, its rho lost, leaving `οσ' -- and answered with
+    ;; page 749.  That hit is now refused by `diogenes-tgl--page-holds-key-p',
+    ;; which leaves the word unplaced; this puts it where the index says.
+    ("\u03bf\u03c3"                                     ; οσ (ὅς, Qui)
+     . (:page 2 765))                                        ; index p799: t.2 c.1502
+    ;; ἕ (Se, the reflexive) is at t.1 c.1068 by the same index -- volume V
+    ;; p412, "E, pronome, Se, t.1, c.1068, b" -- and is NOT entered here,
+    ;; because a column is not a page and volume 1's conversion is not known.
+    ;; Volume 2's was got from two observed pairs, c.1458 on p743 and c.1470 on
+    ;; p749; the same for volume 1 would place this one, and a guess would
+    ;; place it wrongly with an air of authority.
+    )
   "Hand-curated overrides for entries the OCR corrupts beyond automatic reach.
 See the source comment for the entry format and rationale.  Extend one
 line at a time; each entry affects only the exact word-key it lists.")
