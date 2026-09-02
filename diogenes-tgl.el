@@ -2928,7 +2928,34 @@ spurious short stem simply fails to resolve and does no harm."
     ("\u03c8\u03c5\u03bb\u03bb\u03bf\u03c3"                                ; ψυλλος (Pulex, the flea)
      . (:page 5 996))                                        ; supplementary entry, t.V p996
     ("\u03c8\u03c9\u03b1"                                    ; ψωα (Ψώα, Fœtor -- a stench)
-     . (:page 5 996)))                                       ; entry OCR'd "Iwa"; t.V p996
+     . (:page 5 996))                                        ; entry OCR'd "Iwa"; t.V p996
+    ;; The two pronouns the index carries and the OCR hides.
+    ;;
+    ;; ὅς (Qui) -- volume V index p799 reads "fos, Qui, t.2, c.1502, a": the
+    ;; headword is gone, so no key was ever captured, and the line sits between
+    ;; `Ορώρω' and `Ora, aduerb.' -- the latter being `ὅσα' misread.  Column
+    ;; 1502 is page 765: `ὀρός' is at c.1458 on p743 and c.1470 is p749, so two
+    ;; columns to the page.
+    ;;
+    ;; Without this the key `οσ' matched a DIFFERENT index line altogether --
+    ;; `ὄρος' on the ORO pages, its rho lost, leaving `οσ' -- and answered with
+    ;; page 749.  That hit is now refused by `diogenes-tgl--page-holds-key-p',
+    ;; which leaves the word unplaced; this puts it where the index says.
+    ("\u03bf\u03c3"                                     ; οσ (ὅς, Qui)
+     . (:page 2 765))                                        ; index p799: t.2 c.1502
+    ;; ἕ (Se, the reflexive) -- volume V index p412: "E, pronome, Se, t.1,
+    ;; c.1068, b".  Volume 1's column-to-page conversion was measured from its
+    ;; own running heads: 801 pages carry a clean pair of column numbers and 797
+    ;; of them agree that the even column is twice the scan page less 112.  So
+    ;; c.1068 is p590 -- which the page itself confirms, its head reading
+    ;; `1067 1068 E' and `Οἱ πόσιν, Suum maritum. Et pro σφέτερος' running on
+    ;; into 591: the reflexive's article.
+    ;;
+    ;; An override rather than an index key, because a single letter as a key
+    ;; matches almost anything the OCR has truncated -- which is how `οσ' came
+    ;; to mean a page of `ὄρος'.
+    ("\u03b5"                                              ; ε (ἕ, Se)
+     . (:page 1 590)))                                       ; index p412: t.1 c.1068
   "Hand-curated overrides for entries the OCR corrupts beyond automatic reach.
 See the source comment for the entry format and rationale.  Extend one
 line at a time; each entry affects only the exact word-key it lists.")
@@ -3073,8 +3100,14 @@ caps-opening hit.  Honours `diogenes-tgl-morph-fallback'."
             (when hit
               (cl-destructuring-bind (vol page col letter kind) hit
                 (ignore kind)
-                (setq result (list vol page col letter cand))
-                (cl-return))))))
+                ;; CHECKED against the page.  The index gives the relative
+                ;; pronoun a column on a page of `ὄρος' -- the rho lost to the
+                ;; OCR leaves a key that still looks like a word -- and an
+                ;; unchecked hit is definitive, so it won.  A page whose own
+                ;; range is nowhere near the key cannot hold it.
+                (when (diogenes-tgl--page-holds-key-p vol page cand)
+                  (setq result (list vol page col letter cand))
+                  (cl-return)))))))
       ;; Pass 1.5: denominative reduction (Smyth Section 866).  If no prefix
       ;; candidate resolved, try the noun/adjective a denominative verb was
       ;; built from (μεστόω -> μεστός, δηλόω -> δῆλος), resolving each parent
@@ -3090,8 +3123,14 @@ caps-opening hit.  Honours `diogenes-tgl-morph-fallback'."
             (when hit
               (cl-destructuring-bind (vol page col letter kind) hit
                 (ignore kind)
-                (setq result (list vol page col letter cand))
-                (cl-return))))))
+                ;; CHECKED against the page.  The index gives the relative
+                ;; pronoun a column on a page of `ὄρος' -- the rho lost to the
+                ;; OCR leaves a key that still looks like a word -- and an
+                ;; unchecked hit is definitive, so it won.  A page whose own
+                ;; range is nowhere near the key cannot hold it.
+                (when (diogenes-tgl--page-holds-key-p vol page cand)
+                  (setq result (list vol page col letter cand))
+                  (cl-return)))))))
       ;; Pass 2: only if nothing definitive, allow a volume-consistent fuzzy
       ;; index hit on a candidate (`index-locate-key' without EXACT-ONLY
       ;; still applies the own-letter-volume filter, so a fuzzy hit is
@@ -3105,6 +3144,39 @@ caps-opening hit.  Honours `diogenes-tgl-morph-fallback'."
                 (setq result (list vol page col letter cand))
                 (cl-return))))))
       result)))
+
+(defun diogenes-tgl--page-holds-key-p (tomus page key)
+  "Whether PAGE of TOMUS plausibly holds KEY, by the page\='s own key range.
+The body index records what each page begins and ends with, `:lo\=' and `:hi\=',
+and a page whose range is nowhere near KEY cannot hold it however confidently an
+index says so.
+
+Compared on the first TWO letters, not the whole key: a page\='s range is read
+from its running heads, which are abbreviated -- `ΟΡΟ\=' for a page of `ὄρος\=' --
+so a stricter comparison would reject good pages, and a looser one (the first
+letter alone) would accept the whole of a letter\='s hundreds of pages.
+
+Nil where there is no body index for the volume, in which case nothing can be
+checked and the caller should trust what it has."
+  (let* ((body (diogenes-tgl--body tomus))
+         (pages (and body (plist-get body :pages))))
+    (if (or (null pages) (zerop (length pages)))
+        t                               ; nothing to check against
+      (let* ((want (substring key 0 (min 2 (length key))))
+             (pg (cl-loop for p across pages
+                          when (equal (plist-get p :page) page)
+                          return p)))
+        (if (null pg)
+            t                           ; the page is not in the index either
+          (let* ((lo (or (plist-get pg :lo) ""))
+                 (hi (or (plist-get pg :hi) ""))
+                 (lo2 (substring lo 0 (min 2 (length lo))))
+                 (hi2 (substring hi 0 (min 2 (length hi)))))
+            ;; Within the page\='s own two-letter span, inclusive, and in either
+            ;; order: a page\='s `:lo\=' and `:hi\=' come from the OCR and are not
+            ;; always the right way round.
+            (or (and (not (string< want lo2)) (not (string< hi2 want)))
+                (and (not (string< want hi2)) (not (string< lo2 want))))))))))
 
 (defun diogenes-tgl--index-locate-key (key index &optional exact-only)
   "Resolve collation KEY through parsed INDEX, or nil.
@@ -3552,9 +3624,14 @@ none of these and its volume/letter is uninstalled."
        (let ((c (diogenes-tgl--caps-locate key)))
          (when c
            (list :via 'caps :tomus (car c) :page (cdr c))))
-       ;; 2. Direct EXACT index hit in the word's own volume.
+       ;; 2. Direct EXACT index hit in the word's own volume -- CHECKED
+       ;;    against the page it names.  The index gives the relative pronoun
+       ;;    column 1470, page 749, whose running heads read `ΟΡΟ': `ὄρος' on
+       ;;    those pages, its rho lost to the OCR, leaves the key `οσ'.  Short
+       ;;    keys suffer this most, so it is a class and not a one-off.
        (let ((hit (diogenes-tgl--index-locate-key key index 'exact-only)))
-         (when hit
+         (when (and hit
+                    (diogenes-tgl--page-holds-key-p (nth 0 hit) (nth 1 hit) key))
            (cl-destructuring-bind (tomus page col letter kind) hit
              (list :via 'index :tomus tomus :page page
                    :column col :letter letter :match kind))))
@@ -3572,7 +3649,8 @@ none of these and its volume/letter is uninstalled."
        ;;    so per the index principle it outranks any cross-reference or
        ;;    prefix-analysis, which only infer where a *related* root sits.
        (let ((hit (diogenes-tgl--index-locate-key key index nil)))
-         (when hit
+         (when (and hit
+                    (diogenes-tgl--page-holds-key-p (nth 0 hit) (nth 1 hit) key))
            (cl-destructuring-bind (tomus page col letter kind) hit
              (list :via 'index :tomus tomus :page page
                    :column col :letter letter :match kind))))
