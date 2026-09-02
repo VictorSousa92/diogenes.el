@@ -262,6 +262,17 @@ FILE defaults to `diogenes-montanari-pdf-file'."
 ;;;; HEADWORD -> PAGE
 ;;;; --------------------------------------------------------------------
 
+(defun diogenes-montanari--page-after (page low)
+  "The (KEY . PAGE) in LOW for the first page after PAGE, or nil.
+LOW is in order, so this is the entry following the one whose page is PAGE --
+and where PAGE is nil, the first entry of all, a word sorting before every
+headword in the book."
+  (if (null page)
+      (car low)
+    (cl-loop for rest on low
+             when (equal (cdr (car rest)) page)
+             return (cadr rest))))
+
 (defun diogenes-montanari--page-for-word (word &optional file)
   "Return the Montanari page number for WORD's entry.
 The index is keyed on each page's FIRST headword (its low bound),
@@ -295,7 +306,25 @@ word is itself garbled can be off by a page or two; adjust
       ;; Δία vs διά, where no straddle holds) on their low-bound page.
       (let ((start (gethash key straddle)))
         (when (and start (or (null best) (< start best)))
-          (setq best start))))
+          (setq best start)))
+      ;; A PREFIX, not a word.  `C-u L\=' invites the beginning of a word, and a
+      ;; bare letter sorts before every headword that begins with it -- `e\=' is
+      ;; less than `ea\=' -- so the rule above sends a reader asking for epsilon
+      ;; to the last page of delta.
+      ;;
+      ;; Where the page AFTER the chosen one opens with a headword having KEY as
+      ;; a prefix, that page is where the letter begins.  A whole word is
+      ;; untouched: `dwrea\=' is the prefix of nothing on the next page.
+      ;; And only where the chosen page has not ALREADY reached the key:
+      ;; asking for `ea\=' exactly must stay on the page `ea\=' opens, though
+      ;; `eautou\=' on the next page begins with it too.
+      (let* ((here (cl-loop for (lo . page) in low
+                            when (equal page best) return lo))
+             (next (diogenes-montanari--page-after best low)))
+        (when (and next
+                   (not (and here (string-prefix-p key here)))
+                   (string-prefix-p key (car next)))
+          (setq best (cdr next)))))
     (let ((page (or best (cdr (car low)))))
       (when page
         (+ page diogenes-montanari-page-offset)))))
