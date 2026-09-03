@@ -2819,7 +2819,7 @@ Nil where the entry cannot be read, an unreadable entry being no evidence."
             (let ((form (match-string 1 text)))
               ;; Hyphen-initial only: an `<orth>' without one is an ordinary
               ;; variant spelling, which is no reason to doubt anything.
-              (when (and (string-match-p "\\`[-\u2010\u2011]" form)
+                            (when (and (string-match-p "\\`-" form)
                          (equal (diogenes--greek-letters-only form) want))
                 (setq found t))))
           found)))))
