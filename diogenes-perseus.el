@@ -2744,104 +2744,6 @@ distinction; otherwise file order is kept.  Governed by
 	     (list (cons assimilated -2))
 	   (diogenes--expand-homographs offset conf lemma lang file)))))))
 
-(defcustom diogenes-lookup-drop-suffix-analyses t
-  "Whether to drop an analysis whose entry presents its lemma as a suffix.
-
-`τέως\=' has two analyses.  The first, lemma `τέος\=', carries the offset of
-`κινδυν-ευτέον\=' and that entry\='s gloss, `one must venture', Perseus took the
-`-τέος\=' at the end of it for a headword.  So a reader looking up `τέως\=' was
-shown an entry about venturing.
-
-`-τέος\=', `-τέα\=', `-τέον\=' are the verbal-adjective suffixes and not words.  The
-LSJ marks them the only way it can, with a leading hyphen, inside the entry of a
-word that uses them -- and that mark is what this reads.  See
-`diogenes--lemma-shown-as-suffix-p\=' for why the test is narrow enough to leave
-the prefixed compounds alone, those being 7 analyses in every 100 and every one
-of them right."
-  :type 'boolean
-  :group 'diogenes)
-
-(defun diogenes--greek-letters-only (text)
-  "TEXT as bare Greek letters: no accents, no hyphens, no case.
-So that a lemma in one form can be compared with a headword in another."
-  (let* ((decomposed (ucs-normalize-NFD-string (or text "")))
-         (kept (cl-loop for c across decomposed
-                        unless (<= #x0300 c #x036f)
-                        collect (downcase c))))
-    (apply #'string
-           (cl-remove-if-not
-            (lambda (c)
-              (let ((o (if (characterp c) c 0)))
-                (or (<= #x03b1 o #x03c9) (<= #x0391 o #x03a9))))
-            (mapcar (lambda (c)
-                      (if (eq c ?\N{GREEK SMALL LETTER FINAL SIGMA})
-                          ?\N{GREEK SMALL LETTER SIGMA}
-                        c))
-                    kept)))))
-
-(defun diogenes--lemma-shown-as-suffix-p (offset lemma lang &optional file)
-  "Whether the entry at OFFSET names LEMMA as a hyphen-initial form.
-
-The LSJ says which forms an entry covers, in `<orth>' elements, and where the
-form is a suffix it writes it with a leading hyphen.  `κινδυν-ευτέον' ends:
-
-    <pos>Adj.</pos> <orth lang=\"greek\">-τέος</orth>, <itype>α</itype>, ...
-
-So the test is the dictionary's own markup: the lemma equals one of the
-entry's hyphen-initial forms, and is not the entry's own key.
-
-Not `extent=\"suff\"' on the head, which says the HEADWORD is printed truncated
--- `κινδυν-ευτέον' for `κινδυνευτέον' -- and appears on 55252 entries.  That is
-most of the compounds in the dictionary and would filter nothing usefully.
-
-And not a hyphen anywhere in the text, which was the first attempt: the entry's
-prose has hyphens of its own, and the test would have caught the compounds it
-exists to protect.
-
-Nil where the entry cannot be read, an unreadable entry being no evidence."
-  (let* ((dict (or file (diogenes--dict-file lang)))
-         (line (car (diogenes--get-dict-line dict offset))))
-    (when (and line lemma)
-      (let* ((text (if (multibyte-string-p line) line
-                     (decode-coding-string line 'utf-8)))
-             (want (diogenes--greek-letters-only
-                    (diogenes--perseus-beta-to-utf8 lemma)))
-             (key (and (string-match "key=\"\\([^\"]+\\)\"" text)
-                       (diogenes--greek-letters-only
-                        (diogenes--perseus-beta-to-utf8
-                         (match-string 1 text)))))
-             (found nil)
-             (start 0))
-        (when (and want (> (length want) 0) (not (equal key want)))
-          (while (and (not found)
-                      (string-match "<orth[^>]*>\\([^<]+\\)</orth>" text start))
-            (setq start (match-end 0))
-            (let ((form (match-string 1 text)))
-              ;; Hyphen-initial only: an `<orth>' without one is an ordinary
-              ;; variant spelling, which is no reason to doubt anything.
-              (when (and (string-match-p "\\`[-\u2010\u2011]" form)
-                         (equal (diogenes--greek-letters-only form) want))
-                (setq found t))))
-          found)))))
-
-(defun diogenes--drop-suffix-analyses (record dicts lang &optional file)
-  "DICTS without the entries that present their lemma as a suffix.
-Never all of them: where every analysis fails the test the list is returned
-whole, an empty lookup being worse than a wrong one and the test being a
-safeguard rather than an authority."
-  (if (not diogenes-lookup-drop-suffix-analyses)
-      dicts
-    (let ((kept (cl-loop
-                 for (offset . conf) in dicts
-                 for lemma = (cl-loop for a in (plist-get record :analyses)
-                                      thereis (and (= offset (plist-get a :offset))
-                                                   (plist-get a :lemma)))
-                 unless (and lemma
-                             (diogenes--lemma-shown-as-suffix-p
-                              offset lemma lang file))
-                 collect (cons offset conf))))
-      (or kept dicts))))
-
 (defun diogenes--show-analysis-entries (dicts lang &optional file)
   "Show the entries named by DICTS, an alist of (OFFSET . CONF).
 The first goes into a fresh lookup buffer and the rest are appended to
@@ -3732,10 +3634,7 @@ headword, exactly as the application does."
 		 (dicts (diogenes--analyses-dicts record)))
 	    (message "%s does not parse; analysed by Morpheus" word)
 	    (let ((buffer (diogenes--show-analysis-entries
-			   (diogenes--drop-suffix-analyses
-			    record
-			    (diogenes--expand-uncertain-dicts record dicts lang)
-			    lang)
+			   (diogenes--expand-uncertain-dicts record dicts lang)
 			   lang)))
 	      (when diogenes-lookup-show-analysis
 		(with-current-buffer buffer
@@ -3760,12 +3659,9 @@ headword, exactly as the application does."
 	      (message "No dictionary entry for %s; searching by headword" word)
 	      (diogenes--lookup-dict word lang))
 	  (let ((buffer (diogenes--show-analysis-entries
-			 (diogenes--drop-suffix-analyses
-			  record
-			  (if diogenes-lookup-show-all-entries
-			      (diogenes--expand-uncertain-dicts record dicts lang)
-			    (diogenes--choose-analysis record dicts word))
-			  lang)
+			 (if diogenes-lookup-show-all-entries
+			     (diogenes--expand-uncertain-dicts record dicts lang)
+			   (diogenes--choose-analysis record dicts word))
 			 lang)))
 	    (when diogenes-lookup-show-analysis
 	      (with-current-buffer buffer
