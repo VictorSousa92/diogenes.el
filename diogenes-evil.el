@@ -68,6 +68,59 @@ dictionary keys into normal state by hand -- which costs `o', `d', `p', `b',
   :type 'boolean
   :group 'diogenes-evil)
 
+(defcustom diogenes-evil-lent-keys '("[" "]")
+  "Keys to lend from normal state to the buffers started in Emacs state.
+
+Emacs state costs a reader everything evil binds, and most of it is no loss in a
+buffer that cannot be typed in.  The brackets are a loss.  Under Doom they are
+keymaps and carry a family apiece -- `]F\=' and `[F\=' between frames, `]b\=' and
+`[b\=' between buffers, `]f\=' and `[f\=' between files -- and moving among frames
+is precisely what a reader wants when the entries open in frames of their own.
+
+Lending the key lends the map, so the whole family comes at once.
+
+Set to nil to lend nothing.  Other keys may be added, though a key that is a
+COMMAND rather than a keymap will shadow whatever the Diogenes buffer binds it
+to, which is what Emacs state was chosen to avoid."
+  :type '(repeat string)
+  :group 'diogenes-evil)
+
+(defun diogenes-evil--mode-map (mode)
+  "The keymap of MODE, or nil if it has none yet.
+By name, `foo-mode\=' having `foo-mode-map\=': the maps live in files this one
+does not require, so they may not exist when this is called."
+  (let ((symbol (intern-soft (concat (symbol-name mode) "-map"))))
+    (and symbol (boundp symbol) (keymapp (symbol-value symbol))
+         (symbol-value symbol))))
+
+(defun diogenes-evil-lend-keys (&optional mode)
+  "Lend `diogenes-evil-lent-keys\=' from normal state to MODE, or to all of them.
+
+What normal state has for the key is bound to it in the mode\\='s own map.  Where
+normal state has a KEYMAP -- which is what `[\=' and `]\=' are under Doom -- the
+whole family is lent with it.
+
+A map that already uses the key keeps what it has: the point is to restore what
+Emacs state took away, not to take something else.  Nothing is done where evil
+is absent, or where the key is bound to nothing in normal state."
+  (interactive)
+  (when (and diogenes-evil-lent-keys
+             (boundp 'evil-normal-state-map)
+             (keymapp evil-normal-state-map))
+    (dolist (mode (if mode (list mode) diogenes-evil-emacs-state-modes))
+      (let ((map (diogenes-evil--mode-map mode)))
+        (when map
+          (dolist (key diogenes-evil-lent-keys)
+            (let ((lent (lookup-key evil-normal-state-map (kbd key)))
+                  (mine (lookup-key map (kbd key))))
+              ;; Only where the mode has nothing of its own for it.  A number
+              ;; means the key is a prefix of something longer in this map,
+              ;; which is a use too.
+              (when (and lent (not (numberp lent))
+                         (or (null mine) (numberp mine)
+                             (eq mine 'self-insert-command)))
+                (keymap-set map key lent)))))))))
+
 (defvar diogenes-evil--set nil
   "The modes this file has set an initial state for.
 So that `diogenes-evil-uninstall' can undo exactly those, and no more.")
@@ -151,6 +204,13 @@ elsewhere -- `evil-set-initial-state' in an init file wins."
                                         diogenes-corpora
                                         pdf-view doc-view reader))
       (with-eval-after-load feature (diogenes-evil-bind-normal-state-key)))
+    ;; And the brackets lent back: Emacs state costs a reader `]F\=' and `[F\='
+    ;; among the rest, and with the entries in frames of their own that is how
+    ;; one moves between them.  After the maps exist, as above.
+    (dolist (feature '(diogenes-perseus diogenes-forms diogenes-search
+                                        diogenes-corpora))
+      (with-eval-after-load feature (diogenes-evil-lend-keys)))
+    (diogenes-evil-lend-keys)
     (when (called-interactively-p 'interactive)
       (message "Diogenes buffers start in Emacs state; %s for normal state"
                (or diogenes-evil-normal-state-key "C-z")))))
