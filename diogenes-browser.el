@@ -1283,9 +1283,15 @@ This is what the buffer can say about WHERE IT IS.  It keeps no record of that
 display -- but every line carries its citation as a text property, so the
 position is readable from the text even though it is not remembered."
   (if (use-region-p)
-      (cons (diogenes-browser-citation-at (region-beginning))
-            (diogenes-browser-citation-at (max (region-beginning)
-                                               (1- (region-end)))))
+      (let ((start (diogenes-browser-citation-at (region-beginning)))
+            (end (diogenes-browser-citation-at (max (region-beginning)
+                                                    (1- (region-end))))))
+        ;; NOT A RANGE WHERE BOTH ENDS ARE THE SAME LINE.  A region marked
+        ;; within one line, or across a wrapped one, gave END equal to START
+        ;; and everything downstream then wrote it out twice:
+        ;; `Arist. Metaph. 1048a27-1048a27', which says no more than
+        ;; `1048a27' and says it worse.
+        (cons start (unless (equal start end) end)))
     (cons (diogenes-browser-citation-at) nil)))
 
 (defcustom diogenes-abbreviation-overrides nil
