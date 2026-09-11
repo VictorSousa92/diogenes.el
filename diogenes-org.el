@@ -55,6 +55,10 @@
                   (&key goto keys node info props templates))
 (declare-function org-roam-node-create "org-roam-node" (&rest args))
 (declare-function diogenes-browser-reference "diogenes-browser" ())
+(declare-function diogenes-reference-to-string "diogenes-browser" (reference))
+(declare-function diogenes--get-works-list "diogenes-perl-interface"
+                  (options author))
+(declare-function diogenes--assoc-cadr "diogenes-lisp-utils" (key alist))
 (declare-function diogenes-browser-citation-at "diogenes-browser"
                   (&optional position))
 (declare-function diogenes-citation-to-key "diogenes-utils" (citation))
@@ -222,13 +226,75 @@ For `org-store-link\\=', which is what `C-c l\\=' calls."
            ;; keeping notes this way.
            :description (diogenes-org--label it)))))))
 
+(defcustom diogenes-org-title-by-name t
+  "Whether a note is titled with the work\='s own name.
+
+Non-nil asks the corpus what the work is called and titles the note with it:
+`Aristotle, Metaphysica 1048a27\='.  The corpora give the Latin titles the
+manuscripts and editions use -- Metaphysica, Ethica Eudemia, De Anima -- which
+is how a classicist refers to them and what a reader wants to see in a list of
+notes a year hence.
+
+Nil uses the dictionaries\=' abbreviations instead, `Arist. Metaph. 1048a27\=',
+which are shorter and are what one writes in a footnote.
+
+Asking the corpus means a call into Perl, so the answer is remembered: once
+per author for as long as Emacs runs."
+  :type 'boolean
+  :group 'diogenes-org)
+
+(defvar diogenes-org--work-names (make-hash-table :test 'equal)
+  "What the corpus calls each work, keyed by (CORPUS AUTHOR).
+A call into Perl is dear enough to be worth making once.")
+
+(defun diogenes-org--work-name (corpus author work)
+  "What CORPUS calls WORK of AUTHOR, or nil.
+
+The corpus\='s own name -- `Metaphysica\=', `Ethica Eudemia\=' -- which is the
+Latin title the editions use, and not the number the database files it under."
+  (when (and corpus author work)
+    (let* ((key (list corpus author))
+           (map (if (gethash key diogenes-org--work-names)
+                    (gethash key diogenes-org--work-names)
+                  (puthash key
+                           (condition-case nil
+                               (or (diogenes--get-works-list
+                                    (list :type corpus) author)
+                                   'none)
+                             ;; NO CORPUS, NO NAME.  A reader without the
+                             ;; databases installed should still get a note,
+                             ;; titled by number, rather than an error.
+                             (error 'none))
+                           diogenes-org--work-names))))
+      (unless (eq map 'none)
+        (car (diogenes--assoc-cadr work map))))))
+
 (defun diogenes-org--label (it)
-  "The passage in IT as a reader writes it."
-  (let ((text (plist-get it :text))
-        (work (plist-get it :work)))
-    (cond ((and text work) (format "%s %s" work text))
-          (text text)
-          (t "a passage"))))
+  "The passage in IT as a SCHOLAR writes it.
+
+`Arist. Metaph. 1048a27\=', and not `025 1048a27\='.  The work\='s number is what
+the corpus calls it and is no use as the title of a note: a reader looking down
+a list of notes a year hence should see which text each is on.
+
+`diogenes-reference-to-string\=' does the naming, and falls back by degrees --
+the work\='s abbreviation where the dictionaries have one, the author\='s alone
+where they name him but not it, and the numbers where they name neither.  So a
+text no lexicographer quoted still gets a title, and an unambiguous one."
+  (or (and diogenes-org-title-by-name
+           (let ((name (diogenes-org--work-name
+                        (plist-get it :corpus)
+                        (diogenes-org--digits (plist-get it :author))
+                        (diogenes-org--digits (plist-get it :work))))
+                 (text (plist-get it :text)))
+             (and name text (format "%s %s" name text))))
+      (and (fboundp 'diogenes-reference-to-string)
+           (let ((said (diogenes-reference-to-string it)))
+             (and said (not (string-empty-p said)) said)))
+      (let ((text (plist-get it :text))
+            (work (plist-get it :work)))
+        (cond ((and text work) (format "%s %s" work text))
+              (text text)
+              (t "a passage")))))
 
 ;;;###autoload
 (with-eval-after-load 'org
