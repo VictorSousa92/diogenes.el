@@ -3111,14 +3111,66 @@ and i exchanged (see `diogenes--latin-form-variants')."
      ;; usual offsets and confidences, and nothing here has to know how an
      ;; analysis is shaped.
      ;;
-     ;; Last of all, and only for Greek: it is the coarsest test, and
-     ;; anything that parses as written must find itself first.
+     ;; THE ACCENT MOVED, tried a few cheap ways before the dear one.
+     ;;
+     ;; `diogenes--try-parse' costs almost nothing: the .idt index gives the
+     ;; bucket for the first three characters and the binary search stays
+     ;; inside it.  `diogenes--parse-all' costs a great deal: the whole
+     ;; analyses file -- nine hundred thousand keys -- read into a hashtable,
+     ;; and then every key of it transformed to build a second table without
+     ;; diacritics.  Seconds, the first time in a session, for one word.
+     ;;
+     ;; A Greek word carries ONE accent, and the spelling sought differs from
+     ;; the spelling given only in where that accent sits and which it is.  So
+     ;; the accent is put on each vowel in turn, acute, grave and circumflex,
+     ;; and each spelling looked up exactly: six lookups for `muon', twelve
+     ;; for a long word, and every one of them a binary search in one bucket.
+     (and (string= lang "greek")
+          (cl-loop for candidate in (diogenes--greek-accent-variants word)
+                   thereis (diogenes--try-parse candidate lang)))
+     ;; AND ONLY THEN THE WHOLE FILE, for a form the accents alone do not
+     ;; explain -- a breathing misread, an iota subscript dropped.  Dear, but
+     ;; once per session, and better than not finding the word.
      (and (string= lang "greek")
           (let ((found (ignore-errors
                          (diogenes--parse-all word lang nil t t))))
             (cl-loop for (key . _) in found
                      thereis (and (stringp key)
                                   (diogenes--try-parse key lang))))))))
+
+(defun diogenes--greek-accent-variants (word)
+  "WORD in beta code with its accent moved, every way it might sit.
+
+The accent is stripped and then put back on each vowel in turn -- acute,
+grave and circumflex -- because a Greek word carries one accent and an
+editor\='s may not be the wordlist\='s: Ross prints `mu=on\=' where the file has
+`mu/on\='.
+
+The BREATHINGS and the iota subscript are left as they stand.  They are part
+of the spelling, not of the accentuation: `a)nh/r\=' and `a(nh/r\=' are
+different words, where `a)nh/r\=' and `a)nh=r\=' are one word differently
+accented.
+
+The form as given is not among them, its own spelling having been tried
+already."
+  (let* ((bare (replace-regexp-in-string "[/\\\\=]" "" (or word "")))
+         (out nil))
+    (dotimes (i (length bare))
+      (when (memq (aref bare i) '(?a ?e ?i ?o ?u ?h ?w))
+        ;; AFTER THE BREATHING, which beta code writes between the vowel and
+        ;; the accent: `a)/nhr\=' and not `a/)nhr\='.  Putting the accent
+        ;; straight after the vowel made a spelling no wordlist can hold, and
+        ;; so six lookups that could not match.
+        (let ((at (1+ i)))
+          (while (and (< at (length bare))
+                      (memq (aref bare at) '(?\) ?\()))
+            (setq at (1+ at)))
+          (dolist (accent '("/" "\\\\" "="))
+            (push (concat (substring bare 0 at)
+                          accent
+                          (substring bare at))
+                  out)))))
+    (delete word (nreverse out))))
 
 (defun diogenes--choose-analysis (record dicts word)
   "Ask which lemma of RECORD to show; return its (OFFSET . CONF) alone.
