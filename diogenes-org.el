@@ -259,13 +259,20 @@ business -- but every line carries its citation as a text property, so the
 extent is read off the first and last lines of the text itself."
   (when (derived-mode-p 'diogenes-browser-mode)
     (let* ((it (diogenes-browser-reference))
+           ;; FORWARD FOR THE FIRST, backward for the last.
+           ;; `diogenes-browser-citation-at' searches BACKWARD where the line
+           ;; it is given has no citation of its own -- a citation belonging
+           ;; to the lines that follow it -- so asked at the very first line
+           ;; of the buffer it had nothing behind it and answered nil, which
+           ;; is every browser buffer there is.
            (first (save-excursion
                     (goto-char (point-min))
-                    (diogenes-browser-citation-at)))
+                    (or (diogenes-browser-citation-at)
+                        (let ((match (text-property-search-forward 'cit)))
+                          (and match (prop-match-value match))))))
            (last (save-excursion
-                   (goto-char (point-max))
-                   (diogenes-browser-citation-at (max (point-min)
-                                                      (1- (point-max)))))))
+                   (goto-char (max (point-min) (1- (point-max))))
+                   (diogenes-browser-citation-at))))
       (when (and it first)
         (let ((base (format "%s:%s:%s:"
                             (or (plist-get it :corpus) "tlg")
