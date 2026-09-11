@@ -688,6 +688,70 @@ The counterpart of `diogenes-browser-page-forward\='."
   (diogenes--send-cmd-to-browser
    (concat (number-to-string (diogenes-browser--page-size)) "p")))
 
+(defcustom diogenes-browser-goto-by-level t
+  "Whether `diogenes-browser-goto-passage\=' asks for a citation level by level.
+
+Non-nil asks one question for each level the corpus names -- `Stephanus page\=',
+then `section\=', then `line\=' -- so that a reader need not remember which
+levels a work has, nor in what order, nor what separates them.  An empty answer
+ends the citation, a passage naming fewer levels than the work has being
+perfectly good.
+
+Nil asks once, for the whole citation with full stops between its levels:
+`327a.5\='.  Quicker for a reader who knows the form and is citing all day, and
+the older behaviour.
+
+Either way the whole may be typed at the first prompt: a separator in that
+answer can mean nothing else, so `327a.5\=' is taken whole even when the levels
+are being asked for one at a time."
+  :type 'boolean
+  :group 'diogenes)
+
+(defun diogenes-browser--read-levels (labels)
+  "A citation read one level at a time, as LABELS name them.
+
+ASKED LEVEL BY LEVEL, and not all at once.  A citation is not one string but
+several numbers, and which several depends on the work: Plato is cited by
+Stephanus page, section and line, Aristotle by Bekker page, column and line,
+and a historian by book, chapter and section.  A single prompt made the reader
+remember both the order and the separators, and getting either wrong sent the
+request to the wrong place -- or nowhere, the corpus refusing a citation with
+too many levels in it.
+
+The labels are the corpus\='s own, so the prompts are too: `Stephanus page\=',
+then `section\=', then `line\='.  Where the corpus did not say them the levels
+are simply numbered.
+
+AN EMPTY ANSWER ENDS IT, so a reader who wants the top of a page gives the
+page and presses return twice -- a citation may name as few levels as it
+likes, and the corpus begins where it is told.
+
+AND THE WHOLE MAY STILL BE TYPED AT THE FIRST PROMPT.  `1053a.15\=' at
+`Bekker page:\=' is taken as the whole citation rather than as a page: a reader
+who knows the form should not be made to answer three questions, and a
+separator in the first answer can mean nothing else."
+  (let* ((names (if labels
+                    (mapcar #'string-trim labels)
+                  (list "level 1" "level 2" "level 3")))
+         (levels nil))
+    (catch 'done
+      (dolist (name names)
+        (let ((answer (string-trim
+                       (read-string
+                        (format "%s%s: "
+                                (capitalize (substring name 0 1))
+                                (substring name 1))))))
+          (when (string-empty-p answer)
+            ;; Nothing given: the citation ends here.
+            (throw 'done nil))
+          (if (and (null levels) (string-match "[.: ]" answer))
+              ;; THE WHOLE CITATION AT THE FIRST PROMPT, which is what a
+              ;; separator in it can only mean.
+              (progn (setq levels (split-string answer "[.: ]+" t))
+                     (throw 'done nil))
+            (push answer levels)))))
+    (nreverse levels)))
+
 (defun diogenes-browser-goto-passage (&optional passage)
   "Open this work at PASSAGE, asking for it when not given.
 A citation as the work numbers itself -- `384a\=', `1.5.2\=', `1053a15\=' -- and not
@@ -706,12 +770,21 @@ the passage at the top rather than paged to."
              " -- the passage reference is not in this version")))
   (let* ((labels (and (boundp 'diogenes--browser-labels)
                       diogenes--browser-labels))
-         (prompt (if labels
+         (levels
+          (cond
+           (passage (split-string (string-trim passage) "[.: ]+" t))
+           (diogenes-browser-goto-by-level
+            (diogenes-browser--read-levels labels))
+           ;; ALL AT ONCE, the older way: the levels named in the prompt
+           ;; where the corpus told us them, and full stops between.
+           (t (split-string
+               (string-trim
+                (read-string
+                 (if labels
                      (format "Go to (%s): "
                              (string-join (mapcar #'string-trim labels) ", "))
-                   "Go to (levels separated by full stops): "))
-         (answer (or passage (read-string prompt)))
-         (levels (split-string (string-trim answer) "[.: ]+" t)))
+                   "Go to (levels separated by full stops): ")))
+               "[.: ]+" t)))))
     (unless levels
       (user-error "No passage given"))
     ;; Outermost level first, as Diogenes takes them.
