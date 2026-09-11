@@ -982,12 +982,19 @@ stolen silently."
 
 ;;; Keys
 
-(defcustom diogenes-org-notes-key "C-c C-a"
+(defcustom diogenes-org-notes-key "C-c C-y"
   "Key in the browser for the notes on what it is showing.  Nil binds nothing.
 
-`C-c C-a\=' for annotations.  Not `C-c C-o\=', which the browser already gives to
-`diogenes-lookup-in-dictionary\=', nor `C-c C-n\=' or `C-c C-p\=', which turn the
-page."
+WHAT WAS LEFT.  Diogenes has taken a good deal of the `C-c\=' and a letter
+space already -- `C-c C-a\=' goes to the analysis, `C-c C-b\=' to the browser,
+`C-c C-l\=' to the lookup, `C-c C-c\=' looks a word up, `C-c C-o\=' opens the
+dictionary, `C-c C-n\=' and `C-c C-p\=' turn the page, `C-c C-q\=' quits,
+`C-c C-t\=' toggles the citations, and the editions package has `C-c C-r\=' for
+the printed page.  `C-c C-y\=' is free, and near enough to nothing else to be
+remembered.
+
+A binding already there is left alone and said so, so choosing badly here
+costs nothing but a message."
   :type '(choice (const :tag "Bind nothing" nil) string)
   :group 'diogenes-org)
 
