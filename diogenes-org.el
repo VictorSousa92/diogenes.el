@@ -876,6 +876,80 @@ how the note is found again and how it leads back."
      :keys "d")))
 
 
+;;; Back to the text
+
+;; FROM ANYWHERE IN THE NOTE, and not from a link in it.  A note's `ROAM_REFS'
+;; already says which passage it is on -- it is what the note was found by --
+;; so a reader in a note has no business hunting for a link to click, and a
+;; note written before there were links has none to hunt for.
+;;
+;; The reference is looked for outwards from point: this heading's, then its
+;; parent's, then the file's.  Which is what a reader means by `the passage
+;; this is about' in a file of notes on a dozen passages -- the nearest one
+;; that says.
+
+(defun diogenes-org--ref-at-point ()
+  "The passage reference governing point, or nil.
+
+Outwards from point: the entry\='s own `ROAM_REFS\=', then those of the headings
+above it, then the file\='s.  The first that names a passage wins, an inner
+note being about a narrower thing than its parent."
+  (when (derived-mode-p 'org-mode)
+    (save-excursion
+      (catch 'found
+        ;; Every heading from here outwards, and then the file itself.
+        (let ((looking t))
+          (while looking
+            (dolist (ref (append
+                          (org-entry-get-multivalued-property
+                           (point) "ROAM_REFS")
+                          nil))
+              (when (diogenes-org--passage-parts ref)
+                (throw 'found ref)))
+            ;; A property drawer may hold the refs unsplit, where they were
+            ;; written by hand rather than by org-roam.
+            (let ((raw (org-entry-get (point) "ROAM_REFS")))
+              (when raw
+                (dolist (ref (split-string raw "[ \t]+" t))
+                  (when (diogenes-org--passage-parts ref)
+                    (throw 'found ref)))))
+            (setq looking (ignore-errors (org-up-heading-safe)))))
+        ;; And the file\='s own keyword, for a note that is one file.
+        (let ((raw (cadr (assoc "ROAM_REFS"
+                                (org-collect-keywords '("ROAM_REFS"))))))
+          (when raw
+            (dolist (ref (split-string raw "[ \t]+" t))
+              (when (diogenes-org--passage-parts ref)
+                (throw 'found ref)))))
+        nil))))
+
+;;;###autoload
+(defun diogenes-org-goto-passage ()
+  "Open the passage this note is about.
+
+Read from the note\='s own `ROAM_REFS\=', so it works anywhere in the note and
+in notes written before there were links to click.
+
+The browser already reading the work is reused where there is one -- see
+`diogenes-org-reuse-browser\=' -- and the lines the note was made on are
+marked."
+  (interactive)
+  (let ((ref (diogenes-org--ref-at-point)))
+    (unless ref
+      (user-error
+       "This note says no passage: no ROAM_REFS naming one, here or above"))
+    (diogenes-org-follow-link
+     (replace-regexp-in-string
+      (concat "\\`" (regexp-quote diogenes-org-link-type) ":") "" ref))))
+
+(defcustom diogenes-org-goto-key "C-c C-d"
+  "Key in an org buffer for opening the passage a note is about.
+Nil binds nothing.  `C-c C-d\=' for Diogenes; it is `org-deadline\=' by default,
+so a reader who wants that should choose another."
+  :type '(choice (const :tag "Bind nothing" nil) string)
+  :group 'diogenes-org)
+
+
 ;;; Keys
 
 (defcustom diogenes-org-notes-key "C-c C-o"
@@ -905,10 +979,25 @@ its own business."
          ((and taken (not (numberp taken)))
           (message "Diogenes: %s is already %s, so %s is unbound"
                    key taken command))
-         (t (keymap-set diogenes-browser-mode-map key command)))))))
+         (t (keymap-set diogenes-browser-mode-map key command))))))
+  ;; AND IN ORG, for the way back.  `C-c C-d' is `org-deadline' out of the
+  ;; box, so a binding already there is left alone and said so.
+  (when (and diogenes-org-goto-key (boundp 'org-mode-map))
+    (let ((taken (keymap-lookup org-mode-map diogenes-org-goto-key)))
+      (cond
+       ((eq taken #'diogenes-org-goto-passage))
+       ((and taken (not (numberp taken)))
+        (message "Diogenes: %s in org is already %s, so %s is unbound"
+                 diogenes-org-goto-key taken 'diogenes-org-goto-passage))
+       (t (keymap-set org-mode-map diogenes-org-goto-key
+                      #'diogenes-org-goto-passage))))))
 
 ;;;###autoload
 (with-eval-after-load 'diogenes-browser
+  (diogenes-org-install-keys))
+
+;;;###autoload
+(with-eval-after-load 'org
   (diogenes-org-install-keys))
 
 (provide 'diogenes-org)
