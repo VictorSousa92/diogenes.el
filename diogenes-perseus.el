@@ -3060,27 +3060,8 @@ Then, on a miss:
 needs only one of the two."
   (let* ((plain (diogenes--beta-drop-capital-marker word))
          (dropped (diogenes--beta-drop-extra-accents word))
-         (both (diogenes--beta-drop-extra-accents plain))
-         ;; LAST, WITHOUT ANY ACCENT AT ALL.  An editor's accentuation is not
-         ;; always the wordlist's: Ross prints `mu=on' for the participle of
-         ;; `mu/w' where the file has `mu/on', and an exact match finds
-         ;; neither from the other -- so `mu=on' landed on `mu?omaxi/a', a
-         ;; battle of mice, being what sorts next to it.
-         ;;
-         ;; Last of all because it is the coarsest: a form stripped of its
-         ;; accents may stand for more than one word, and anything that
-         ;; parses as written must find itself first.
-         (bare (diogenes--beta-drop-all-accents word)))
-    (delete-dups (list word plain dropped both bare))))
-
-(defun diogenes--beta-drop-all-accents (word)
-  "WORD in beta code without acute, grave or circumflex.
-
-The breathings are KEPT.  They are part of the spelling and the wordlist
-keeps them: `a)nh/r\=' and `a(nh/r\=' are different words, where `a)nh/r\=' and
-`a)nh=r\=' are one word differently accented.  Dropping them too would make
-this a search for a shape rather than a word."
-  (replace-regexp-in-string "[/\\\\=]" "" (or word "")))
+         (both (diogenes--beta-drop-extra-accents plain)))
+    (delete-dups (list word plain dropped both))))
 
 (defun diogenes--do-parse (word lang)
   "Return the raw analyses record for WORD in LANG, or nil.
@@ -3109,10 +3090,35 @@ and i exchanged (see `diogenes--latin-form-variants')."
             ;; The word as written stays first, so nothing that parses today
             ;; stops parsing.
             (diogenes--greek-parse-candidates word))))
-    (cl-loop for variant in (delete-dups variants)
-             thereis (or (diogenes--try-parse variant lang)
-                         (and (string-match-p "[[:upper:]]" variant)
-                              (diogenes--try-parse (downcase variant) lang))))))
+    (or
+     (cl-loop for variant in (delete-dups variants)
+              thereis (or (diogenes--try-parse variant lang)
+                          (and (string-match-p "[[:upper:]]" variant)
+                               (diogenes--try-parse (downcase variant) lang))))
+     ;; THE WORDLIST'S OWN SPELLING, found by letting the accents go.
+     ;;
+     ;; An editor's accentuation is not always the file's: Ross prints
+     ;; `mu=on' for the participle of `mu/w' where the file has `mu/on'.
+     ;; Every variant above is an exact lookup, and the KEYS keep their
+     ;; accents, so no amount of stripping the query can reach a key spelled
+     ;; otherwise -- `mu=on' found nothing and the caller fell back on
+     ;; showing whatever sorted next to it, `mu?omaxi/a', a battle of mice.
+     ;;
+     ;; So the form is looked for with diacritics ignored on BOTH sides,
+     ;; which is what `diogenes-parse-greek' does and why that command found
+     ;; it.  What comes back is the file's own key, and THAT is parsed in the
+     ;; ordinary way -- so the record is built by the usual code, with the
+     ;; usual offsets and confidences, and nothing here has to know how an
+     ;; analysis is shaped.
+     ;;
+     ;; Last of all, and only for Greek: it is the coarsest test, and
+     ;; anything that parses as written must find itself first.
+     (and (string= lang "greek")
+          (let ((found (ignore-errors
+                         (diogenes--parse-all word lang nil t t))))
+            (cl-loop for (key . _) in found
+                     thereis (and (stringp key)
+                                  (diogenes--try-parse key lang))))))))
 
 (defun diogenes--choose-analysis (record dicts word)
   "Ask which lemma of RECORD to show; return its (OFFSET . CONF) alone.
