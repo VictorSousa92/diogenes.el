@@ -570,7 +570,7 @@ The links carry their kind first -- `passage', `entry', `page' -- so a
 reference to a dictionary entry is not mistaken for one to a text.  TO is nil
 where the reference names a single place rather than a stretch."
   (let* ((path (replace-regexp-in-string
-                (concat "\\\\`" (regexp-quote diogenes-org-link-type) ":")
+                (concat "\\`" (regexp-quote diogenes-org-link-type) ":")
                 "" (or path "")))
          (parts (diogenes-org--decode path)))
     (when (and (>= (length parts) 5) (equal (nth 0 parts) "passage"))
@@ -587,7 +587,7 @@ strings.  Which is what lets a note made on a stretch be found from inside it:
 `1048a.27' is less than `1048b.16' by arithmetic and not by spelling."
   (let (out)
     (dolist (level (split-string (or key "") "[.]" t))
-      (if (string-match "\\\\`\\\\([0-9]+\\\\)\\\\([a-e]\\\\)\\\\'" level)
+      (if (string-match "\\`\\([0-9]+\\)\\([a-e]\\)\\'" level)
           ;; A PAGE AND ITS COLUMN, which the corpora write as one level:
           ;; times ten and the letter's place, so `1048b' is above `1048a'
           ;; and below `1049a'.
@@ -595,7 +595,7 @@ strings.  Which is what lets a note made on a stretch be found from inside it:
                    (- (aref (match-string 2 level) 0) ?a))
                 out)
         (push (string-to-number
-               (if (string-match "\\\\([0-9]+\\\\)" level)
+               (if (string-match "\\([0-9]+\\)" level)
                    (match-string 1 level)
                  "0"))
               out)))
