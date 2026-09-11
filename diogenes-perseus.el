@@ -3060,8 +3060,27 @@ Then, on a miss:
 needs only one of the two."
   (let* ((plain (diogenes--beta-drop-capital-marker word))
          (dropped (diogenes--beta-drop-extra-accents word))
-         (both (diogenes--beta-drop-extra-accents plain)))
-    (delete-dups (list word plain dropped both))))
+         (both (diogenes--beta-drop-extra-accents plain))
+         ;; LAST, WITHOUT ANY ACCENT AT ALL.  An editor's accentuation is not
+         ;; always the wordlist's: Ross prints `mu=on' for the participle of
+         ;; `mu/w' where the file has `mu/on', and an exact match finds
+         ;; neither from the other -- so `mu=on' landed on `mu?omaxi/a', a
+         ;; battle of mice, being what sorts next to it.
+         ;;
+         ;; Last of all because it is the coarsest: a form stripped of its
+         ;; accents may stand for more than one word, and anything that
+         ;; parses as written must find itself first.
+         (bare (diogenes--beta-drop-all-accents word)))
+    (delete-dups (list word plain dropped both bare))))
+
+(defun diogenes--beta-drop-all-accents (word)
+  "WORD in beta code without acute, grave or circumflex.
+
+The breathings are KEPT.  They are part of the spelling and the wordlist
+keeps them: `a)nh/r\=' and `a(nh/r\=' are different words, where `a)nh/r\=' and
+`a)nh=r\=' are one word differently accented.  Dropping them too would make
+this a search for a shape rather than a word."
+  (replace-regexp-in-string "[/\\\\=]" "" (or word "")))
 
 (defun diogenes--do-parse (word lang)
   "Return the raw analyses record for WORD in LANG, or nil.
@@ -3621,49 +3640,14 @@ in the analyses record is fetched from the byte offset recorded there.
 Only a form that will not parse falls back on searching the dictionary by
 headword, exactly as the application does."
   (let* ((raw (diogenes--do-parse word lang))
-	 ;; THE WORDLIST'S ACCENT IS NOT ALWAYS THE TEXT'S.  Ross prints
-	 ;; `mu=on' for the participle of `mu/w' where the wordlist has
-	 ;; `mu/on': one and the same form, and an exact match finds neither
-	 ;; from the other.  So where the form as written is not there, it is
-	 ;; asked for again without diacritics -- which is what
-	 ;; `diogenes-parse-greek' does, and why that command found `mu=on'
-	 ;; while this did not and fell back on showing whatever sorted next
-	 ;; to it in the lexicon.
-	 ;;
-	 ;; The shipped analyses are searched, not Morpheus, so the offsets
-	 ;; and glosses are the ones the application itself would show.
-	 (loose (and (not raw)
-		     (let ((found (ignore-errors
-				    (diogenes--parse-all word lang nil t t))))
-		       ;; A LIST OF FORMS, one for each spelling that matched.
-		       ;; The first is taken: they are the same word differently
-		       ;; accented, and where they are not, the header says
-		       ;; which form was found.
-		       (and found (cdr (car found))))))
-	 (extra (and (not loose) (diogenes--extra-lemma word lang)))
+	 (extra (diogenes--extra-lemma word lang))
 	 ;; Only where the shipped data has nothing: its offsets and glosses
 	 ;; are better than anything that can be recovered from a lemma.
-	 (morpheus (and (not raw) (not loose) (not extra)
+	 (morpheus (and (not raw) (not extra)
 			(diogenes-morpheus-available-p)
 			(diogenes--morpheus-analyses word lang))))
     (if (not raw)
 	(cond
-	 ;; FOUND, once the accents were let go.  Shown exactly as a form that
-	 ;; parsed would be, the record having the same shape and the same
-	 ;; offsets; only the message says that the spelling differed.
-	 (loose
-	  (let* ((record (list :analyses loose :suppl nil))
-		 (dicts (diogenes--analyses-dicts record)))
-	    (message "%s parses without its accents" word)
-	    (let ((buffer (diogenes--show-analysis-entries
-			   (diogenes--expand-uncertain-dicts record dicts lang)
-			   lang)))
-	      (when diogenes-lookup-show-analysis
-		(with-current-buffer buffer
-		  (diogenes--lookup-insert-at-top
-		   (diogenes--format-analysis-header word lang record))
-		  (goto-char (point-min))))
-	      buffer)))
 	 (morpheus
 	  (let* ((record (list :analyses morpheus :suppl nil))
 		 (dicts (diogenes--analyses-dicts record)))
@@ -3684,12 +3668,8 @@ headword, exactly as the application does."
 	  (message "%s does not parse; showing %s" word extra)
 	  (diogenes--lookup-dict extra lang))
 	 (t
-	  ;; SAID PLAINLY.  What follows is not an analysis of the word but
-	  ;; whatever sorts nearest to it, which may be another word entirely:
-	  ;; `mu=on' used to fetch `mu?omaxi/a', a battle of mice.
-	  (message
-	   "%s does not parse; showing the nearest entry, which may be unrelated"
-	   word)
+	  (message "No results for %s, trying to look it up in the dictionaries!"
+		   word)
 	  (diogenes--lookup-dict word lang)))
       (let* ((record (diogenes--parse-analyses-record raw lang))
 	     (dicts (diogenes--analyses-dicts record)))
