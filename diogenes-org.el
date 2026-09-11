@@ -967,23 +967,35 @@ marked."
      (replace-regexp-in-string
       (concat "\\`" (regexp-quote diogenes-org-link-type) ":") "" ref))))
 
-(defcustom diogenes-org-goto-key "C-c C-d"
+(defcustom diogenes-org-goto-key "C-c C-x C-d"
   "Key in an org buffer for opening the passage a note is about.
-Nil binds nothing.  `C-c C-d\=' for Diogenes; it is `org-deadline\=' by default,
-so a reader who wants that should choose another."
+Nil binds nothing.
+
+`C-c C-x C-d\=' because the plain `C-c C-d\=' is `org-deadline\=', which a reader
+of org will want to keep; the `C-c C-x\=' prefix is where org itself puts its
+less common commands.  Set this to `\"C-c C-d\"\=' to take the shorter key
+anyway -- a binding already there is left alone and said so, so nothing is
+stolen silently."
   :type '(choice (const :tag "Bind nothing" nil) string)
   :group 'diogenes-org)
 
 
 ;;; Keys
 
-(defcustom diogenes-org-notes-key "C-c C-o"
-  "Key in the browser for the notes on what it is showing.  Nil binds nothing."
+(defcustom diogenes-org-notes-key "C-c C-a"
+  "Key in the browser for the notes on what it is showing.  Nil binds nothing.
+
+`C-c C-a\=' for annotations.  Not `C-c C-o\=', which the browser already gives to
+`diogenes-lookup-in-dictionary\=', nor `C-c C-n\=' or `C-c C-p\=', which turn the
+page."
   :type '(choice (const :tag "Bind nothing" nil) string)
   :group 'diogenes-org)
 
 (defcustom diogenes-org-note-key "C-c C-w"
-  "Key in the browser for making a note.  Nil binds nothing."
+  "Key in the browser for making a note.  Nil binds nothing.
+
+`C-c C-w\=' for writing one.  Free in the browser, where org gives it to
+`org-refile\=' -- but this is not an org buffer."
   :type '(choice (const :tag "Bind nothing" nil) string)
   :group 'diogenes-org)
 
