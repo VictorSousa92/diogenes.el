@@ -914,11 +914,36 @@ note being about a narrower thing than its parent."
                   (when (diogenes-org--passage-parts ref)
                     (throw 'found ref)))))
             (setq looking (ignore-errors (org-up-heading-safe)))))
-        ;; And the file\='s own keyword, for a note that is one file.
+        ;; AND THE FILE'S OWN, for a note that is one file and has no
+        ;; headings at all -- which is what org-roam writes: a property
+        ;; DRAWER at the very top, before `#+title:', and not a keyword.
+        ;; Walking outwards from point never reaches it, there being no
+        ;; heading to walk out of, and `org-collect-keywords' does not see a
+        ;; drawer.  So the top of the buffer is asked directly.
+        (save-excursion
+          (goto-char (point-min))
+          (let ((raw (org-entry-get (point) "ROAM_REFS")))
+            (when raw
+              (dolist (ref (split-string raw "[ \t]+" t))
+                (when (diogenes-org--passage-parts ref)
+                  (throw 'found ref))))))
+        ;; And a keyword, for a note written that way by hand.
         (let ((raw (cadr (assoc "ROAM_REFS"
                                 (org-collect-keywords '("ROAM_REFS"))))))
           (when raw
             (dolist (ref (split-string raw "[ \t]+" t))
+              (when (diogenes-org--passage-parts ref)
+                (throw 'found ref)))))
+        ;; LAST, THE TEXT ITSELF.  A note may carry the passage as a link in
+        ;; its body and nothing in a drawer -- one written before there were
+        ;; refs, or by a reader who types links and not properties.
+        (save-excursion
+          (goto-char (point-min))
+          (while (re-search-forward
+                  (concat "\\[\\[" (regexp-quote diogenes-org-link-type)
+                          ":\\([^]]+\\)\\]")
+                  nil t)
+            (let ((ref (match-string 1)))
               (when (diogenes-org--passage-parts ref)
                 (throw 'found ref)))))
         nil))))
