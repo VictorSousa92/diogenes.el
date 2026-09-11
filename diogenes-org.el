@@ -55,6 +55,11 @@
                   (&key goto keys node info props templates))
 (declare-function org-roam-node-create "org-roam-node" (&rest args))
 (declare-function diogenes-browser-reference "diogenes-browser" ())
+(declare-function diogenes-browser-citation-at "diogenes-browser"
+                  (&optional position))
+(declare-function diogenes-citation-to-key "diogenes-utils" (citation))
+(declare-function diogenes-citation-to-string "diogenes-utils"
+                  (citation labels))
 (declare-function diogenes-open-passage "diogenes"
                   (corpus author work passage))
 (declare-function diogenes-citation-to-key "diogenes-utils" (citation))
@@ -241,6 +246,67 @@ For `org-store-link\\=', which is what `C-c l\\=' calls."
 ;;;; THE NOTES ON THIS PASSAGE
 ;;;; --------------------------------------------------------------------
 
+(defun diogenes-org--page-span ()
+  "What the browser is showing, as (FROM . TO) references, or nil.
+
+THE WHOLE PAGE, and not the line at point.  A reader looking for notes is
+looking for whatever bears on what is in front of them: asking only about the
+line the cursor happens to rest on found nothing nine times in ten, and the
+note two lines up went unmentioned.
+
+The buffer keeps no record of where it is -- paging is the Perl process\='s
+business -- but every line carries its citation as a text property, so the
+extent is read off the first and last lines of the text itself."
+  (when (derived-mode-p 'diogenes-browser-mode)
+    (let* ((it (diogenes-browser-reference))
+           (first (save-excursion
+                    (goto-char (point-min))
+                    (diogenes-browser-citation-at)))
+           (last (save-excursion
+                   (goto-char (point-max))
+                   (diogenes-browser-citation-at (max (point-min)
+                                                      (1- (point-max)))))))
+      (when (and it first)
+        (let ((base (format "%s:%s:%s:"
+                            (or (plist-get it :corpus) "tlg")
+                            (diogenes-org--digits (plist-get it :author))
+                            (diogenes-org--digits (plist-get it :work)))))
+          (cons (concat base (diogenes-citation-to-key first))
+                (concat base (diogenes-citation-to-key (or last first)))))))))
+
+(defun diogenes-org--overlaps-p (reference from to)
+  "Whether REFERENCE\='s span meets the stretch FROM to TO.
+
+MEETS, and not merely falls within.  A note made on a paragraph that begins
+before this page and ends on it bears on the page as much as one made wholly
+inside it, and a reader turning to the page wants both."
+  (let ((r (diogenes-org--parse reference))
+        (a (diogenes-org--parse from))
+        (b (diogenes-org--parse to)))
+    (when (and r a b
+               (equal (nth 0 r) (nth 0 a))
+               (equal (nth 1 r) (nth 1 a))
+               (equal (nth 2 r) (nth 2 a)))
+      (let ((r-start (diogenes-org--levels (nth 3 r)))
+            (r-end (diogenes-org--levels (or (nth 4 r) (nth 3 r))))
+            (p-start (diogenes-org--levels (nth 3 a)))
+            (p-end (diogenes-org--levels (or (nth 4 b) (nth 3 b)))))
+        (and r-start p-start
+             ;; Two spans meet where neither ends before the other begins.
+             (diogenes-org--before-p r-start p-end)
+             (diogenes-org--before-p p-start r-end))))))
+
+(defun diogenes-org--where (reference)
+  "REFERENCE\='s own citation, as a reader writes it.
+
+The levels alone -- `327a.5-327b.4\=' -- the corpus, the author and the work
+being the same for every note offered and so worth none of the line.  Which is
+what a reader chooses by: not the title of the note but the passage it is on."
+  (let ((r (diogenes-org--parse reference)))
+    (if r
+        (concat (nth 3 r) (and (nth 4 r) (concat "-" (nth 4 r))))
+      reference)))
+
 (defun diogenes-org--refs ()
   "Every (REFERENCE NODE-ID TITLE) org-roam knows, for our own references.
 
@@ -264,20 +330,25 @@ they are read."
 
 ;;;###autoload
 (defun diogenes-org-notes (&optional all)
-  "The notes on the passage in hand.
+  "The notes on what the browser is showing.
 
-Found by comparing citations and not by matching strings, so a note made on
-327a5-327b4 is found from anywhere inside it -- which is how notes are
-actually made: on a stretch of argument, and then wanted from the middle of
-it.
+THE WHOLE PAGE is looked at, and not the line at point: a reader wants
+whatever bears on what is in front of them, and a note two lines above the
+cursor is as much to the point as one on it.
 
-With ALL, every note on this WORK rather than on this passage, which is what
-one wants on arriving at a dialogue rather than at a line."
+A NOTE IS OFFERED BY ITS PASSAGE -- `327a.5-327b.4\=' and then its title -- and
+offered even where there is only one, so that a reader sees WHICH line it was
+made on before opening it.  A note found is not always the note wanted, and
+the citation is how one can tell.
+
+With ALL, every note on this WORK rather than on this page, which is what one
+wants on arriving at a dialogue rather than at a line."
   (interactive "P")
-  (let ((here (diogenes-org--reference)))
-    (unless here
+  (let* ((span (diogenes-org--page-span))
+         (here (diogenes-org--reference)))
+    (unless (or span here)
       (user-error "Not in a browser, so there is no passage to look for"))
-    (let* ((parts (diogenes-org--parse here))
+    (let* ((parts (diogenes-org--parse (or (car span) here)))
            (found
             (cl-remove-if-not
              (lambda (row)
@@ -287,26 +358,40 @@ one wants on arriving at a dialogue rather than at a line."
                           (equal (nth 0 r) (nth 0 parts))
                           (equal (nth 1 r) (nth 1 parts))
                           (equal (nth 2 r) (nth 2 parts))))
-                 (diogenes-org--covers-p (nth 0 row) here)))
+                 (and span
+                      (diogenes-org--overlaps-p (nth 0 row)
+                                                (car span) (cdr span)))))
              (diogenes-org--refs))))
-      (cond
-       ((null found)
-        (message "No notes on %s%s"
-                 (diogenes-org--label (diogenes-browser-reference))
-                 (if all "" " -- C-u for the whole work")))
-       ((= (length found) 1)
-        (org-roam-node-open (org-roam-node-from-id (nth 1 (car found)))))
-       (t
-        (let* ((choices (mapcar (lambda (row)
-                                  (cons (format "%s   %s"
-                                                (nth 2 row) (nth 0 row))
-                                        row))
-                                found))
+      (if (null found)
+          (message "No notes on %s%s"
+                   (if all
+                       (or (plist-get (diogenes-browser-reference) :work)
+                           "this work")
+                     (diogenes-org--where (car span)))
+                   (if all "" " -- C-u for the whole work"))
+        ;; SORTED BY PASSAGE, so the list runs down the page as the text does
+        ;; rather than in whatever order the database answered.
+        (setq found
+              (sort found
+                    (lambda (a b)
+                      (diogenes-org--before-p
+                       (diogenes-org--levels
+                        (nth 3 (diogenes-org--parse (nth 0 a))))
+                       (diogenes-org--levels
+                        (nth 3 (diogenes-org--parse (nth 0 b))))))))
+        (let* ((choices
+                (mapcar (lambda (row)
+                          (cons (format "%-22s %s"
+                                        (diogenes-org--where (nth 0 row))
+                                        (or (nth 2 row) ""))
+                                row))
+                        found))
                (picked (completing-read
-                        (format "%d notes: " (length found)) choices nil t)))
+                        (format "%d note%s: " (length found)
+                                (if (= (length found) 1) "" "s"))
+                        choices nil t)))
           (org-roam-node-open
-           (org-roam-node-from-id (nth 1 (cdr (assoc picked choices)))))))))))
-
+           (org-roam-node-from-id (nth 1 (cdr (assoc picked choices))))))))))
 
 ;;;; --------------------------------------------------------------------
 ;;;; A NOTE ON THIS PASSAGE
