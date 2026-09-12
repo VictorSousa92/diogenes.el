@@ -394,7 +394,10 @@ the nearest entry and its offsets are returned."
       ;; the canonical, hyphen-free lemma (e.g. "tamquam" for the entry
       ;; displayed as "tam-quam").  Seed it into the properties so the
       ;; `head' handler can prefer it as the headword for OLD/TLL.
-      (let ((entry-key (cdr (assq 'key (cadr parsed)))))
+      (let ((entry-key (cdr (assq 'key (cadr parsed))))
+	    ;; ONE ENTRY, ONE STACK.  Otherwise the senses of the last entry
+	    ;; shown would still be in force at the top of the next.
+	    (diogenes--dict-sense-stack nil))
 	(diogenes--dict-process-elt
 	 parsed (list 'begin begin 'end end 'entry-key entry-key))))))
 
@@ -408,6 +411,40 @@ headword such as \"tam-quam\" that is split across child nodes."
     (string elt)
     (list (mapconcat #'diogenes--element-text (cddr elt) ""))
     (t "")))
+
+(defvar diogenes--dict-sense-stack nil
+  "The sense labels in force, outermost first, as an entry is walked.
+
+A stack and not a tree, because the senses of an entry are FLAT: the LSJ
+writes them as siblings and says how deep each is with a `level' attribute.
+Bound afresh for each entry by `diogenes--dict-process-entry'.")
+
+(defun diogenes--dict-sense-path (label level)
+  "The path to a sense of LEVEL labelled LABEL, or nil where it has none.
+
+Kept in `diogenes--dict-sense-stack\='.  A sense of level n replaces everything
+at n and deeper, that being what makes it a new branch rather than a
+continuation, and the path is what remains joined by stops.
+
+A sense with no label of its own takes no place on the stack -- Gaffiot and
+Georges write bare senses, and a path with an empty level in it names
+nothing -- but it does close the levels below it, a new sense being a new
+sense whether it is numbered or not."
+  (let ((depth (max 1 level)))
+    ;; BY LEVEL, AND NOT BY POSITION.  The stack holds (LEVEL . LABEL) pairs
+    ;; because an UNLABELLED sense takes no place on it -- the LSJ writes
+    ;; level-1 senses with no number, as mere paragraph breaks -- and after
+    ;; one of those the nth entry is no longer the nth level.  Truncating by
+    ;; position then kept a sibling as a parent, and two level-2 senses came
+    ;; out `II\=' and `II.III\=' where `II\=' and `III\=' were meant.
+    (setq diogenes--dict-sense-stack
+          (seq-remove (lambda (pair) (>= (car pair) depth))
+                      diogenes--dict-sense-stack))
+    (unless (string-empty-p label)
+      (setq diogenes--dict-sense-stack
+            (append diogenes--dict-sense-stack (list (cons depth label)))))
+    (and diogenes--dict-sense-stack
+         (string-join (mapcar #'cdr diogenes--dict-sense-stack) "."))))
 
 (defun diogenes--dict-process-elt (elt properties)
   "Process a parsed XML element of a dictionary entry recursively.
@@ -497,11 +534,20 @@ it may carry an `entry-key' (the canonical lemma of the entry)."
 	;; A sense with no `n' adds nothing and passes its parent's path on
 	;; unchanged -- Gaffiot and Georges have bare <sense> elements, and a
 	;; path with an empty level in it would name nothing.
-	(let* ((label (or (cdr (assoc 'n (cadr elt))) ""))
-	       (above (plist-get properties 'sense-path))
-	       (path (cond ((string-empty-p (string-trim label)) above)
-			   (above (concat above "." (string-trim label)))
-			   (t (string-trim label)))))
+	;; FLAT, AND DEEP BY ATTRIBUTE.  The senses of an LSJ entry are
+	;; siblings -- every one closes before the next opens -- and their
+	;; depth is the `level' attribute, not the nesting.  So a sense
+	;; cannot read its place from its ancestors: it has none, and
+	;; inheriting from them gave `2' where `III.2' was wanted.
+	;;
+	;; What is kept instead is a stack, one label to a level, as the
+	;; senses are met in order.  A sense of level n throws away
+	;; everything at n and deeper -- that is what makes it a new branch
+	;; -- and puts its own label at n.  The path is the stack joined.
+	(let* ((label (string-trim (or (cdr (assoc 'n (cadr elt))) "")))
+	       (level (string-to-number
+		       (or (cdr (assoc 'level (cadr elt))) "1")))
+	       (path (diogenes--dict-sense-path label level)))
 	  (push (concat "\n\n"
 			(propertize label 'font-lock-face 'success)
 			" ")
@@ -1123,9 +1169,16 @@ LSJ or Lewis & Short themselves -- they are what the others are offered
 BESIDE."
   (let ((lang (or (and (boundp 'diogenes--lookup-lang) diogenes--lookup-lang)
                   "greek")))
+    ;; OF THIS LANGUAGE ONLY.  A predicate may answer for any lookup buffer
+    ;; -- several ask no more than `am I in a Diogenes lookup?' -- so the
+    ;; first registration in the list claimed a Greek entry for a Latin
+    ;; dictionary, and an LSJ link said Lewis & Short.  The buffer says which
+    ;; language it holds; a dictionary of the other cannot be what is shown.
     (or (cl-loop for entry in diogenes--lookup-dictionaries
                  for predicate = (plist-get entry :buffer-p)
-                 when (and predicate (ignore-errors (funcall predicate)))
+                 when (and predicate
+                           (equal (plist-get entry :lang) lang)
+                           (ignore-errors (funcall predicate)))
                  return (list (plist-get entry :id)
                               (plist-get entry :name)
                               (or (plist-get entry :lang) lang)))
