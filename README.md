@@ -226,6 +226,27 @@ You can browse forward and backward with `C-c C-n`
 or simply by reaching the beginning or end of the buffer and using the
 arrow keys to go beyond the boundaries of the current buffer. 
 
+**Going to a passage.** `diogenes-browser-goto-passage` asks for a citation
+one level at a time, using the names the corpus itself gives them:
+
+```
+Stephanus page: 327
+section: a
+line: 5
+```
+
+- An **empty answer ends it**, so the top of a page is the page and two
+  returns.
+- The **whole may still be typed at the first prompt**: `327a.5` at *Stephanus
+  page* is taken as the entire citation, a separator there meaning nothing
+  else.
+- `diogenes-browser-goto-by-level` set to nil asks once instead, for the whole
+  citation with full stops between its levels.
+
+Which levels a work has depends on the work — Plato and Aristotle are cited
+one way, a historian another, and authors differ in what they count by. One
+prompt made a reader remember the order and the separators both.
+
 Additionally, there are commands in the browser mode that facilitate
 the post processing of the texts. `diogenes-browser-toggle-citations-
 (bound to ~C-c C-t`) removes or reinserts all citations from the
@@ -965,6 +986,27 @@ The middle step is the one that matters:
 - `desimus` without the mark is a key too — the present subjunctive of *dēsum* — so treating the mark as decoration answers about a word the text did not print.
 - `diogenes-latin-expand-contractions` set to nil turns the reading off, for a text that uses the mark otherwise.
 
+**Greek has the accent to contend with.** The wordlists keep one spelling of a
+word and an editor may print another, the accent sitting elsewhere or being a
+different accent: `μῦον` for the neuter participle of `μύω` where the file has
+`μύον`. Every lookup in the file is exact and the **keys keep their accents**,
+so stripping the query cannot reach a key spelled otherwise — `μῦον` found
+nothing, and the fallback showed whatever sorted next to it, `μυομαχία`, a
+battle of mice.
+
+So a Greek form that does not parse as written is tried again with its accent
+moved: on each vowel in turn, acute, grave and circumflex. Five or six lookups
+for a short word, and each is a binary search in one bucket of the index.
+
+- The **breathings** and the iota subscript are left alone. They are part of
+  the spelling, not of the accentuation: `ἀνήρ` and `ἁνήρ` are different words,
+  where `ἀνήρ` and `ἀνῆρ` are one word differently accented.
+- The form as written is tried first, so nothing that parses today stops
+  parsing.
+- Where the accent alone does not explain it, the whole file is searched with
+  diacritics ignored on both sides. That costs seconds the first time in a
+  session, so it comes last.
+
 ### Forms with no analysis at all
 
 Where the file has no entry and you know the headword, name it:
@@ -1155,6 +1197,24 @@ because in Emacs state it does nothing else.
 
 The dictionaries have the single letters when you want a dictionary, and evil
 has the keyboard when you want to move about.
+
+**The brackets are lent back.** Emacs state costs a reader everything evil
+binds, and most of it is no loss in a buffer that cannot be typed in. `[` and
+`]` are the loss: under Doom they are keymaps carrying a family apiece — `]F`
+and `[F` between frames, `]b` and `[b` between buffers, `]f` and `[f` between
+files — and moving among frames is precisely what one wants when the entries
+open in frames of their own.
+
+So whatever normal state has for those keys is bound to them in the Diogenes
+modes' own maps. Lending the key lends the map, so the whole family comes at
+once.
+
+- `diogenes-evil-lent-keys` is the list, `("[" "]")` by default. Nil lends
+  nothing.
+- A map that **already uses the key keeps what it has**. The point is to
+  restore what Emacs state took away, not to take something else.
+- A key bound to a *command* rather than a keymap will shadow whatever the
+  Diogenes buffer binds it to, which is what Emacs state was chosen to avoid.
 
 ## Clicking a word
 
