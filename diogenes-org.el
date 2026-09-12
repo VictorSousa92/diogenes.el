@@ -138,16 +138,42 @@ its own punctuation."
 The entry's key and language are text properties the lookup put there, so an
 entry can be reopened by name -- which is what makes a link to one possible at
 all."
-  (let ((key (get-text-property (point) 'entry-key))
-        (language (get-text-property (point) 'lang)))
-    (when (and key language)
+  (let* ((where (and (fboundp 'diogenes-lookup-sense-here)
+                     (diogenes-lookup-sense-here)))
+         (dictionary (and (fboundp 'diogenes-lookup-dictionary-here)
+                          (diogenes-lookup-dictionary-here)))
+         (key (car where))
+         ;; THE BUFFER'S LANGUAGE, from the registration.  The `lang' text
+         ;; property says what language a PIECE OF TEXT is in -- most of an
+         ;; LSJ article is English definition, so it reads `english', and a
+         ;; link built from it named a Greek word as Lewis & Short.
+         (language (or (nth 2 dictionary) "greek")))
+    (when key
       (org-link-store-props
        :type diogenes-org-link-type
        :link (concat diogenes-org-link-type ":"
                      (diogenes-org--encode (list "entry" language key)))
-       :description (format "%s, %s" key
-                            (if (equal language "greek") "LSJ" "Lewis & Short")))
+       ;; AS A CITATION IS WRITTEN: the dictionary, `s.v.', the headword, and
+       ;; the sense where the link is to a sense and not to the whole of a
+       ;; long article.  `LSJ s.v. πέμπω III.2' is a reference a reader can
+       ;; act on; `pe/mpw, LSJ' is a note to oneself.
+       :description
+       (concat (or (nth 1 dictionary) "")
+               (if (nth 1 dictionary) " s.v. " "s.v. ")
+               (diogenes-org--entry-word key language)
+               (and (cdr where) (concat " " (cdr where)))))
       t)))
+
+(defun diogenes-org--entry-word (key language)
+  "KEY as a reader reads it.
+
+The dictionaries key their entries in betacode -- `pe/mpw\=' -- which belongs in
+the link\='s path, where it is what reopens the entry, and not in what a reader
+sees.  Greek is converted; Latin is already itself."
+  (if (and (equal language "greek")
+           (fboundp 'diogenes--beta-to-utf8))
+      (or (ignore-errors (diogenes--beta-to-utf8 key)) key)
+    key))
 
 (defun diogenes-org--store-page ()
   "A link to the scanned page in this document buffer, or nil.

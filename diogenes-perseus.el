@@ -451,6 +451,18 @@ it may carry an `entry-key' (the canonical lemma of the entry)."
     (nconc
      (list 'lang lang)
      (cl-case tag
+       (div2
+	;; THE HEADWORD OVER THE WHOLE ENTRY.  The `head' handler puts `orth'
+	;; on the head text, which is where the headword is printed -- but a
+	;; reader standing in the middle of an article is not standing on it,
+	;; and a command that wants to know which entry this is had to search
+	;; the buffer backwards to find out.
+	;;
+	;; The entry element carries the key, so it can be put on everything
+	;; the entry renders to and read at point.  Betacode, as the
+	;; dictionaries write it.
+	(let ((key (cdr (assoc 'key (cadr elt)))))
+	  (and key (list 'entry-key key))))
        (head (let* ((entry-key (plist-get properties 'entry-key))
 		    (orth-orig (cdr (assoc 'orth_orig (cadr elt))))
 		    ;; The headword shown as "tam-quam" is the compound
@@ -471,12 +483,30 @@ it may carry an `entry-key' (the canonical lemma of the entry)."
 	       ;; any point inside the entry.
 	       (list 'font-lock-face 'shr-h1
 		     'orth hw)))
-       (sense (push (concat "\n\n"
-			    (propertize (or (cdr (assoc 'n (cadr elt))) "")
-					'font-lock-face 'success)
-			    " ")
-		    (cddr elt))
-	      nil)
+       (sense
+	;; THE PLACE IN THE ENTRY, and not only the label.  A reader citing a
+	;; dictionary cites `LSJ s.v. pe/mpw III.2', not the whole of a long
+	;; article: the sense is the citation.
+	;;
+	;; Built without knowing the tree, because it need not be known.
+	;; `diogenes--dict-process-elt' hands each handler the properties of
+	;; its ANCESTORS and passes what comes back down to the children, so
+	;; a sense has only to read the path it inherited and add its own
+	;; label.  The nesting takes care of itself.
+	;;
+	;; A sense with no `n' adds nothing and passes its parent's path on
+	;; unchanged -- Gaffiot and Georges have bare <sense> elements, and a
+	;; path with an empty level in it would name nothing.
+	(let* ((label (or (cdr (assoc 'n (cadr elt))) ""))
+	       (above (plist-get properties 'sense-path))
+	       (path (cond ((string-empty-p (string-trim label)) above)
+			   (above (concat above "." (string-trim label)))
+			   (t (string-trim label)))))
+	  (push (concat "\n\n"
+			(propertize label 'font-lock-face 'success)
+			" ")
+		(cddr elt))
+	  (and path (list 'sense-path path))))
        (bibl (let ((reference (cdr (assoc 'n (cadr elt)))))
 	       (list 'font-lock-face 'link
 		     'keymap diogenes-perseus-action-map
@@ -1076,6 +1106,53 @@ can.  Re-registering is idempotent, so doing both is harmless."
                     (if (cdr entries)
                         (diogenes--lookup-key-dispatcher entries)
                       (plist-get (car entries) :command)))))))
+
+(defun diogenes-lookup-dictionary-here ()
+  "The dictionary this buffer is showing, as (ID NAME LANG), or nil.
+
+Asked of the registrations rather than guessed.  Each module says how its own
+buffer is recognised -- `:buffer-p' -- and what it is called, so this answers
+`Montanari' or `DGE' or `Gaffiot' and not merely `greek' or `latin'.
+
+Wanted because a citation names a dictionary: `LSJ s.v. pe/mpw III.2' is a
+reference and `a Greek dictionary, pe/mpw' is not.  The language alone cannot
+say which of twelve it was.
+
+The base dictionaries are the fallback, there being no registration for the
+LSJ or Lewis & Short themselves -- they are what the others are offered
+BESIDE."
+  (let ((lang (or (and (boundp 'diogenes--lookup-lang) diogenes--lookup-lang)
+                  "greek")))
+    (or (cl-loop for entry in diogenes--lookup-dictionaries
+                 for predicate = (plist-get entry :buffer-p)
+                 when (and predicate (ignore-errors (funcall predicate)))
+                 return (list (plist-get entry :id)
+                              (plist-get entry :name)
+                              (or (plist-get entry :lang) lang)))
+        (if (equal lang "latin")
+            (list 'lewis-short "Lewis & Short" "latin")
+          (list 'lsj "LSJ" "greek")))))
+
+(defun diogenes-lookup-sense-here ()
+  "The place in the entry at point: (HEADWORD . SENSE-PATH), or nil.
+
+HEADWORD as the dictionary writes it, in betacode; SENSE-PATH as a reader
+cites it, `III.2\=', or nil above the first sense.
+
+The headword is looked for FORWARD as well as at point.  `orth\=' is put on the
+entry by the walk, but a buffer may open above the entry element -- a banner,
+a blank line -- and there the property is not yet in force."
+  (let ((key (or (get-text-property (point) 'entry-key)
+                 (get-text-property (point) 'orth)
+                 (save-excursion
+                   (goto-char (point-min))
+                   (let ((match (text-property-search-forward 'entry-key)))
+                     (and match (prop-match-value match))))
+                 (save-excursion
+                   (goto-char (point-min))
+                   (let ((match (text-property-search-forward 'orth)))
+                     (and match (prop-match-value match)))))))
+    (and key (cons key (get-text-property (point) 'sense-path)))))
 
 (defun diogenes--lookup-key-dispatcher (entries)
   "A command opening whichever of ENTRIES matches the language being read.
