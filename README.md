@@ -38,6 +38,7 @@ below is added here.
 
 - [Additional features (Victor)](#additional-features-victor)
   - [Install](#install)
+  - [The org-integration branch](#the-org-integration-branch)
   - [Configuration](#configuration)
   - [Looking a word up](#looking-a-word-up)
     - [`C-c C-o` — any dictionary, by name](#c-c-c-o--any-dictionary-by-name)
@@ -319,6 +320,7 @@ What this half adds:
 - Contraction-aware Latin parsing, and a Morpheus fallback for forms the shipped data never saw.
 - Corrections for analyses the shipped data gets wrong.
 - Optional window management.
+- Notes in org-roam anchored to citations rather than to page numbers — on the `org-integration` branch, see below.
 
 ## Install
 
@@ -361,6 +363,27 @@ package is already there, so without it every start-up fails. Update with
                      :repo "VictorSousa92/diogenes.el"
                      :branch "modular-customizable"))
 ```
+
+## The org-integration branch
+
+Notes on passages — org links to a place in a text, notes found by citation,
+and a command each way between the note and the browser — are on the
+`org-integration` branch rather than here.
+
+```fish
+git clone -b org-integration https://github.com/VictorSousa92/diogenes.el
+```
+
+That branch is this one with the org work added: everything documented below
+is on it and behaves the same way. What it adds beside the notes is a citation
+layer the links rest on — `diogenes-browser-reference`, `diogenes-open-passage`
+and the rest — and `diogenes-abbreviations.el`, so a passage can be named
+*Arist. Metaph. 1048a27* rather than *tlg 0086/025 1048a27*.
+
+It is a branch and not an option because the citation layer is a good deal of
+code to carry for a reader who does not want it. Nothing on it needs org-roam
+to be installed: the links work without it, and only the two commands that
+look for notes ask for it.
 
 ## Configuration
 
