@@ -443,48 +443,40 @@ are remembered afterwards in `diogenes-books-cache-file\\='."
     (diogenes-books--find
      corpus author work
      (lambda (books)
-       (let* ((labels
-               (let ((n 0))
-                 (mapcar (lambda (book)
-                           (setq n (1+ n))
-                           (cons (diogenes-books--label book n) book))
-                         books)))
-              ;; SHOWN AND NOT COUNTED.  Every book with its letter, its
-              ;; number and the page it starts at, so a reader chooses by
-              ;; looking -- which is the only way to be right about a work
-              ;; whose numbering and whose letters disagree.
-              (choice
+       (let* ((choice
                (or said
-                   (completing-read
-                    "Book: "
-                    ;; IN THE WORK'S ORDER, not the alphabet's.  Completion
-                    ;; sorts what it is given, and sorted alphabetically the
-                    ;; list read Α ΕΛΑΤΤΟΝ, Β, Ε, Η, Γ -- which is no order
-                    ;; at all to choose a book from.  `identity' as the sort
-                    ;; leaves them as they were built, which is the order the
-                    ;; work prints them in.
-                    (lambda (string predicate action)
-                      (if (eq action 'metadata)
-                          '(metadata
-                            (display-sort-function . identity)
-                            (cycle-sort-function . identity))
-                        (complete-with-action action labels
-                                              string predicate)))
-                    nil t)))
-              ;; THE LABEL WHOLE, and not a title cut out of it.  The label
-              ;; was built here and is the key of `labels', so it is looked up
-              ;; as it stands.  Cutting the title back out went wrong the
-              ;; moment a title ran past the column the format pads to: the
-              ;; books of the Metaphysics are headed `ΑΡΙΣΤΟΤΕΛΟΥΣ ΤΩΝ ΜΕΤΑ
-              ;; ΤΑ ΦΥΣΙΚΑ Ζ', which is longer than the padding, so `%-28s'
-              ;; added nothing, no two spaces were left to split on, and the
-              ;; whole label was taken for a title -- which answers to no
-              ;; book.
-              ;;
-              ;; `diogenes-books--choose' still answers for SAID, a caller
-              ;; naming a book outright rather than picking one from the list.
-              (book (or (cdr (assoc choice labels))
-                        (diogenes-books--choose books choice))))
+                   (let* ((labels
+                           (let ((n 0))
+                             (mapcar (lambda (book)
+                                       (setq n (1+ n))
+                                       (cons (diogenes-books--label book n)
+                                             book))
+                                     books))))
+                     ;; SHOWN AND NOT COUNTED.  Every book with its letter,
+                     ;; its number and the page it starts at, so a reader
+                     ;; chooses by looking -- which is the only way to be
+                     ;; right about a work whose numbering and whose letters
+                     ;; disagree.
+                     (car (split-string
+                           (completing-read
+                            "Book: "
+                            ;; IN THE WORK'S ORDER, not the alphabet's.
+                            ;; Completion sorts what it is given, and sorted
+                            ;; alphabetically the list read Α ΕΛΑΤΤΟΝ, Β, Ε,
+                            ;; Η, Γ -- which is no order at all to choose a
+                            ;; book from.  `identity' as the sort leaves them
+                            ;; as they were built, which is the order the work
+                            ;; prints them in.
+                            (lambda (string predicate action)
+                              (if (eq action 'metadata)
+                                  '(metadata
+                                    (display-sort-function . identity)
+                                    (cycle-sort-function . identity))
+                                (complete-with-action action labels
+                                                      string predicate)))
+                            nil t)
+                           "  " t)))))
+              (book (diogenes-books--choose books choice)))
          (unless book
            (user-error "No book of this work answers to `%s'" choice))
          (message "%s, at %s" (car book) (cadr book))
