@@ -579,50 +579,82 @@ thing.  A reader typing beta code notices nothing."
 (defun diogenes-complete--entry-forms (entry)
   "The forms of ENTRY, as processed by `diogenes--process-lemma'.
 ENTRY is (LEMMA RAW-LEMMA NUMBER . FORMS), each form being (FORM . ANALYSES)."
-  (mapcar #'car (cdddr entry)))
+  (cdddr entry))
 
 (defun diogenes-complete-merge-lemmata (entries)
-  "ENTRIES with the duplicates among them merged.
+  "ENTRIES grouped by the dictionary entry each points at.
 
-THE SAME RECORD TWICE IS NOT A HOMOGRAPH.  Two entries with the same full
-lemma and the same set of forms say the same thing, whatever their offsets,
-and offering both is offering a choice that cannot be made."
-  (let ((seen (make-hash-table :test #'equal))
-        (kept nil))
+THE NUMBER IS THE ANSWER.  Every record of the word list carries one -- the
+third element of a processed entry, and the byte offset of the article in the
+dictionary, which is how Diogenes reaches an article at all: it seeks to the
+offset and reads.  So two records with the SAME number are two records of ONE
+article, whatever else differs between them, and offering a reader a choice
+between them is offering a choice that has no answer.  Their forms are
+UNIONED, which is what the records were: the word list splits a long entry's
+forms across more than one line.
+
+Two records with DIFFERENT numbers are two articles -- LSJ's λέγω to gather
+and λέγω to say, stored `le/gw1' and `le/gw2' under the one key, the word
+list being keyed on the lemma with its homograph digit taken off.  That choice
+is real and is put to the reader.
+
+Grouped by the number AND the full lemma, the pair being what identifies an
+article; the first record's spelling and order are kept."
+  (let ((groups nil))
     (dolist (entry entries)
-      (let ((key (cons (nth 1 entry)
-                       (sort (copy-sequence
-                              (diogenes-complete--entry-forms entry))
-                             #'string-lessp))))
-        (unless (gethash key seen)
-          (puthash key t seen)
-          (push entry kept))))
-    (nreverse kept)))
+      (let* ((key (list (nth 1 entry) (nth 2 entry)))
+             (known (assoc key groups)))
+        (if known
+            ;; UNIONED BY THE FORM, keeping the analyses first seen: the same
+            ;; form in two records of one article is the same form.
+            (setcdr known
+                    (let ((merged (cdr known)))
+                      (dolist (form (diogenes-complete--entry-forms entry))
+                        (unless (assoc (car form) (cdddr merged))
+                          (setcdr (last merged) (list form))))
+                      merged))
+          (push (cons key (copy-sequence entry)) groups))))
+    (mapcar #'cdr (nreverse groups))))
+
+(defun diogenes-complete--lemma-labels (entries)
+  "ENTRIES as an alist of (LABEL . ENTRY), each label distinguishing its own.
+
+THE NUMBER IS SHOWN ONLY WHERE IT HAS TO BE.  Where the full lemmas differ --
+`le/gw1' against `le/gw2' -- that is what a reader recognises and the offset
+is noise.  Where they do not, the offset is the only thing that tells the two
+apart and leaving it out would reproduce the fault this replaced."
+  (let* ((raws (mapcar (lambda (entry) (nth 1 entry)) entries))
+         (ambiguous (/= (length (delete-dups (copy-sequence raws)))
+                        (length raws))))
+    (mapcar
+     (lambda (entry)
+       (let* ((shown (or (nth 0 entry) "?"))
+              (raw (or (nth 1 entry) "?"))
+              (number (nth 2 entry))
+              (forms (length (diogenes-complete--entry-forms entry)))
+              (pad (max 1 (- diogenes-complete-greek-width
+                             (string-width shown)))))
+         (cons (format "%s%s%-14s %s%d form%s"
+                       shown (make-string pad ?\s) raw
+                       (if (and ambiguous number)
+                           (format "entry %s, " number) "")
+                       forms (if (= forms 1) "" "s"))
+               entry)))
+     entries)))
 
 (defun diogenes-complete-choose-lemma (entries &optional prompt)
   "Ask which of ENTRIES was meant, and return it.
 
-Returns the one entry where ENTRIES holds only one, or only one once the
-duplicates are merged -- in which case nothing is asked."
+Nothing is asked where the records turn out to be one article: see
+`diogenes-complete-merge-lemmata', which is where the question of what counts
+as one lemma is actually settled."
   (let ((entries (diogenes-complete-merge-lemmata entries)))
     (if (null (cdr entries))
         (car entries)
-      (let* ((labels
-              (mapcar
-               (lambda (entry)
-                 (let* ((shown (or (nth 0 entry) "?"))
-                        (raw (or (nth 1 entry) "?"))
-                        (forms (length (diogenes-complete--entry-forms entry)))
-                        (pad (max 1 (- diogenes-complete-greek-width
-                                       (string-width shown)))))
-                   (cons (format "%s%s%-14s %d form%s"
-                                 shown (make-string pad ?\s) raw forms
-                                 (if (= forms 1) "" "s"))
-                         entry)))
-               entries))
-             (chosen (completing-read (or prompt "Which lemma? ")
-                                      labels nil t)))
-        (cdr (assoc chosen labels))))))
+      (let ((labels (diogenes-complete--lemma-labels entries)))
+        (cdr (assoc (completing-read (or prompt "Which lemma? ")
+                                     labels nil t)
+                    labels))))))
 
 (provide 'diogenes-complete)
 ;;; diogenes-complete.el ends here
