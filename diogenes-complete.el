@@ -259,10 +259,20 @@ word list cannot be read, so a caller may use this unconditionally."
           (let* ((diogenes-complete--pairs pairs)
                  (candidates (mapcar #'car pairs))
                  (shown
-                  ;; GREEK IS SHOWN AS GREEK.  The list is beta code and a
-                  ;; reader completing on `memuk' is completing on nothing
-                  ;; they can read; the beta is kept in the annotation, that
-                  ;; being what one may want to copy.
+                  ;; GREEK IS SHOWN AS GREEK, AND FIRST.  The list is beta
+                  ;; code and a reader completing on `memuk' is completing on
+                  ;; nothing they can read -- so the Greek goes in front,
+                  ;; where the eye is, and the beta follows it, that being
+                  ;; what one may want to copy and what the search will
+                  ;; actually use.
+                  ;;
+                  ;; IT HAS TO BE THE PREFIX and cannot be the candidate: the
+                  ;; candidate IS the string that comes back and that the
+                  ;; style matches against, and both of those must be the beta
+                  ;; the word list is keyed on.  An affixation is displayed
+                  ;; PREFIX CANDIDATE SUFFIX, so putting the Greek in the
+                  ;; prefix puts it first without changing what anything else
+                  ;; sees.
                   (and (string= lang "greek")
                        (fboundp 'diogenes--beta-to-utf8)))
                  (table
@@ -275,15 +285,7 @@ word list cannot be read, so a caller may use this unconditionally."
                          (cycle-sort-function . identity)
                          ,@(when shown
                              `((affixation-function
-                                . ,(lambda (candidates)
-                                     (mapcar
-                                      (lambda (candidate)
-                                        (list candidate
-                                              ""
-                                              (format "   %s"
-                                                      (diogenes--beta-to-utf8
-                                                       candidate))))
-                                      candidates)))))))
+                                . ,#'diogenes-complete--affix)))))
                       (_ (complete-with-action action candidates
                                                string predicate))))))
             ;; THE INPUT IS BROUGHT TO THE LIST'S OWN SPELLING BEFORE IT IS
@@ -298,6 +300,28 @@ word list cannot be read, so a caller may use this unconditionally."
                                    #'diogenes-complete--convert nil t))
                      (completing-read prompt table nil nil))))
               (diogenes-complete--as-stored (string-trim answer) lang))))))))
+
+(defcustom diogenes-complete-greek-width 20
+  "How wide the Greek column is, in display columns.
+
+The Greek is shown before the beta code and padded to this, so that the beta
+lines up down the page: a column of it that wandered with the length of each
+Greek word would be harder to read than no column at all.  Twenty, because
+`a)/nqrwpos\=' converted is nine and the compounds run to twenty."
+  :type 'integer
+  :group 'diogenes-complete)
+
+(defun diogenes-complete--affix (candidates)
+  "CANDIDATES as (BETA GREEK-PREFIX EMPTY-SUFFIX), for the completion display."
+  (mapcar
+   (lambda (candidate)
+     (let* ((greek (diogenes--beta-to-utf8 candidate))
+            (pad (max 1 (- diogenes-complete-greek-width
+                           (string-width greek)))))
+       (list candidate
+             (concat greek (make-string pad ?\s))
+             "")))
+   candidates))
 
 (defvar-local diogenes-complete--converting nil
   "Non-nil while this hook is rewriting the minibuffer, to not recurse.")
