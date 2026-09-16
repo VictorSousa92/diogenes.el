@@ -60,6 +60,7 @@
 (require 'diogenes-abbreviations nil t)
 (require 'diogenes-search)
 (require 'diogenes-perseus)
+(require 'diogenes-complete)
 (require 'diogenes-dict-faces)
 
 ;; The dictionary modules, loaded for everyone so that configuring a
@@ -463,25 +464,27 @@ QUERY is interpreted as a regular expression which must match the forms."
 ;;;###autoload
 (defun diogenes-show-all-forms-greek (lemma)
   "Show all attested forms of a Greek lemma."
-  (interactive "sShow all forms of: ")
+  (interactive (list (diogenes-read-lemma "greek" "Show all forms of: ")))
   (diogenes--show-all-forms (diogenes--greek-ensure-beta lemma) "greek"))
 
 ;;;###autoload
 (defun diogenes-show-all-forms-latin (lemma)
   "Show all attested forms of a Latin lemma."
-  (interactive "sShow all forms of: ")
+  (interactive (list (diogenes-read-lemma "latin" "Show all forms of: ")))
   (diogenes--show-all-forms lemma "latin"))
 
 ;;;###autoload
 (defun diogenes-show-all-lemmata-greek (query)
   "Show all Greek lemmata and forms that match QUERY."
-  (interactive "sShow all lemmata and their form matching: ")
+  (interactive (list (diogenes-read-lemma
+                      "greek" "Show all lemmata matching: ")))
   (diogenes--show-all-lemmata (diogenes--greek-ensure-beta query) "greek"))
 
 ;;;###autoload
 (defun diogenes-show-all-lemmata-latin (query)
   "Show all Latin lemmata and forms that match QUERY."
-  (interactive "sShow all lemmata and their form matching: ")
+  (interactive (list (diogenes-read-lemma
+                      "latin" "Show all lemmata matching: ")))
   (diogenes--show-all-lemmata query "latin"))
 
 

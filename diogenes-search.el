@@ -17,6 +17,7 @@
 (require 'diogenes-lisp-utils)
 (require 'diogenes-user-interface)
 (require 'diogenes-perseus)
+(require 'diogenes-complete)
 
 ;; Called across files that cannot be required from here without a
 ;; cycle, and -- where the name is one of this package's own caches --
@@ -435,7 +436,15 @@ This function is the generic dispacher for all corpora."
 (defun diogenes--morphological-search (type &optional lemma-or-forms authors)
   (let ((lemma-or-forms
 	 (or lemma-or-forms
-	     (read-from-minibuffer
+	     ;; READ WITH THE WORD LIST TO COMPLETE ON.  This is the one search
+	     ;; that finds a WORD rather than a string, and it used to ask for
+	     ;; the lemma with a plain `read-from-minibuffer': a reader had to
+	     ;; know whether the list spells it `mu/w' or `mu/w1', and where the
+	     ;; breathing goes, before they could type anything at all.
+	     ;; `diogenes-read-lemma' falls back on the plain prompt where the
+	     ;; list cannot be read, so this is unconditional.
+	     (diogenes-read-lemma
+	      (diogenes--probable-corpus-language type)
 	      (format "Please enter a lemma for searching the %s: "
 		      (upcase type))))))
     (cl-typecase lemma-or-forms
