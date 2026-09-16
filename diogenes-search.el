@@ -424,8 +424,24 @@ identical lines, and a choice between indistinguishables is not a choice.
 -- same lemma, same forms -- and labels what remains with the full lemma, its
 offset and how many forms are attested, which is usually what tells a reader
 which homograph they meant."
-  (let* ((lemmata (or (diogenes--get-all-forms lemma lang)
-		      (error "No results for %s" lemma)))
+  (let* ((lemmata (or
+		   ;; READ BY OFFSET WHERE THERE IS AN INDEX.  A lemma's records
+		   ;; are at known places in the word list, so
+		   ;; `diogenes-complete-records' reads those few hundred bytes
+		   ;; instead of parsing the file -- which for the Greek list is
+		   ;; the difference between a moment and a minute, and is the
+		   ;; reason the prompt before this one is instant.
+		   (and (fboundp 'diogenes-complete-records)
+			(let ((records (ignore-errors
+					 (diogenes-complete-records lemma lang))))
+			  (and records
+			       (mapcar (lambda (record)
+					 (diogenes--process-lemma record lang))
+				       records))))
+		   ;; And the whole table where there is not, or where the index
+		   ;; knows nothing of this lemma.
+		   (diogenes--get-all-forms lemma lang)
+		   (error "No results for %s" lemma)))
 	 (entry (cond
 		 ((null (cdr lemmata)) (car lemmata))
 		 ((fboundp 'diogenes-complete-choose-lemma)
