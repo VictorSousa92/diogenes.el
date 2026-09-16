@@ -135,46 +135,252 @@ thing and is not used here, this file being loadable before it."
     string))
 
 
-;;; The candidates, read once
+;;; The candidates, indexed once and kept on disk
+
+;; WHY A CACHE AT ALL.  `diogenes--get-all-lemmata' parses the whole of
+;; `greek-lemmata.txt' into a hash table -- every lemma with every attested
+;; form and every analysis of it -- and says so while it works, because it
+;; takes a while.  For the prompt that is a great deal of work to do before a
+;; reader can type the first letter: what the prompt needs is the LEMMATA, and
+;; the forms only matter once one has been chosen.
+;;
+;; SO THIS INDEXES THE FILE ONCE AND WRITES DOWN THREE THINGS PER LEMMA: how
+;; the word list spells it, how that reads as Greek, and how it reads with the
+;; diacritics off -- the first for the search, the second for the reader, the
+;; third for the matching.  Some hundred thousand lines, written as plain text,
+;; one lemma to a line, read back with one `insert-file-contents' and a split.
+;;
+;; AND THE OFFSETS, which is what makes the forms cheap too.  Each lemma's
+;; records are somewhere in the file, and the index remembers where -- so the
+;; forms of one lemma are got by reading those few hundred bytes rather than
+;; the whole file.  It is the same trick Diogenes uses for its dictionaries,
+;; which seek to a byte offset and read a line rather than search.
+;;
+;; THE CACHE IS CHECKED AGAINST THE FILE, by size and modification time, so a
+;; new Perseus release is noticed rather than answered from the old index.
+;; `diogenes-complete-rebuild' forces it, for a file changed in place within
+;; the same second.
+
+(defcustom diogenes-complete-cache-directory
+  (expand-file-name "diogenes-complete/" user-emacs-directory)
+  "Where the lemma index is kept.
+
+One file per language, plain text, some megabytes.  Written the first time a
+lemma prompt is used and read at every one after."
+  :type 'directory
+  :group 'diogenes-complete)
 
 (defvar diogenes-complete--cache nil
-  "Candidates by language: an alist of (LANG . PAIRS).
+  "Per language, in memory: an alist of (LANG PAIRS OFFSETS).
+PAIRS is (CANDIDATE . BARE) and OFFSETS a hash from a candidate to the places
+in the word list where its records are.")
 
-PAIRS is (CANDIDATE . BARE) for every lemma in that language\\='s word list.
-KEPT because the list is long -- the Greek one runs to six figures -- and
-because the bare form of a lemma cannot change: doing this once a session is
-nothing, and doing it at every keystroke would make the prompt unusable.")
+(defun diogenes-complete--lemmata-file (lang)
+  "The word list of LANG."
+  (unless (fboundp 'diogenes--perseus-path)
+    (user-error "Diogenes is not loaded"))
+  (let ((file (file-name-concat (diogenes--perseus-path)
+                                (concat lang "-lemmata.txt"))))
+    (unless (file-readable-p file)
+      (user-error "No %s word list at %s" lang file))
+    file))
 
-(defun diogenes-complete-forget ()
-  "Forget the candidates read from the word lists.
-Wanted after changing the Perseus data, and nowhere else."
-  (interactive)
-  (setq diogenes-complete--cache nil)
-  (message "The lemma candidates are forgotten"))
+(defun diogenes-complete--cache-file (lang)
+  "Where LANG's index is written."
+  (expand-file-name (concat lang "-lemmata-index.txt")
+                    diogenes-complete-cache-directory))
+
+(defun diogenes-complete--stamp (file)
+  "FILE's size and modification time, as one string.
+ENOUGH TO NOTICE A NEW RELEASE and cheap to compute; not enough to notice a
+file rewritten in place within the same second, which is what
+`diogenes-complete-rebuild' is for."
+  (let ((attributes (file-attributes file)))
+    (format "%d %s"
+            (file-attribute-size attributes)
+            (format-time-string "%s" (file-attribute-modification-time
+                                      attributes)))))
+
+(defun diogenes-complete--build (lang)
+  "Read LANG's word list and write the index.  Return (PAIRS OFFSETS).
+
+READ LITERALLY AND BY BYTE.  The offsets written down are byte positions into
+the file, which is how they are read back -- `insert-file-contents' takes them
+that way -- so the buffer must not be decoded on the way in."
+  (let ((file (diogenes-complete--lemmata-file lang))
+        (offsets (make-hash-table :test #'equal))
+        (greek (string= lang "greek"))
+        (pairs nil)
+        (lines 0))
+    (message "Indexing the %s lemmata, once ..." lang)
+    (with-temp-buffer
+      (set-buffer-multibyte nil)
+      (insert-file-contents-literally file)
+      (goto-char (point-min))
+      (while (not (eobp))
+        (let* ((start (point))
+               (end (line-end-position))
+               (tab (save-excursion
+                      (goto-char start)
+                      (and (search-forward "\t" end t) (1- (point))))))
+          (when tab
+            (let* ((full (buffer-substring-no-properties start tab))
+                   ;; THE KEY IS THE LEMMA WITHOUT ITS HOMOGRAPH DIGIT, as
+                   ;; `diogenes--lemmata-file-to-hashtable' has it: `le/gw1'
+                   ;; and `le/gw2' are one key and two records, and the
+                   ;; records are told apart after the choice, not before it.
+                   (key (if (string-match "[0-9]$" full)
+                            (substring full 0 (match-beginning 0))
+                          full)))
+              (puthash key (cons (cons start end) (gethash key offsets))
+                       offsets)))
+          (setq lines (1+ lines))
+          (forward-line 1))))
+    ;; The candidates are the keys, converted once.
+    ;; THE BARE FORM IS THE BETA LEMMA'S, and this is the one thing here that
+    ;; has to be right.  It was the GREEK lemma's bared -- Greek letters with
+    ;; the accents off, `μυω' -- while a reader typing `muw' reduces to Latin
+    ;; letters, so the two could never be equal and unaccented beta code
+    ;; matched nothing at all.  Both sides are now the word list's own script,
+    ;; and Unicode input is brought to it before it is compared.  The Greek is
+    ;; for the reader to see and for nothing else.
+    (maphash
+     (lambda (key _places)
+       (push (cons key (diogenes-complete--bare key)) pairs))
+     offsets)
+    (setq pairs (sort pairs (lambda (a b) (string-lessp (cdr a) (cdr b)))))
+    (message "Indexing the %s lemmata: %d lines, %d lemmata"
+             lang lines (length pairs))
+    (diogenes-complete--write lang pairs offsets)
+    (list pairs offsets)))
+
+(defun diogenes-complete--write (lang pairs offsets)
+  "Write LANG's index: PAIRS and OFFSETS, as plain text."
+  (condition-case error
+      (progn
+        (make-directory diogenes-complete-cache-directory t)
+        (with-temp-file (diogenes-complete--cache-file lang)
+          ;; VERSION 2: the second column changed meaning, an index written
+          ;; by the earlier code holding Greek where this expects beta code.
+          (insert (format "# diogenes-complete 2 %s %s\n" lang
+                          (diogenes-complete--stamp
+                           (diogenes-complete--lemmata-file lang))))
+          (dolist (pair pairs)
+            (insert (car pair) "\t" (cdr pair) "\t"
+                    (mapconcat (lambda (place)
+                                 (format "%d-%d" (car place) (cdr place)))
+                               (gethash (car pair) offsets) ",")
+                    "\n"))))
+    ;; A READ-ONLY HOME DIRECTORY is a reason to do the work every session,
+    ;; not a reason to fail: the index is a convenience and the prompt works
+    ;; without it.
+    (error (message "Could not write the lemma index: %s"
+                    (error-message-string error)))))
+
+(defun diogenes-complete--read (lang)
+  "LANG's index from its cache file, or nil where there is none to trust."
+  (let ((file (diogenes-complete--cache-file lang)))
+    (when (file-readable-p file)
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (let ((header (buffer-substring-no-properties
+                           (point) (line-end-position)))
+                  (wanted (format "# diogenes-complete 2 %s %s" lang
+                                  (diogenes-complete--stamp
+                                   (diogenes-complete--lemmata-file lang)))))
+              ;; STALE IS WORSE THAN ABSENT: a word list replaced by a new
+              ;; release would otherwise go on being answered from the old
+              ;; index, and a lemma that is simply missing is the hardest
+              ;; kind of fault to think to blame on a cache.
+              (when (equal header wanted)
+                (forward-line 1)
+                (let ((offsets (make-hash-table :test #'equal))
+                      (pairs nil))
+                  (while (not (eobp))
+                    (let ((fields (split-string
+                                   (buffer-substring-no-properties
+                                    (point) (line-end-position))
+                                   "\t")))
+                      (when (= (length fields) 3)
+                        (push (cons (nth 0 fields) (nth 1 fields)) pairs)
+                        (puthash (nth 0 fields)
+                                 (mapcar
+                                  (lambda (place)
+                                    (let ((two (split-string place "-")))
+                                      (cons (string-to-number (nth 0 two))
+                                            (string-to-number (nth 1 two)))))
+                                  (split-string (nth 2 fields) "," t))
+                                 offsets)))
+                    (forward-line 1))
+                  (list (nreverse pairs) offsets)))))
+        (error nil)))))
+
+(defun diogenes-complete--index (lang)
+  "LANG's index, from memory, from the cache file, or built."
+  (let ((known (assoc lang diogenes-complete--cache)))
+    (unless known
+      (setq known (cons lang (or (diogenes-complete--read lang)
+                                 (diogenes-complete--build lang))))
+      (push known diogenes-complete--cache))
+    (cdr known)))
 
 (defun diogenes-complete--pairs (lang)
   "Every lemma of LANG with its bare form, as (CANDIDATE . BARE)."
-  (let ((known (assoc lang diogenes-complete--cache)))
-    (unless known
-      (unless (fboundp 'diogenes--get-all-lemmata)
-        (user-error "The Perseus word lists are not available"))
-      (let* ((table (diogenes--get-all-lemmata lang))
-             (pairs nil))
-        (unless (hash-table-p table)
-          (user-error "No %s word list to complete on" lang))
-        (maphash
-         (lambda (lemma _entry)
-           (push (cons lemma (diogenes-complete--bare lemma)) pairs))
-         table)
-        ;; ALPHABETICAL BY THE BARE FORM.  A hash table's own order is no
-        ;; order at all, and sorting by the spelling would scatter words that
-        ;; belong together -- `a)/nqrwpos' and `a)nqrw/pinos' sort apart when
-        ;; the breathings and accents are counted.
-        (setq known (cons lang (sort pairs (lambda (a b)
-                                             (string-lessp (cdr a) (cdr b))))))
-        (push known diogenes-complete--cache)))
-    (cdr known)))
+  (nth 0 (diogenes-complete--index lang)))
 
+(defun diogenes-complete-records (lemma lang)
+  "The word list's records for LEMMA in LANG, read by offset.
+
+THE FEW HUNDRED BYTES THAT MATTER.  A lemma's records are at known places in
+the file, so they are read from those places -- which is the whole point of
+keeping the offsets, and means that choosing a lemma costs no more than
+looking one up.
+
+Each record comes back in the shape `diogenes--process-lemma' expects:
+\\(FULL-LEMMA NUMBER . ENTRIES)."
+  (let* ((index (diogenes-complete--index lang))
+         (places (gethash lemma (nth 1 index)))
+         (file (diogenes-complete--lemmata-file lang))
+         (records nil))
+    (dolist (place places)
+      (let ((line (with-temp-buffer
+                    (set-buffer-multibyte nil)
+                    (insert-file-contents-literally
+                     file nil (1- (car place)) (1- (cdr place)))
+                    (decode-coding-string (buffer-string) 'utf-8))))
+        (let ((fields (split-string line "\t")))
+          (when (cdr fields)
+            (push (nconc (list (nth 0 fields)
+                               (string-to-number (nth 1 fields)))
+                         (cddr fields))
+                  records)))))
+    (nreverse records)))
+
+(defun diogenes-complete-forget ()
+  "Forget the lemma index held in memory.
+The files on disk are kept: they carry the word list's own size and time and
+are passed over of their own accord once that has changed."
+  (interactive)
+  (setq diogenes-complete--cache nil)
+  (message "The lemma index is forgotten"))
+
+;;;###autoload
+(defun diogenes-complete-rebuild (&optional lang)
+  "Index the word list again, LANG or both, and write it.
+
+Wanted where a word list has been changed in place within the same second as
+before -- which the size and time cannot see -- and after a Perseus release
+that happens to be the same length, which would be a remarkable coincidence
+and is cheap to rule out."
+  (interactive (list (completing-read "Language: " '("greek" "latin") nil t)))
+  (dolist (one (if lang (list lang) '("greek" "latin")))
+    (setq diogenes-complete--cache
+          (assoc-delete-all one diogenes-complete--cache))
+    (ignore-errors
+      (push (cons one (diogenes-complete--build one))
+            diogenes-complete--cache))))
 
 ;;; The style
 
@@ -190,7 +396,19 @@ See this file\\='s commentary for the rule.  The language is not needed here:
 the input has already been brought to the spelling of the list it is being
 matched against."
   (let* ((marked (diogenes-complete--marked-p input))
-         (needle (if marked input (diogenes-complete--bare input)))
+         ;; CONVERTED HERE AND NOWHERE ELSE.  Greek typed at the prompt is
+         ;; brought to the word list's spelling before anything is compared --
+         ;; one short string, once per keystroke -- so `μύω' and `mu/w' are
+         ;; one question and the text the reader typed is left as they typed
+         ;; it.  Converting the minibuffer itself was the first attempt and
+         ;; was wrong twice over: it rewrote what a reader was in the middle
+         ;; of typing, and with an input method it converted a combining mark
+         ;; on its own and made nonsense of the rest.
+         (stored (if (and (string-match-p "\\cg" input)
+                          (fboundp 'diogenes--utf8-to-beta))
+                     (diogenes--utf8-to-beta input)
+                   input))
+         (needle (if marked stored (diogenes-complete--bare stored)))
          (get (if marked #'car #'cdr)))
     (cond
      ((string-empty-p needle) (mapcar #'car pairs))
@@ -292,13 +510,10 @@ word list cannot be read, so a caller may use this unconditionally."
             ;; MATCHED, which is why Unicode works: what the style compares is
             ;; beta against beta, and the conversion happens here, once per
             ;; keystroke, on one short string.
-            (let ((completion-styles '(diogenes-lemma))
-                  (answer
-                   (minibuffer-with-setup-hook
-                       (lambda ()
-                         (add-hook 'after-change-functions
-                                   #'diogenes-complete--convert nil t))
-                     (completing-read prompt table nil nil))))
+            (let ((answer (completing-read prompt table nil nil)))
+              ;; WHAT COMES BACK is either a candidate -- already the word
+              ;; list's own spelling -- or whatever was typed, which is
+              ;; converted here, once, at the end.
               (diogenes-complete--as-stored (string-trim answer) lang))))))))
 
 (defcustom diogenes-complete-greek-width 20
@@ -323,29 +538,6 @@ Greek word would be harder to read than no column at all.  Twenty, because
              "")))
    candidates))
 
-(defvar-local diogenes-complete--converting nil
-  "Non-nil while this hook is rewriting the minibuffer, to not recurse.")
-
-(defun diogenes-complete--convert (start end _length)
-  "Turn Unicode Greek typed in the minibuffer into beta code.
-
-WHY IN THE MINIBUFFER AND NOT IN THE MATCHER.  The matcher is given one string
-and could convert it; but the reader must also SEE what will be searched for,
-and a prompt that shows `μύω' while matching `mu/w' is a prompt that lies
-about what it is doing.  Converting the text itself makes the two the same
-thing.  A reader typing beta code notices nothing."
-  (unless diogenes-complete--converting
-    (let ((typed (buffer-substring-no-properties start end)))
-      (when (and (string-match-p "\\cg" typed)
-                 (fboundp 'diogenes--utf8-to-beta))
-        (let ((diogenes-complete--converting t)
-              (beta (diogenes--utf8-to-beta typed)))
-          (unless (equal beta typed)
-            (save-excursion
-              (delete-region start end)
-              (goto-char start)
-              (insert beta))))))))
-
 ;;;###autoload
 (defun diogenes-read-greek-lemma (&optional prompt)
   "Read a Greek lemma with completion; return beta code."
@@ -355,6 +547,105 @@ thing.  A reader typing beta code notices nothing."
 (defun diogenes-read-latin-lemma (&optional prompt)
   "Read a Latin lemma with completion."
   (diogenes-read-lemma "latin" (or prompt "Latin lemma: ")))
+
+;;; Choosing between the records of one lemma
+
+;; WHY THERE IS A SECOND PROMPT AT ALL.  The word list is keyed on the lemma
+;; with its homograph digit taken OFF -- `diogenes--lemmata-file-to-hashtable'
+;; strips a trailing number -- so one key collects every record spelled that
+;; way: `le/gw1' and `le/gw2' are LSJ's two verbs, to gather and to say, and
+;; they arrive together under `le/gw'.  `diogenes--lemma-forms-list' then asks
+;; which was meant, and asked it with `completing-read' over the processed
+;; entries, whose car is the lemma as converted -- which for three records of
+;; one spelling is three identical lines.  A choice between indistinguishables
+;; is not a choice.
+;;
+;; SO TWO THINGS HAPPEN HERE.  Records that are the same record -- same full
+;; lemma and the same forms, which the list does hold in places -- are merged,
+;; and where that leaves one there is nothing to ask.  What remains is labelled
+;; with what distinguishes it: the full lemma with its digit, the dictionary
+;; offset, and how many forms are attested, which is usually the thing that
+;; tells a reader which of two homographs is the one they meant.
+
+(defun diogenes-complete--entry-forms (entry)
+  "The forms of ENTRY, as processed by `diogenes--process-lemma'.
+ENTRY is (LEMMA RAW-LEMMA NUMBER . FORMS), each form being (FORM . ANALYSES)."
+  (cdddr entry))
+
+(defun diogenes-complete-merge-lemmata (entries)
+  "ENTRIES grouped by the dictionary entry each points at.
+
+THE NUMBER IS THE ANSWER.  Every record of the word list carries one -- the
+third element of a processed entry, and the byte offset of the article in the
+dictionary, which is how Diogenes reaches an article at all: it seeks to the
+offset and reads.  So two records with the SAME number are two records of ONE
+article, whatever else differs between them, and offering a reader a choice
+between them is offering a choice that has no answer.  Their forms are
+UNIONED, which is what the records were: the word list splits a long entry's
+forms across more than one line.
+
+Two records with DIFFERENT numbers are two articles -- LSJ's λέγω to gather
+and λέγω to say, stored `le/gw1' and `le/gw2' under the one key, the word
+list being keyed on the lemma with its homograph digit taken off.  That choice
+is real and is put to the reader.
+
+Grouped by the number AND the full lemma, the pair being what identifies an
+article; the first record's spelling and order are kept."
+  (let ((groups nil))
+    (dolist (entry entries)
+      (let* ((key (list (nth 1 entry) (nth 2 entry)))
+             (known (assoc key groups)))
+        (if known
+            ;; UNIONED BY THE FORM, keeping the analyses first seen: the same
+            ;; form in two records of one article is the same form.
+            (setcdr known
+                    (let ((merged (cdr known)))
+                      (dolist (form (diogenes-complete--entry-forms entry))
+                        (unless (assoc (car form) (cdddr merged))
+                          (setcdr (last merged) (list form))))
+                      merged))
+          (push (cons key (copy-sequence entry)) groups))))
+    (mapcar #'cdr (nreverse groups))))
+
+(defun diogenes-complete--lemma-labels (entries)
+  "ENTRIES as an alist of (LABEL . ENTRY), each label distinguishing its own.
+
+THE NUMBER IS SHOWN ONLY WHERE IT HAS TO BE.  Where the full lemmas differ --
+`le/gw1' against `le/gw2' -- that is what a reader recognises and the offset
+is noise.  Where they do not, the offset is the only thing that tells the two
+apart and leaving it out would reproduce the fault this replaced."
+  (let* ((raws (mapcar (lambda (entry) (nth 1 entry)) entries))
+         (ambiguous (/= (length (delete-dups (copy-sequence raws)))
+                        (length raws))))
+    (mapcar
+     (lambda (entry)
+       (let* ((shown (or (nth 0 entry) "?"))
+              (raw (or (nth 1 entry) "?"))
+              (number (nth 2 entry))
+              (forms (length (diogenes-complete--entry-forms entry)))
+              (pad (max 1 (- diogenes-complete-greek-width
+                             (string-width shown)))))
+         (cons (format "%s%s%-14s %s%d form%s"
+                       shown (make-string pad ?\s) raw
+                       (if (and ambiguous number)
+                           (format "entry %s, " number) "")
+                       forms (if (= forms 1) "" "s"))
+               entry)))
+     entries)))
+
+(defun diogenes-complete-choose-lemma (entries &optional prompt)
+  "Ask which of ENTRIES was meant, and return it.
+
+Nothing is asked where the records turn out to be one article: see
+`diogenes-complete-merge-lemmata', which is where the question of what counts
+as one lemma is actually settled."
+  (let ((entries (diogenes-complete-merge-lemmata entries)))
+    (if (null (cdr entries))
+        (car entries)
+      (let ((labels (diogenes-complete--lemma-labels entries)))
+        (cdr (assoc (completing-read (or prompt "Which lemma? ")
+                                     labels nil t)
+                    labels))))))
 
 (provide 'diogenes-complete)
 ;;; diogenes-complete.el ends here
