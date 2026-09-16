@@ -237,13 +237,16 @@ that way -- so the buffer must not be decoded on the way in."
           (setq lines (1+ lines))
           (forward-line 1))))
     ;; The candidates are the keys, converted once.
+    ;; THE BARE FORM IS THE BETA LEMMA'S, and this is the one thing here that
+    ;; has to be right.  It was the GREEK lemma's bared -- Greek letters with
+    ;; the accents off, `μυω' -- while a reader typing `muw' reduces to Latin
+    ;; letters, so the two could never be equal and unaccented beta code
+    ;; matched nothing at all.  Both sides are now the word list's own script,
+    ;; and Unicode input is brought to it before it is compared.  The Greek is
+    ;; for the reader to see and for nothing else.
     (maphash
      (lambda (key _places)
-       (push (cons key (diogenes-complete--bare
-                        (if (and greek (fboundp 'diogenes--beta-to-utf8))
-                            (diogenes--beta-to-utf8 key)
-                          key)))
-             pairs))
+       (push (cons key (diogenes-complete--bare key)) pairs))
      offsets)
     (setq pairs (sort pairs (lambda (a b) (string-lessp (cdr a) (cdr b)))))
     (message "Indexing the %s lemmata: %d lines, %d lemmata"
@@ -257,7 +260,9 @@ that way -- so the buffer must not be decoded on the way in."
       (progn
         (make-directory diogenes-complete-cache-directory t)
         (with-temp-file (diogenes-complete--cache-file lang)
-          (insert (format "# diogenes-complete 1 %s %s\n" lang
+          ;; VERSION 2: the second column changed meaning, an index written
+          ;; by the earlier code holding Greek where this expects beta code.
+          (insert (format "# diogenes-complete 2 %s %s\n" lang
                           (diogenes-complete--stamp
                            (diogenes-complete--lemmata-file lang))))
           (dolist (pair pairs)
@@ -282,7 +287,7 @@ that way -- so the buffer must not be decoded on the way in."
             (goto-char (point-min))
             (let ((header (buffer-substring-no-properties
                            (point) (line-end-position)))
-                  (wanted (format "# diogenes-complete 1 %s %s" lang
+                  (wanted (format "# diogenes-complete 2 %s %s" lang
                                   (diogenes-complete--stamp
                                    (diogenes-complete--lemmata-file lang)))))
               ;; STALE IS WORSE THAN ABSENT: a word list replaced by a new
@@ -391,7 +396,19 @@ See this file\\='s commentary for the rule.  The language is not needed here:
 the input has already been brought to the spelling of the list it is being
 matched against."
   (let* ((marked (diogenes-complete--marked-p input))
-         (needle (if marked input (diogenes-complete--bare input)))
+         ;; CONVERTED HERE AND NOWHERE ELSE.  Greek typed at the prompt is
+         ;; brought to the word list's spelling before anything is compared --
+         ;; one short string, once per keystroke -- so `μύω' and `mu/w' are
+         ;; one question and the text the reader typed is left as they typed
+         ;; it.  Converting the minibuffer itself was the first attempt and
+         ;; was wrong twice over: it rewrote what a reader was in the middle
+         ;; of typing, and with an input method it converted a combining mark
+         ;; on its own and made nonsense of the rest.
+         (stored (if (and (string-match-p "\\cg" input)
+                          (fboundp 'diogenes--utf8-to-beta))
+                     (diogenes--utf8-to-beta input)
+                   input))
+         (needle (if marked stored (diogenes-complete--bare stored)))
          (get (if marked #'car #'cdr)))
     (cond
      ((string-empty-p needle) (mapcar #'car pairs))
@@ -493,13 +510,10 @@ word list cannot be read, so a caller may use this unconditionally."
             ;; MATCHED, which is why Unicode works: what the style compares is
             ;; beta against beta, and the conversion happens here, once per
             ;; keystroke, on one short string.
-            (let ((completion-styles '(diogenes-lemma))
-                  (answer
-                   (minibuffer-with-setup-hook
-                       (lambda ()
-                         (add-hook 'after-change-functions
-                                   #'diogenes-complete--convert nil t))
-                     (completing-read prompt table nil nil))))
+            (let ((answer (completing-read prompt table nil nil)))
+              ;; WHAT COMES BACK is either a candidate -- already the word
+              ;; list's own spelling -- or whatever was typed, which is
+              ;; converted here, once, at the end.
               (diogenes-complete--as-stored (string-trim answer) lang))))))))
 
 (defcustom diogenes-complete-greek-width 20
@@ -523,29 +537,6 @@ Greek word would be harder to read than no column at all.  Twenty, because
              (concat greek (make-string pad ?\s))
              "")))
    candidates))
-
-(defvar-local diogenes-complete--converting nil
-  "Non-nil while this hook is rewriting the minibuffer, to not recurse.")
-
-(defun diogenes-complete--convert (start end _length)
-  "Turn Unicode Greek typed in the minibuffer into beta code.
-
-WHY IN THE MINIBUFFER AND NOT IN THE MATCHER.  The matcher is given one string
-and could convert it; but the reader must also SEE what will be searched for,
-and a prompt that shows `μύω' while matching `mu/w' is a prompt that lies
-about what it is doing.  Converting the text itself makes the two the same
-thing.  A reader typing beta code notices nothing."
-  (unless diogenes-complete--converting
-    (let ((typed (buffer-substring-no-properties start end)))
-      (when (and (string-match-p "\\cg" typed)
-                 (fboundp 'diogenes--utf8-to-beta))
-        (let ((diogenes-complete--converting t)
-              (beta (diogenes--utf8-to-beta typed)))
-          (unless (equal beta typed)
-            (save-excursion
-              (delete-region start end)
-              (goto-char start)
-              (insert beta))))))))
 
 ;;;###autoload
 (defun diogenes-read-greek-lemma (&optional prompt)
