@@ -356,5 +356,72 @@ thing.  A reader typing beta code notices nothing."
   "Read a Latin lemma with completion."
   (diogenes-read-lemma "latin" (or prompt "Latin lemma: ")))
 
+;;; Choosing between the records of one lemma
+
+;; WHY THERE IS A SECOND PROMPT AT ALL.  The word list is keyed on the lemma
+;; with its homograph digit taken OFF -- `diogenes--lemmata-file-to-hashtable'
+;; strips a trailing number -- so one key collects every record spelled that
+;; way: `le/gw1' and `le/gw2' are LSJ's two verbs, to gather and to say, and
+;; they arrive together under `le/gw'.  `diogenes--lemma-forms-list' then asks
+;; which was meant, and asked it with `completing-read' over the processed
+;; entries, whose car is the lemma as converted -- which for three records of
+;; one spelling is three identical lines.  A choice between indistinguishables
+;; is not a choice.
+;;
+;; SO TWO THINGS HAPPEN HERE.  Records that are the same record -- same full
+;; lemma and the same forms, which the list does hold in places -- are merged,
+;; and where that leaves one there is nothing to ask.  What remains is labelled
+;; with what distinguishes it: the full lemma with its digit, the dictionary
+;; offset, and how many forms are attested, which is usually the thing that
+;; tells a reader which of two homographs is the one they meant.
+
+(defun diogenes-complete--entry-forms (entry)
+  "The forms of ENTRY, as processed by `diogenes--process-lemma'.
+ENTRY is (LEMMA RAW-LEMMA NUMBER . FORMS), each form being (FORM . ANALYSES)."
+  (mapcar #'car (cdddr entry)))
+
+(defun diogenes-complete-merge-lemmata (entries)
+  "ENTRIES with the duplicates among them merged.
+
+THE SAME RECORD TWICE IS NOT A HOMOGRAPH.  Two entries with the same full
+lemma and the same set of forms say the same thing, whatever their offsets,
+and offering both is offering a choice that cannot be made."
+  (let ((seen (make-hash-table :test #'equal))
+        (kept nil))
+    (dolist (entry entries)
+      (let ((key (cons (nth 1 entry)
+                       (sort (copy-sequence
+                              (diogenes-complete--entry-forms entry))
+                             #'string-lessp))))
+        (unless (gethash key seen)
+          (puthash key t seen)
+          (push entry kept))))
+    (nreverse kept)))
+
+(defun diogenes-complete-choose-lemma (entries &optional prompt)
+  "Ask which of ENTRIES was meant, and return it.
+
+Returns the one entry where ENTRIES holds only one, or only one once the
+duplicates are merged -- in which case nothing is asked."
+  (let ((entries (diogenes-complete-merge-lemmata entries)))
+    (if (null (cdr entries))
+        (car entries)
+      (let* ((labels
+              (mapcar
+               (lambda (entry)
+                 (let* ((shown (or (nth 0 entry) "?"))
+                        (raw (or (nth 1 entry) "?"))
+                        (forms (length (diogenes-complete--entry-forms entry)))
+                        (pad (max 1 (- diogenes-complete-greek-width
+                                       (string-width shown)))))
+                   (cons (format "%s%s%-14s %d form%s"
+                                 shown (make-string pad ?\s) raw forms
+                                 (if (= forms 1) "" "s"))
+                         entry)))
+               entries))
+             (chosen (completing-read (or prompt "Which lemma? ")
+                                      labels nil t)))
+        (cdr (assoc chosen labels))))))
+
 (provide 'diogenes-complete)
 ;;; diogenes-complete.el ends here

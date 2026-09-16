@@ -410,14 +410,29 @@ This function is the generic dispacher for all corpora."
 ;;--------------------------------------------------------------------
 ;;;; MORPHOLOGICAL SEARCH
 (defun diogenes--lemma-forms-list (lemma lang)
-  "Returns a list of all attested forms of LEMMA in LANG."
-  (let ((entry (let ((lemmata (or (diogenes--get-all-forms lemma lang)
-				  (error "No results for %s" lemma))))
-		 (if (> (length lemmata) 1)
-		     (assoc (completing-read "Please choose a lemma: "
-					     lemmata nil t)
-			    lemmata)
-		   (car lemmata)))))
+  "Returns a list of all attested forms of LEMMA in LANG.
+
+WHERE ONE SPELLING HOLDS SEVERAL RECORDS the reader is asked which was meant.
+The word list is keyed on the lemma with its homograph digit taken off --
+`diogenes--lemmata-file-to-hashtable\=' strips a trailing number -- so `le/gw\='
+collects `le/gw1\=' and `le/gw2\=', which are two verbs, to gather and to say.
+
+It used to ask with `completing-read\=' over the entries themselves, whose car
+is the lemma as converted: for three records of one spelling that is three
+identical lines, and a choice between indistinguishables is not a choice.
+`diogenes-complete-choose-lemma\=' merges the records that are the same record
+-- same lemma, same forms -- and labels what remains with the full lemma, its
+offset and how many forms are attested, which is usually what tells a reader
+which homograph they meant."
+  (let* ((lemmata (or (diogenes--get-all-forms lemma lang)
+		      (error "No results for %s" lemma)))
+	 (entry (cond
+		 ((null (cdr lemmata)) (car lemmata))
+		 ((fboundp 'diogenes-complete-choose-lemma)
+		  (diogenes-complete-choose-lemma lemmata "Which lemma? "))
+		 (t (assoc (completing-read "Please choose a lemma: "
+					    lemmata nil t)
+			   lemmata)))))
     (cl-remove-duplicates (mapcar #'car (cdddr entry)))))
 
 (defun diogenes--lemma-regexp (lemma lang &optional retain-diacritics)
