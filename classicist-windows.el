@@ -55,6 +55,12 @@
 (define-obsolete-variable-alias 'classicist--role-modes
                                 'classicist-role-modes "0.1")
 
+(require 'classicist-groups)
+
+(defgroup classicist-windows nil
+  "Where a classicist's buffers go."
+  :group 'classicist)
+
 (defcustom classicist-role-modes
   '((diogenes-lookup-mode . lookup)
     ;; `morphology', not `lookup'.  The name regexps got this right and this
@@ -85,7 +91,7 @@ module adds its own modes the way it already adds its own names to
 A role this does not mention, and no regexp matches, is nil -- and a buffer
 of no role is placed by whatever is installed, as before."
   :type '(alist :key-type symbol :value-type symbol)
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-display-actions nil
   "Roles and the `display-buffer\=' action each takes.
@@ -100,7 +106,7 @@ which stay and still win where they are set -- they were four options for
 four roles, which is no way to hold a set a module may add to, and no reason
 to break a setting either."
   :type '(alist :key-type symbol :value-type sexp)
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 
 ;;; The options
@@ -134,7 +140,7 @@ going spare and using it is never wrong.  And a `C-c C-c\=' chain stays in
 one window, that being what the reader asked for by pressing the key in an
 entry rather than a request about layout.  See `classicist-display-buffer\='."
   :type 'sexp
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-browser-display-action nil
   "Where a passage from the corpora appears.
@@ -143,7 +149,7 @@ is the text being read, so it wants a window of its own and a lookup should
 not displace it -- which is what `classicist-lookup-display-action\=' is for,
 this being the other half of that arrangement."
   :type 'sexp
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-dictionary-display-action nil
   "Where a scanned dictionary\='s page appears.
@@ -152,7 +158,7 @@ the other two because a dictionary is consulted and closed where an entry is
 read: `diogenes-old-pdf-display-action\=' is the value the print dictionaries
 use today, and this is where it is heading."
   :type 'sexp
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-gather-frames 'auto
   "Whether Diogenes buffers of a kind share a frame.
@@ -178,7 +184,7 @@ precedence: an answer given there is given first refusal."
   :type '(choice (const :tag "Follow pop-up-frames" auto)
                  (const :tag "Always" t)
                  (const :tag "Never" nil))
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-frame-parameters
   '((name . "Diogenes"))
@@ -188,7 +194,7 @@ place these frames by rule.  A width and a height are deliberately NOT here
 -- a tiling manager assigns the space, and a frame that asks for a size it
 cannot have leaves part of its tile empty."
   :type '(alist :key-type symbol :value-type sexp)
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-role-regexps
   '(("\\`\\*diogenes-lookup" . lookup)
@@ -208,7 +214,7 @@ what they are called:
     (add-to-list \='classicist-role-regexps
                  \='(\\\\`Oxford Latin Dictionary\\\\.pdf . dictionary))"
   :type '(alist :key-type regexp :value-type symbol)
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-companion-roles
   '((morphology . lookup))
@@ -251,7 +257,7 @@ an analysis takes a window by the ordinary rules."
                                     (const :tag "A scanned page" dictionary)
                                     (const :tag "An analysis" morphology)
                                     (const :tag "Whichever window I am in" selected)))
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-companion-direction 'below
   "Which way the companion window is divided; see
@@ -261,7 +267,7 @@ the other wants: they share the column the entry had, and the frame gains no
 third column."
   :type '(choice (const :tag "Below" below) (const :tag "Above" above)
                  (const :tag "To the right" right) (const :tag "To the left" left))
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-window-behaviour 'defer
   "Where Diogenes buffers go, said in one word.
@@ -315,7 +321,7 @@ was pressed in, and a frame holding only a startup page yields its window."
                                    (const dictionary))
                  :value-type (choice (const defer) (const reuse)
                                      (const split) (const frames))))
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-split-direction nil
   "Which way `split\=' and the window fallbacks divide a window.
@@ -332,7 +338,7 @@ something Emacs can infer."
                  (const :tag "Above the text" above)
                  (const :tag "To the right" right)
                  (const :tag "To the left" left))
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-split-size nil
   "How much of the divided window the new one takes, or nil for half.
@@ -353,7 +359,7 @@ kind that never gets a window of its own has nothing to act on."
   :type '(choice (const :tag "Half" nil)
                  (number :tag "Lines, columns, or a fraction")
                  (alist :key-type symbol :value-type number))
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-split-from 'selected
   "Which window is divided when a new one is wanted.
@@ -368,7 +374,7 @@ kind that never gets a window of its own has nothing to act on."
                  (const :tag "The frame's main window" main)
                  (const :tag "The whole frame" root)
                  (const :tag "Whichever is largest" largest))
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-morphology-display-action nil
   "Where an analysis or a list of forms appears, or nil for the shorthand.
@@ -381,7 +387,7 @@ analysis is what the morphology says about a form, and a reader consulting one
 about the other wants both on the screen at once."
   :type '(choice (const :tag "Follow classicist-window-behaviour" nil)
                  (sexp :tag "A display-buffer action"))
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-claim-buffers t
   "Whether a Diogenes buffer is claimed by the perspective it appears in.
@@ -396,7 +402,7 @@ displayed by `display-buffer\=' is seen by neither, so it exists, is on the
 window\='s own history, and is still invisible to the keys that walk it --
 which is a confusing state, and was reported as a buffer being killed."
   :type 'boolean
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-claim-buffer-function 'auto
   "How a Diogenes buffer is claimed by the current perspective.
@@ -414,7 +420,7 @@ set of buffers, so a buffer is reachable from any of them."
   :type '(choice (const :tag "Detect what is installed" auto)
                  (const :tag "Never" nil)
                  function)
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-display-debug nil
   "When non-nil, record every decision `classicist-display-buffer\=' makes.
@@ -433,7 +439,7 @@ answers in one keypress what the probing did not.
 
 then do the thing that misbehaves, and read the buffer."
   :type 'boolean
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defcustom classicist-home-buffer-names
   '("*spacemacs*" "*doom*" "*doom-dashboard*" "*dashboard*"
@@ -454,7 +460,7 @@ deliberately NOT here -- it would be reasonable for that second purpose and
 wrong for this one, since a frame showing scratch is a frame the reader may be
 using."
   :type '(repeat string)
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 
 
@@ -1144,7 +1150,7 @@ menu offers them under `w\='."
                  (alist :key-type function
                         :value-type (choice key-sequence
                                             (const :tag "Unbound" nil))))
-  :group 'diogenes)
+  :group 'classicist-windows)
 
 (defvar classicist--focus-maps
   '(diogenes-lookup-mode-map

@@ -124,6 +124,12 @@ buffer began at the start of the work.  It is where it BEGAN, not where it now
 is: paging moves the buffer and does not update this, the position being the
 Perl process's to know.")
 
+(require 'classicist-groups)
+
+(defgroup classicist-citation nil
+  "How a passage is named, keyed and abbreviated."
+  :group 'classicist)
+
 (defcustom classicist-citation-run-on-labels
   '("page" "pg" "column" "folio")
   "Levels that run into the level after them, with no stop between.
@@ -154,7 +160,7 @@ which.  So a pattern missing from this list costs a reader `1053a.15\=' where
 they
 would write `1053a15\=', and costs nothing that has to work."
   :type '(repeat string)
-  :group 'diogenes)
+  :group 'classicist-citation)
 
 (defun classicist--citation-runs-on-p (label)
   "Whether LABEL runs into the level after it, with no stop between.
@@ -323,7 +329,7 @@ author to browse.  `phi 0474/065\=' reads `Horte\=', the Hortensius truncated in
 the source.  Four such rows in a thousand when this was written, and each is
 one line to correct here rather than a reason to distrust the rest."
   :type '(alist :key-type (repeat string) :value-type string)
-  :group 'diogenes)
+  :group 'classicist-citation)
 
 (defun classicist-citation-abbreviation (corpus author &optional work)
   "How the dictionaries cite this author, or this work of theirs.
