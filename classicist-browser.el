@@ -1276,16 +1276,6 @@ Uses the Diogenes Perl module."
 
 (provide 'classicist-browser)
 
-;; AND THE OLD NAME, FOR NOW.  Four `with-eval-after-load \='diogenes-browser\='
-;; forms install keys -- two in this package, two in the tei-browser
-;; repository -- and a feature that is never provided makes every one of them
-;; silently never run: the mouse gestures, the turn keys, the org keys and the
-;; keys a TEI text borrows, all simply unbound, with no error and nothing in a
-;; compile.
-;;
-;; It goes when all four name `classicist-browser\='.  Until then this costs a
-;; line and makes the two repositories independent of each other\='s order.
-(provide 'diogenes-browser)
 
 ;;; classicist-browser.el ends here
 
