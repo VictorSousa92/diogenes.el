@@ -41,6 +41,7 @@
 0 diogenes-abbreviations.el
 0 classicist-windows.el
 0 classicist-windows-compat.el
+0 classicist-variants.el
 0 classicist-obsolete.el
 0 classicist-groups.el
 0 classicist-citation.el

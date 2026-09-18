@@ -197,6 +197,30 @@
 (define-obsolete-function-alias 'diogenes-open-passage
                                 'classicist-open-passage "0.1")
 
+
+;;; The variants layer, moved
+;; `classicist-variants.el' holds them now.  Options a reader may have
+;; set, so aliased rather than dropped.
+
+(define-obsolete-variable-alias 'diogenes-latin-analysis-corrections
+                                'classicist-latin-analysis-corrections "0.1")
+(define-obsolete-variable-alias 'diogenes-latin-assimilate-prefixes
+                                'classicist-latin-assimilate-prefixes "0.1")
+(define-obsolete-variable-alias 'diogenes-latin-expand-contractions
+                                'classicist-latin-expand-contractions "0.1")
+(define-obsolete-variable-alias 'diogenes-latin-extra-lemmata
+                                'classicist-latin-extra-lemmata "0.1")
+(define-obsolete-variable-alias 'diogenes-latin-fold-letters
+                                'classicist-latin-fold-letters "0.1")
+(define-obsolete-variable-alias 'diogenes-latin-mark-corrections
+                                'classicist-latin-mark-corrections "0.1")
+(define-obsolete-variable-alias 'diogenes-latin-prefix-variants
+                                'classicist-latin-prefix-variants "0.1")
+(define-obsolete-variable-alias 'diogenes-latin-spelling-rules
+                                'classicist-latin-spelling-rules "0.1")
+(define-obsolete-variable-alias 'diogenes-latin-try-spelling-variants
+                                'classicist-latin-try-spelling-variants "0.1")
+
 (provide 'classicist-obsolete)
 
 ;;; classicist-obsolete.el ends here
