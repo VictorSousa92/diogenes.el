@@ -449,8 +449,8 @@ any machine, without the OCR being parsed at run time.")
 (defun diogenes-passow--load-prebuilt-index (parent signature)
   "Load and return the volume list from PARENT's prebuilt index, or nil.
 SIGNATURE is the current directory signature; when the stored one
-differs, the OCR has changed since the index was built, so we WARN
-(the index may be stale) but still use it -- the user can rebuild with
+differs, the OCR has changed since the index was built, so we
+WARN (the index may be stale) but still use it -- the user can rebuild
 \\[diogenes-passow-build-index].  A missing, corrupt or wrong-version
 file is a silent miss, so lookup falls through to the caches/parse."
   (let ((file (diogenes-passow--prebuilt-index-file parent)))
