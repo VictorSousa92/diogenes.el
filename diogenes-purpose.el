@@ -83,7 +83,7 @@
 
 (defcustom diogenes-purpose-mode-purposes
   '((diogenes-lookup-mode   . diogenes-lookup)
-    (diogenes-analysis-mode . diogenes-morphology)
+    (classicist-analysis-mode . diogenes-morphology)
     (classicist-browser-mode  . diogenes-browser))
   "Alist mapping Diogenes major modes to window-purposes.
 Three families, each keeping its own window: entries, morphological analyses,
@@ -298,7 +298,7 @@ raises the frame and asks the window manager to focus it."
 (defun diogenes-purpose--lookup-window ()
   "A window showing a Diogenes lookup or analysis buffer, or nil."
   (diogenes-purpose--window-with
-   (lambda () (derived-mode-p 'diogenes-lookup-mode 'diogenes-analysis-mode))))
+   (lambda () (derived-mode-p 'diogenes-lookup-mode 'classicist-analysis-mode))))
 
 (defun diogenes-purpose--browser-window ()
   "A window showing the Diogenes browser, or nil."
@@ -371,7 +371,7 @@ and is writable."
   (advice-add 'diogenes-old--display-page-buffer :filter-return
               #'diogenes-purpose--after-display-page)
   (dolist (spec '((diogenes-perseus . diogenes-lookup-mode-map)
-                  (diogenes-perseus . diogenes-analysis-mode-map)
+                  (diogenes-perseus . classicist-analysis-mode-map)
                   (diogenes-browser . classicist-browser-mode-map)))
     (let ((feature (car spec))
           (map (cdr spec)))
@@ -388,7 +388,7 @@ and is writable."
   (advice-remove 'diogenes-old--display-page-buffer
                  #'diogenes-purpose--after-display-page)
   (dolist (map '(diogenes-lookup-mode-map
-                 diogenes-analysis-mode-map
+                 classicist-analysis-mode-map
                  classicist-browser-mode-map))
     (when (boundp map)
       (dolist (key '("C-c C-e" "C-c C-l" "C-c C-b"))

@@ -46,11 +46,11 @@
 
 
 ;; the dispatcher's two, run when a reader follows a link
-(declare-function diogenes--parse-and-lookup "diogenes-perseus" (word lang))
-(declare-function diogenes--show-all-forms "diogenes-perseus" (lemma lang))
+(declare-function classicist--parse-and-lookup "classicist-morphology" (word lang))
+(declare-function classicist--show-all-forms "classicist-morphology" (lemma lang))
 
 ;; named `lookup-' and doing nothing but parse, so it went the other way
-(declare-function diogenes--lookup-lemma-of "diogenes-perseus" (word lang))
+(declare-function classicist--lookup-lemma-of "classicist-morphology" (word lang))
 
 ;; DEFINED IN THIS FILE, and the compiler cannot see it.
 ;; `classicist--lookup-insert-xml' sits inside `(let ((numeric-id 0)) ...)',
@@ -544,7 +544,7 @@ which route, and what their paths are doing."
     (classicist-lookup-in-dictionary  . "C-c C-o")
     (classicist-lookup-next           . "C-c C-n")
     (classicist-lookup-previous       . "C-c C-p")
-    (diogenes-lookup-open-tll-or-tgl . "t")
+    (classicist-lookup-open-tll-or-tgl . "t")
     (classicist-lookup-lewis          . "l")
     (diogenes--quit                 . "q"))
   "The keys of a lookup buffer, as (COMMAND . KEY).
@@ -1253,7 +1253,7 @@ commands when they are asked to offer a choice."
   (let* ((lang (plist-get dictionary :lang))
 	 (command (plist-get dictionary :command))
 	 (word (string-trim (or word "")))
-	 (target (if parse (diogenes--lookup-lemma-of word lang) word)))
+	 (target (if parse (classicist--lookup-lemma-of word lang) word)))
     (when (string-empty-p word)
       (user-error "Nothing to look up"))
     ;; The dictionary commands assert the language of the buffer they are
@@ -1604,7 +1604,7 @@ the file only at the first call."
 		    (classicist--lookup-dict-offset offset lang)
 		  (classicist--lookup-dict (get-text-property char 'lemma)
 					 lang))))
-      (forms (diogenes--show-all-forms (get-text-property char 'lemma)
+      (forms (classicist--show-all-forms (get-text-property char 'lemma)
 				       (get-text-property char 'lang)))
       (t (let* ((lang (classicist--language-at-point char))
 		(word (classicist--word-at-point-for-lookup)))
@@ -1621,7 +1621,7 @@ the file only at the first call."
 		     (and (derived-mode-p 'classicist-lookup-mode)
 			  (or (= (count-windows) 1)
 			      (y-or-n-p "Open the result in this same window? ")))))
-		(diogenes--parse-and-lookup (or word (classicist--word-at-point-for-lookup)) lang)))
+		(classicist--parse-and-lookup (or word (classicist--word-at-point-for-lookup)) lang)))
 	     (_ (message "C-c C-c cannot do anything useful here!")))))))))
 
 (provide 'classicist-lookup)

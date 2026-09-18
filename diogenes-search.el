@@ -30,7 +30,7 @@
 (require 'transient)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-user-interface)
-(require 'diogenes-perseus)
+(require 'classicist-morphology)
 (require 'diogenes-complete)
 
 ;; Called across files that cannot be required from here without a
@@ -450,11 +450,11 @@ which homograph they meant."
 					 (diogenes-complete-records lemma lang))))
 			  (and records
 			       (mapcar (lambda (record)
-					 (diogenes--process-lemma record lang))
+					 (classicist--process-lemma record lang))
 				       records))))
 		   ;; And the whole table where there is not, or where the index
 		   ;; knows nothing of this lemma.
-		   (diogenes--get-all-forms lemma lang)
+		   (classicist--get-all-forms lemma lang)
 		   (error "No results for %s" lemma)))
 	 (entry (cond
 		 ((null (cdr lemmata)) (car lemmata))

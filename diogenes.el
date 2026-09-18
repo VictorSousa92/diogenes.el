@@ -59,7 +59,7 @@
 ;; fails.  `require' with NOERROR for that reason.
 (require 'diogenes-abbreviations nil t)
 (require 'diogenes-search)
-(require 'diogenes-perseus)
+(require 'classicist-morphology)
 (require 'diogenes-complete)
 (require 'diogenes-dict-faces)
 
@@ -108,7 +108,7 @@
 ;; The focus keys, once the maps they go in exist.  Each mode's file may load
 ;; at any time -- a viewer's not until a scan is opened -- so the installer is
 ;; run after each rather than once and hopefully late enough.
-(dolist (feature '(diogenes-perseus diogenes-browser diogenes-search
+(dolist (feature '(classicist-morphology classicist-browser classicist-lookup diogenes-search
                    diogenes-corpora diogenes-forms diogenes-pdf-search))
   (with-eval-after-load feature
     (when (fboundp 'classicist-install-focus-keys)
@@ -404,7 +404,7 @@ recorded, there being no offset for any dictionary but its own."
   (interactive (classicist--lookup-read-args "greek" "Parse greek word: "))
   (if dictionary
       (classicist--lookup-word-in-dictionary word dictionary t)
-    (diogenes--parse-and-lookup (diogenes--greek-ensure-beta word)
+    (classicist--parse-and-lookup (diogenes--greek-ensure-beta word)
 				"greek")))
 
 ;;;###autoload
@@ -416,7 +416,7 @@ With a prefix argument, ask which Latin dictionary to show it in; see
   (interactive (classicist--lookup-read-args "latin" "Parse latin word: "))
   (if dictionary
       (classicist--lookup-word-in-dictionary word dictionary t)
-    (diogenes--parse-and-lookup word "latin")))
+    (classicist--parse-and-lookup word "latin")))
 
 ;;;###autoload
 (defun diogenes-parse-greek (query)
@@ -424,7 +424,7 @@ With a prefix argument, ask which Latin dictionary to show it in; see
 QUERY is interpreted as a regular expression which must match the forms."
   (interactive (list (read-from-minibuffer "Parse Greek word: "
 					   (thing-at-point 'word t))))
-    (diogenes--parse-and-show (diogenes--greek-ensure-beta query)
+    (classicist--parse-and-show (diogenes--greek-ensure-beta query)
 			      "greek"))
 
 ;;;###autoload
@@ -433,33 +433,33 @@ QUERY is interpreted as a regular expression which must match the forms."
 QUERY is interpreted as a regular expression which must match the forms."
   (interactive (list (read-from-minibuffer "Parse Latin word: "
 					   (thing-at-point 'word t))))
-  (diogenes--parse-and-show query "latin"))
+  (classicist--parse-and-show query "latin"))
 
 ;;;###autoload
 (defun diogenes-show-all-forms-greek (lemma)
   "Show all attested forms of a Greek lemma."
   (interactive (list (diogenes-read-lemma "greek" "Show all forms of: ")))
-  (diogenes--show-all-forms (diogenes--greek-ensure-beta lemma) "greek"))
+  (classicist--show-all-forms (diogenes--greek-ensure-beta lemma) "greek"))
 
 ;;;###autoload
 (defun diogenes-show-all-forms-latin (lemma)
   "Show all attested forms of a Latin lemma."
   (interactive (list (diogenes-read-lemma "latin" "Show all forms of: ")))
-  (diogenes--show-all-forms lemma "latin"))
+  (classicist--show-all-forms lemma "latin"))
 
 ;;;###autoload
 (defun diogenes-show-all-lemmata-greek (query)
   "Show all Greek lemmata and forms that match QUERY."
   (interactive (list (diogenes-read-lemma
                       "greek" "Show all lemmata matching: ")))
-  (diogenes--show-all-lemmata (diogenes--greek-ensure-beta query) "greek"))
+  (classicist--show-all-lemmata (diogenes--greek-ensure-beta query) "greek"))
 
 ;;;###autoload
 (defun diogenes-show-all-lemmata-latin (query)
   "Show all Latin lemmata and forms that match QUERY."
   (interactive (list (diogenes-read-lemma
                       "latin" "Show all lemmata matching: ")))
-  (diogenes--show-all-lemmata query "latin"))
+  (classicist--show-all-lemmata query "latin"))
 
 
 ;;; UTILITIES

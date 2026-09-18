@@ -51,7 +51,7 @@
                   (predicate))
 
 (defvar diogenes-lookup-mode-map)
-(defvar diogenes-analysis-mode-map)
+(defvar classicist-analysis-mode-map)
 (defvar diogenes--lookup-dictionaries)
 (defvar classicist-browser-mode-map)
 (defvar diogenes-purpose-dict-mode-map)
@@ -390,7 +390,7 @@ does."
 Only maps that exist are included, and the map of the current buffer comes
 first, so the panel answers \"what can I press HERE\" before anything else."
   (let* ((here (cond ((derived-mode-p 'diogenes-lookup-mode) 'lookup)
-		     ((derived-mode-p 'diogenes-analysis-mode) 'analysis)
+		     ((derived-mode-p 'classicist-analysis-mode) 'analysis)
 		     ((derived-mode-p 'classicist-browser-mode) 'browser)
 		     ((bound-and-true-p diogenes-purpose-dict-mode) 'dict)))
 	 (all
@@ -401,8 +401,8 @@ first, so the panel answers \"what can I press HERE\" before anything else."
 	      (list 'lookup "Lookup" diogenes-lookup-mode-map))
 	    (when (boundp 'classicist-browser-mode-map)
 	      (list 'browser "Browser" classicist-browser-mode-map))
-	    (when (boundp 'diogenes-analysis-mode-map)
-	      (list 'analysis "Analysis" diogenes-analysis-mode-map))
+	    (when (boundp 'classicist-analysis-mode-map)
+	      (list 'analysis "Analysis" classicist-analysis-mode-map))
 	    (when (boundp 'diogenes-purpose-dict-mode-map)
 	      (list 'dict "Print dictionary" diogenes-purpose-dict-mode-map))))))
     (cl-loop for (tag title map) in (append

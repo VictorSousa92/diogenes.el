@@ -355,7 +355,7 @@ the file, so they are read from those places -- which is the whole point of
 keeping the offsets, and means that choosing a lemma costs no more than
 looking one up.
 
-Each record comes back in the shape `diogenes--process-lemma' expects:
+Each record comes back in the shape `classicist--process-lemma' expects:
 \\(FULL-LEMMA NUMBER . ENTRIES)."
   (let* ((index (diogenes-complete--index lang))
          (places (gethash lemma (nth 1 index)))
@@ -585,7 +585,7 @@ Greek word would be harder to read than no column at all.  Twenty, because
 ;; tells a reader which of two homographs is the one they meant.
 
 (defun diogenes-complete--entry-forms (entry)
-  "The forms of ENTRY, as processed by `diogenes--process-lemma'.
+  "The forms of ENTRY, as processed by `classicist--process-lemma'.
 ENTRY is (LEMMA RAW-LEMMA NUMBER . FORMS), each form being (FORM . ANALYSES)."
   (cdddr entry))
 

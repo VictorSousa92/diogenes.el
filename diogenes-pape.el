@@ -597,7 +597,7 @@ Pape is the first Greek dictionary to need a way back."
 ;; was the printed Gaffiot, and `l' was Lewis & Short; both are Latin-only
 ;; and would refuse a Greek entry.  Rather than move anyone's keys, these
 ;; two dispatch on the language of the entry, as
-;; `diogenes-lookup-open-tll-or-tgl' already does for `t'.
+;; `classicist-lookup-open-tll-or-tgl' already does for `t'.
 
 ;;;###autoload
 (defun diogenes-lookup-pape-or-gaffiot-pdf ()

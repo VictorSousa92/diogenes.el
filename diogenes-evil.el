@@ -53,7 +53,7 @@
 
 (defcustom diogenes-evil-emacs-state-modes
   '(diogenes-lookup-mode
-    diogenes-analysis-mode
+    classicist-analysis-mode
     diogenes-search-mode
     diogenes-select-forms-mode
     diogenes-corpus-mode)
@@ -168,7 +168,7 @@ binds nothing."
 
 (defconst diogenes-evil--maps
   '(diogenes-lookup-mode-map
-    diogenes-analysis-mode-map
+    classicist-analysis-mode-map
     diogenes-select-forms-mode-map
     diogenes-search-mode-map
     diogenes-corpus-mode-map

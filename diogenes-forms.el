@@ -29,7 +29,7 @@
 (require 'replace)
 (require 'transient)
 (require 'diogenes-lisp-utils)
-(require 'diogenes-perseus)
+(require 'classicist-morphology)
 (require 'diogenes-utils)                 ; --beta-to-utf8, --utf8-to-beta
 
 ;; THE BRIDGE, DECLARED AND NOT REQUIRED.  Two calls, both when a reader asks
@@ -266,7 +266,7 @@ The forms are passed as a list to the function saved in
 (defun diogenes--select-forms (query lang callback &optional header)
   "Let the user select forms of a LEMMA.
 Then call CALLBACK with this list as its single argument."
-  (let* ((choices (or (diogenes--get-all-forms query lang)
+  (let* ((choices (or (classicist--get-all-forms query lang)
 		      (error "No results for %s" query)))
 	 (lemma (if (= (length choices) 1)
 		    (car choices)
@@ -288,7 +288,7 @@ Then call CALLBACK with this list as its single argument."
 	 (inhibit-read-only t))
     (classicist-display-buffer buffer :kind 'lookup)
     (diogenes-select-forms-mode)
-    ;; TODO: Code duplication with diogenes--format-lemma-and-forms 
+    ;; TODO: Code duplication with classicist--format-lemma-and-forms 
     (insert (propertize (or header
 			    "Search for the following words:")
 			'font-lock-face 'shr-h1))

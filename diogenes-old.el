@@ -151,7 +151,7 @@ are what there are."
              (dolist (w (window-list nil 'no-minibuffer))
                (when (with-current-buffer (window-buffer w)
                        (derived-mode-p 'classicist-lookup-mode
-                                       'diogenes-analysis-mode))
+                                       'classicist-analysis-mode))
                  (throw 'found w))))))
       (when window
         (window--display-buffer buffer window 'reuse alist)))))
@@ -1121,7 +1121,7 @@ core."
     ;; rely on -- and the cheatsheet, which lists as `Everywhere' what is bound
     ;; in every section, could not lift it while the browser lacked it.
     (with-eval-after-load 'classicist-lookup
-      (dolist (map '(classicist-lookup-mode-map diogenes-analysis-mode-map
+      (dolist (map '(classicist-lookup-mode-map classicist-analysis-mode-map
                      diogenes-select-forms-mode-map))
         (when (boundp map)
           (keymap-set (symbol-value map) diogenes-old-visit-dictionary-key

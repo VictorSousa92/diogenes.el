@@ -280,6 +280,35 @@
 (define-obsolete-function-alias 'diogenes-lookup-show-analysis
                                 'classicist-lookup-show-analysis "0.1")
 
+
+;;; The morphology, renamed
+;; `diogenes-perseus.el' is `classicist-morphology.el': what was left of perseus
+;; once the variants, the lexicon and the lookup buffer had
+;; gone is the morphology.
+
+(define-obsolete-function-alias 'diogenes-analysis-cycle
+                                'classicist-analysis-cycle "0.1")
+(define-obsolete-function-alias 'diogenes-analysis-mode
+                                'classicist-analysis-mode "0.1")
+(define-obsolete-variable-alias 'diogenes-analysis-mode-map
+                                'classicist-analysis-mode-map "0.1")
+(define-obsolete-variable-alias 'diogenes-greek-analysis-corrections
+                                'classicist-greek-analysis-corrections "0.1")
+(define-obsolete-variable-alias 'diogenes-greek-extra-lemmata
+                                'classicist-greek-extra-lemmata "0.1")
+(define-obsolete-variable-alias 'diogenes-lookup-expand-homographs
+                                'classicist-lookup-expand-homographs "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-open-tll-or-tgl
+                                'classicist-lookup-open-tll-or-tgl "0.1")
+(define-obsolete-function-alias 'diogenes-morpheus-available-p
+                                'classicist-morpheus-available-p "0.1")
+(define-obsolete-variable-alias 'diogenes-morpheus-directory
+                                'classicist-morpheus-directory "0.1")
+(define-obsolete-variable-alias 'diogenes-morpheus-lemma-markers
+                                'classicist-morpheus-lemma-markers "0.1")
+(define-obsolete-variable-alias 'diogenes-morpheus-timeout
+                                'classicist-morpheus-timeout "0.1")
+
 (provide 'classicist-obsolete)
 
 ;;; classicist-obsolete.el ends here

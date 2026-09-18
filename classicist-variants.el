@@ -161,7 +161,7 @@ which is another verb.  Only a spelling the dictionary confirms is used."
   "The spellings a hyphenated LEMMA might be keyed under, likeliest first.
 `in-mitto\=' gives `immitto\=' and `inmitto\='; `con-pello\=' gives `compello\=',
 `conpello\=' and `coppello\='; `con-eo\=' gives `coeo\='.  Nothing is decided
-here -- every candidate is offered, and `diogenes--assimilated-offset\=' keeps
+here -- every candidate is offered, and `classicist--assimilated-offset\=' keeps
 whichever the dictionary actually has."
   (let* ((clean (replace-regexp-in-string
 		 "[_^+]" ""

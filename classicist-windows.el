@@ -67,7 +67,7 @@
     ;; table did not, so a buffer classified by NAME went to the analysis frame
     ;; and the same buffer classified by MODE went to the entry's -- and which
     ;; happened depended on whether the mode was set before it was displayed.
-    (diogenes-analysis-mode . morphology)
+    (classicist-analysis-mode . morphology)
     (diogenes-select-forms-mode . morphology)
     (classicist-browser-mode . browser)
     (diogenes-search-mode . search)
@@ -126,7 +126,7 @@ they configured.
     ;; entries share one window, replacing each other
     (setq classicist-lookup-display-action
           \='((display-buffer-reuse-mode-window display-buffer-same-window)
-            (mode . (diogenes-lookup-mode diogenes-analysis-mode))))
+            (mode . (diogenes-lookup-mode classicist-analysis-mode))))
 
 Set, this takes precedence over `diogenes-purpose' and `diogenes-doom'.
 Both modules would otherwise win -- purpose through an overriding action,
@@ -1154,7 +1154,7 @@ menu offers them under `w\='."
 
 (defvar classicist--focus-maps
   '(diogenes-lookup-mode-map
-    diogenes-analysis-mode-map
+    classicist-analysis-mode-map
     classicist-browser-mode-map
     diogenes-search-mode-map
     diogenes-select-forms-mode-map

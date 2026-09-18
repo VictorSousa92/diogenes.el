@@ -1,4 +1,4 @@
-;;; diogenes-perseus.el --- Morphological analysis and dictionary lookup for diogenes.el -*- lexical-binding: t -*-
+;;; classicist-morphology.el --- Morphological analysis and dictionary lookup for diogenes.el -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2024 Michael Neidhart
 ;; Copyright (C) 2026 Victor Gonçalves de Sousa
@@ -46,7 +46,7 @@
 (declare-function classicist--get-all-analyses "classicist-lookup" (lang))
 (declare-function classicist--get-all-lemmata "classicist-lookup" (lang))
 (declare-function classicist--get-analyses-index "classicist-lookup" (lang))
-(declare-function diogenes--all-matches-in-hashtable "diogenes-perseus" (query hash-table filter ignore-case no-diacritics))
+(declare-function classicist--all-matches-in-hashtable "classicist-morphology" (query hash-table filter ignore-case no-diacritics))
 (declare-function classicist--lookup-insert-xml "classicist-lookup" (xml start end buffer))
 
 (declare-function rng-first-error "rng-valid" ())
@@ -121,7 +121,7 @@
 ;;;###autoload
 
 
-(defun diogenes--lookup-lemma-of (word lang)
+(defun classicist--lookup-lemma-of (word lang)
   "The lemma of WORD in LANG, or WORD itself if it will not parse.
 A dictionary is keyed by headword, and the word under point is usually
 inflected, so `C-c C-c\=' parses before it looks anything up.  The same
@@ -133,9 +133,9 @@ Morpheus where it is available -- but only the first analysis is taken.
 Where a form is ambiguous this picks the commonest reading rather than
 asking, which is the right trade for a key whose purpose is to get you into
 another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
-  (or (let ((raw (diogenes--do-parse word lang)))
+  (or (let ((raw (classicist--do-parse word lang)))
 	(when raw
-	  (let* ((record (diogenes--parse-analyses-record raw lang))
+	  (let* ((record (classicist--parse-analyses-record raw lang))
 		 (first (car (plist-get record :analyses))))
 	    (when first
 	      ;; Two conversions, and neither is optional.
@@ -158,12 +158,12 @@ another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
 		     (lemma (if (string-match "," field)
 				(substring field (match-end 0))
 			      field)))
-		(diogenes--munge-ls-lemma (string-trim lemma) lang))))))
-      (and (fboundp 'diogenes--extra-lemma)
-	   (diogenes--extra-lemma word lang))
+		(classicist--munge-ls-lemma (string-trim lemma) lang))))))
+      (and (fboundp 'classicist--extra-lemma)
+	   (classicist--extra-lemma word lang))
       ;; Morpheus, which the two lines above and the parse before them have
       ;; between them failed to answer for.  The order is
-      ;; `diogenes--parse-and-lookup''s: the shipped analyses, then the
+      ;; `classicist--parse-and-lookup''s: the shipped analyses, then the
       ;; hand-written table, then the cruncher.
       ;;
       ;; Without this the promise of the docstring was not kept, and the
@@ -174,14 +174,14 @@ another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
       ;; `frugalitatis', a form the wordlists never harvested, showed a scan
       ;; of the page rather than the article on `frugalitas', with nothing
       ;; said about why.
-      (and (diogenes-morpheus-available-p)
-	   (let ((first (car (diogenes--morpheus-analyses word lang))))
+      (and (classicist-morpheus-available-p)
+	   (let ((first (car (classicist--morpheus-analyses word lang))))
 	     (when first
 	       (let* ((field (plist-get first :lemma))
 		      (lemma (if (string-match "," field)
 				 (substring field (match-end 0))
 			       field)))
-		 (diogenes--munge-ls-lemma (string-trim lemma) lang)))))
+		 (classicist--munge-ls-lemma (string-trim lemma) lang)))))
       word))
 
 
@@ -208,7 +208,7 @@ another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
 ;; - Inhibit editing the invisible text
 ;; - org-mode-style  visibility cycling
 ;; - etc.
-(defun diogenes-analysis-cycle (pos)
+(defun classicist-analysis-cycle (pos)
   "On a heading in analysis mode, show or hide its contents."
   (interactive "d")
   (when-let* ((level (get-char-property pos 'heading))
@@ -219,17 +219,17 @@ another dictionary quickly; `C-u\=' prompts for a word if the guess is wrong."
 		       (if (get-text-property region-start 'invisible)
 			   nil t))))
 
-(defvar diogenes-analysis-mode-map
+(defvar classicist-analysis-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
-    (keymap-set map "TAB"  #'diogenes-analysis-cycle)
+    (keymap-set map "TAB"  #'classicist-analysis-cycle)
     map)
   "Basic mode map for the Diogenes Analysis Mode.")
 
-(define-derived-mode diogenes-analysis-mode text-mode "Diogenes Analysis"
+(define-derived-mode classicist-analysis-mode text-mode "Diogenes Analysis"
   "Display analysis of search term.")
 
 
-(defun diogenes--process-parse-result (encoded-str lang)
+(defun classicist--process-parse-result (encoded-str lang)
   "Split a bytestring as retrieved form the analyses file into a
 list of the corresponding entries. Each entry consists of the headword, the
 lemma, the lemma-number, translation and analysis."
@@ -247,7 +247,7 @@ lemma, the lemma-number, translation and analysis."
 			 translation
 			 analysis)))
 
-(defun diogenes--process-lemma (lemma lang)
+(defun classicist--process-lemma (lemma lang)
   "Process a lemma entry as returned from `classicist--get-all-lemmata'.
 Returns a list with the form (lemma raw-lemma lemma-nr &rest analyses)"
   (when lemma
@@ -274,7 +274,7 @@ Returns a list with the form (lemma raw-lemma lemma-nr &rest analyses)"
 
 ;;; Parsing functions
 
-(defun diogenes--parse-word-keys (normalized lang)
+(defun classicist--parse-word-keys (normalized lang)
   "The keys to try for NORMALIZED, in order.
 The form as it stands first, so nothing that works today stops working.  Then,
 for Greek, the form with an enclitic\='s accent taken off -- see
@@ -286,11 +286,11 @@ for Greek, the form with an enclitic\='s accent taken off -- see
           (setq keys (append keys (list dropped))))))
     keys))
 
-(defun diogenes--parse-word (word lang)
+(defun classicist--parse-word (word lang)
   "Search the ananlyses file of lang for word using a binary search.
 Returns the nearest hit to the query.
 
-Every key `diogenes--parse-word-keys\=' offers is tried before a miss is
+Every key `classicist--parse-word-keys\=' offers is tried before a miss is
 reported, so a word carrying an enclitic\='s second accent is found under its own
 spelling rather than answered with its alphabetical neighbour."
   (let* ((normalized (downcase (diogenes--beta-normalize-gravis
@@ -298,7 +298,7 @@ spelling rather than answered with its alphabetical neighbour."
 	 (analyses-file (file-name-concat (diogenes--perseus-path)
 					  (concat lang "-analyses.txt")))
 	 (index (classicist--get-analyses-index lang))
-	 (keys (diogenes--parse-word-keys normalized lang))
+	 (keys (classicist--parse-word-keys normalized lang))
 	 nearest)
     (cl-loop for candidate in keys
 	     for key = (if (> (length candidate) 3)
@@ -317,19 +317,19 @@ spelling rather than answered with its alphabetical neighbour."
 	     ;; to the word AS WRITTEN is the one to show, not the nearest to a
 	     ;; spelling the reader never typed.
 	     do (unless nearest (setq nearest result))
-	     when (nth 3 result) return (diogenes--parse-word-result result lang)
+	     when (nth 3 result) return (classicist--parse-word-result result lang)
 	     finally return (progn
 			      (message "No result for %s! Showing nearest entry" word)
-			      (diogenes--parse-word-result nearest lang)))))
+			      (classicist--parse-word-result nearest lang)))))
 
-(defun diogenes--parse-word-result (result lang)
-  "RESULT from the binary search, shaped as `diogenes--parse-word\=' returns it."
+(defun classicist--parse-word-result (result lang)
+  "RESULT from the binary search, shaped as `classicist--parse-word\=' returns it."
   (cons (and (car result)
-	     (diogenes--process-parse-result (car result) lang))
+	     (classicist--process-parse-result (car result) lang))
 	(cdr result)))
 
 (let ((cache (make-hash-table :test 'equal)))
- (defun diogenes--all-matches-in-hashtable (query hash-table filter ignore-case no-diacritics)
+ (defun classicist--all-matches-in-hashtable (query hash-table filter ignore-case no-diacritics)
    "Search for all entries in the table where querey matches the key via filter.
 Additionally, letter case and diacritics can be ignored."
    (let* ((filter (or filter #'string-equal))
@@ -365,39 +365,39 @@ Additionally, letter case and diacritics can be ignored."
 		(cl-loop for key in keys collect
 			 (cons key (gethash key hash-table))))))))
 
-(defun diogenes--parse-all (query lang &optional filter ignore-case no-diacritics)
+(defun classicist--parse-all (query lang &optional filter ignore-case no-diacritics)
    "Search all the forms in the analyses file.
 Return all the entries whose keys match query when filter is applied to them.
 Unless specified, filter defaults to string-equal."
-   (let ((entries (diogenes--all-matches-in-hashtable query
+   (let ((entries (classicist--all-matches-in-hashtable query
 						      (classicist--get-all-analyses lang)
 						      filter
 						      ignore-case
 						      no-diacritics)))
      (when entries
        (mapcar (lambda (x) (cons (car x)
-			    (diogenes--process-parse-result (cdr x) lang)))
+			    (classicist--process-parse-result (cdr x) lang)))
 	       entries))))
 
-(defun diogenes--get-all-forms (lemma lang)
+(defun classicist--get-all-forms (lemma lang)
   "Get all attested forms of LEMMA in LANG.
 As there vould be several entries for the same lemma, this
 function returns a list of lists."
-  (mapcar (lambda (l) (diogenes--process-lemma l lang))
+  (mapcar (lambda (l) (classicist--process-lemma l lang))
 	  (gethash lemma (or (classicist--get-all-lemmata lang)
 			     (error "No lemmata retrieved for %s" lang)))))
 
-(defun diogenes--query-all-lemmata (query lang &optional filter ignore-case no-diacritics)
+(defun classicist--query-all-lemmata (query lang &optional filter ignore-case no-diacritics)
   "Search all lemmata in the lemmata file.
 Return all the entries whose keys match query when filter is applied to them.
 Unless specified, filter defaults to string-equal."
-  (let ((entries (diogenes--all-matches-in-hashtable query
+  (let ((entries (classicist--all-matches-in-hashtable query
 						     (classicist--get-all-lemmata lang)
 						     filter
 						     ignore-case
 						     no-diacritics)))
     (when entries
-      (mapcar (lambda (l) (diogenes--process-lemma (cadr l) lang))
+      (mapcar (lambda (l) (classicist--process-lemma (cadr l) lang))
 	      entries))))
 
 ;;; Parse and look up -- a port of Perseus.pm's $do_parse / $format_analysis
@@ -421,18 +421,18 @@ Unless specified, filter defaults to string-equal."
 ;; `classicist--binary-search', but offset 34221511 is exact.  Searching for
 ;; the lemma is only the fallback for a form that would not parse at all.
 
-(defconst diogenes--analysis-group-re
+(defconst classicist--analysis-group-re
   "{\\([^}]+\\)}\\(\\(?:\\[[0-9]+\\]\\)*\\)"
   "One analysis group of a record, with its supplementary offsets.
 Mirrors Perl's m/{([^\\}]+)}((?:\\[\\d+\\])*)/g.  The bracketed numbers
 that may follow the closing brace are further dictionary offsets --
 supplementary prefix entries -- and are captured, not discarded.")
 
-(defconst diogenes--analysis-fields-re
+(defconst classicist--analysis-fields-re
   "\\`\\([0-9]+\\) \\([0-9]\\) \\([^\t]*\\)\t\\([^\t]*\\)\t\\(.*\\)\\'"
   "The fields inside one analysis: OFFSET CONF LEMMA<TAB>TRANS<TAB>INFO.")
 
-(defun diogenes--lemma-of-field (field)
+(defun classicist--lemma-of-field (field)
   "The lemma in FIELD, which the analyses file gives as FORM,LEMMA.
 
     *bria/rew^n,bria/rews   ->  bria/rews
@@ -440,7 +440,7 @@ supplementary prefix entries -- and are captured, not discarded.")
     sidus                   ->  sidus
 
 The form comes first, carrying the vowel quantities the key has not got, and
-the lemma second.  `diogenes--process-parse-result' has always split it this
+the lemma second.  `classicist--process-parse-result' has always split it this
 way; the record parser did not, so the analysis header showed both joined by
 the comma -- and then asked the dictionary for that, which no dictionary has as
 a headword.
@@ -454,7 +454,7 @@ prefixes, and guessing which comma means what is beyond a display function."
           ((cdr parts) (cadr parts))
           (t (car parts)))))
 
-(defun diogenes--munge-ls-lemma (lemma lang)
+(defun classicist--munge-ls-lemma (lemma lang)
   "Render a raw lemma from the analyses file for display.
 Mirrors Perl's $munge_ls_lemma for Latin -- the vowel-quantity markers
 become combining diacritics and a trailing homograph numeral is set off
@@ -468,7 +468,7 @@ by a space -- and beta-code conversion for Greek."
       ("&lt;" "<")
       ("&gt;" ">"))))
 
-(defun diogenes--parse-analyses-record (encoded-str lang)
+(defun classicist--parse-analyses-record (encoded-str lang)
   "Parse the raw analyses record in ENCODED-STR.
 Returns a plist (:analyses ANALYSES :suppl OFFSETS), where each analysis
 is itself a plist
@@ -476,7 +476,7 @@ is itself a plist
   (:offset N :conf N :lemma RAW :display SHOWN :trans TRANS :info INFO)
 
 in the order the record gives them.  Nothing is dropped and nothing is
-merged; grouping is `diogenes--analyses-dicts''s job.
+merged; grouping is `classicist--analyses-dicts''s job.
 
 `classicist-latin-analysis-corrections' is applied here, keyed by the form
 the record itself is filed under, so every caller of a parse gets the same
@@ -486,17 +486,17 @@ lemma a hand-picked dictionary is asked about alike."
 	 (body (or (cadr (diogenes--split-once "\t+" str)) ""))
 	 (pos 0)
 	 analyses suppl)
-    (while (string-match diogenes--analysis-group-re body pos)
+    (while (string-match classicist--analysis-group-re body pos)
       ;; Both captured here, before anything that could clobber the match
       ;; data of BODY: the loop below reads EXTRA after `:display' has run.
       (let ((group (match-string 1 body))
 	    (extra (or (match-string 2 body) "")))
 	(setq pos (match-end 0))
-	(if (not (string-match diogenes--analysis-fields-re group))
+	(if (not (string-match classicist--analysis-fields-re group))
 	    (message "Diogenes: bad analysis: %s" group)
 	  ;; EVERY field is read before anything else is called.  The plist was
 	  ;; built inline, and `:display' -- which is
-	  ;; `diogenes--munge-ls-lemma', and so `replace-regexp-in-string' --
+	  ;; `classicist--munge-ls-lemma', and so `replace-regexp-in-string' --
 	  ;; was evaluated before `:trans' and `:info' read groups 4 and 5.
 	  ;; Match data is global: by then it belonged to munge's own regexps,
 	  ;; those groups were nil, and `string-trim' was handed nil.  A latent
@@ -521,8 +521,8 @@ lemma a hand-picked dictionary is asked about alike."
 	    (push (list :offset offset
 			:conf conf
 			:lemma lemma
-			:display (diogenes--munge-ls-lemma
-				  (diogenes--lemma-of-field lemma) lang)
+			:display (classicist--munge-ls-lemma
+				  (classicist--lemma-of-field lemma) lang)
 			:trans trans
 			:info info)
 		  analyses)))
@@ -530,13 +530,13 @@ lemma a hand-picked dictionary is asked about alike."
 	  (while (string-match "\\[\\([0-9]+\\)\\]" extra p)
 	    (push (string-to-number (match-string 1 extra)) suppl)
 	    (setq p (match-end 0))))))
-    (list :analyses (diogenes--correct-analyses
+    (list :analyses (classicist--correct-analyses
                      (car (diogenes--split-once "\t+" str))
                      (nreverse analyses)
                      lang)
 	  :suppl (delete-dups (nreverse suppl)))))
 
-(defun diogenes--analyses-dicts (record)
+(defun classicist--analyses-dicts (record)
   "Return the entries to show for RECORD, as an alist of (OFFSET . CONF).
 Offsets keep their first-seen order and occur only once; CONF is the LOWEST
 confidence among the analyses pointing there.  Perl SUMS them
@@ -559,7 +559,7 @@ appended with a CONF of -1 unless they already occur among the analyses."
 	(setq dicts (nconc dicts (list (cons offset -1))))))
     dicts))
 
-(defun diogenes--analysis-caveat (conf)
+(defun classicist--analysis-caveat (conf)
   "The note to print above an entry whose summed confidence is CONF.
 Diogenes' own wording."
   (cond ((= conf -2)
@@ -569,7 +569,7 @@ Diogenes' own wording."
 this is around the spot it should appear.)")
 	((<= conf 2) "(NB. This dictionary headword is a guess.)")))
 
-(defun diogenes--lookup-append-entry (xml-bytes start end &optional note)
+(defun classicist--lookup-append-entry (xml-bytes start end &optional note)
   "Append the entry in XML-BYTES to the current lookup buffer.
 The body of `classicist-lookup-next' minus the reading, plus an optional
 NOTE above the entry.  Stacks the several entries of one analysis the way
@@ -577,7 +577,7 @@ the application does."
   (let* ((xml (decode-coding-string xml-bytes 'utf-8))
 	 (formatted (classicist--dict-parse-xml xml start end))
 	 (inhibit-read-only t))
-    (setq diogenes--lookup-bufend (max diogenes--lookup-bufend end))
+    (setq classicist--lookup-bufend (max classicist--lookup-bufend end))
     (goto-char (point-max))
     (let ((beg (copy-marker (point) nil))
 	  (fin (copy-marker (point) t)))
@@ -591,14 +591,14 @@ the application does."
 	(classicist--lookup-insert-entry-links classicist--lookup-lang entry-start))
       (classicist--lookup-mark-entry beg fin start end))))
 
-(defun diogenes--lookup-insert-at-top (text)
+(defun classicist--lookup-insert-at-top (text)
   "Insert TEXT at the top of the current lookup buffer."
   (let ((inhibit-read-only t))
     (save-excursion
       (goto-char (point-min))
       (insert text))))
 
-(defun diogenes--format-analysis-header (query lang record)
+(defun classicist--format-analysis-header (query lang record)
   "The analysis header for QUERY, as the application prints it."
   (let ((analyses (plist-get record :analyses)))
     (cl-labels ((line (a)
@@ -622,7 +622,7 @@ the application does."
 		  concat (format "%2d. %s\n" i (line a))))
        "\n"))))
 
-(defcustom diogenes-lookup-expand-homographs t
+(defcustom classicist-lookup-expand-homographs t
   "Whether a guessed dictionary entry is shown together with its homographs.
 When the offset recorded for a lemma is a guess -- confidence 2 or less --
 the entry it names is as likely as not the wrong one of a numbered set, and
@@ -648,14 +648,14 @@ be done without an index that distinguishes them."
   :type 'boolean
   :group 'diogenes)
 
-(defun diogenes--dict-basic-key (entry)
+(defun classicist--dict-basic-key (entry)
   "The letters of ENTRY's key, downcased: `re^tento2' gives `retento'.
 The spelling `index_lewis.pl' reduces a key to for its coarsest index, and
 the only one a homograph number does not distinguish."
   (when (string-match "key\\s-*=\\s-*\"\\([^\"]*\\)\"" entry)
     (downcase (diogenes--ascii-alpha-only (match-string 1 entry)))))
 
-(defun diogenes--dict-homograph-run (offset lang &optional file limit)
+(defun classicist--dict-homograph-run (offset lang &optional file limit)
   "The entries around OFFSET that share its headword, as (START END BYTES).
 Homographs are numbered forms of one headword -- `re^tento1', `re^tento2'
 -- and so are always neighbours in the file: this walks outwards from
@@ -669,7 +669,7 @@ entry among them."
 	nil
       ;; `classicist--get-dict-line' returns (BYTES START END); a run entry is
       ;; (START END BYTES).
-      (let* ((key (diogenes--dict-basic-key (car here)))
+      (let* ((key (classicist--dict-basic-key (car here)))
 	     (self (list (nth 1 here) (nth 2 here) (nth 0 here)))
 	     (before nil)
 	     (after nil))
@@ -683,7 +683,7 @@ entry among them."
 	    (while (and (< n limit) (> pos 0))
 	      (let ((line (classicist--get-dict-line dict pos)))
 		(if (and (car line)
-			 (equal key (diogenes--dict-basic-key (car line)))
+			 (equal key (classicist--dict-basic-key (car line)))
 			 (< (nth 1 line) (nth 0 (or (car before) self))))
 		    (progn (push (list (nth 1 line) (nth 2 line) (nth 0 line))
 				 before)
@@ -696,7 +696,7 @@ entry among them."
 	    (while (< n limit)
 	      (let ((line (classicist--get-dict-line dict pos)))
 		(if (and (car line)
-			 (equal key (diogenes--dict-basic-key (car line)))
+			 (equal key (classicist--dict-basic-key (car line)))
 			 (> (nth 1 line)
 			    (nth 0 (or (car (last after)) self))))
 		    (setq after (nconc after
@@ -707,7 +707,7 @@ entry among them."
 		  (setq n limit))))))
 	(append before (list self) after)))))
 
-(defun diogenes--dict-entry-hyphenated-p (entry)
+(defun classicist--dict-entry-hyphenated-p (entry)
   "Whether ENTRY's printed headword contains a hyphen.
 Lewis & Short prints the compound as `rĕ-tento' and the frequentative as
 `rĕtento', a distinction its keys drop but its `orth_orig' keeps -- the
@@ -716,7 +716,7 @@ same distinction Morpheus makes by writing the lemma `re-tento'."
        (string-search "-" (match-string 1 entry))
        t))
 
-(defun diogenes--dict-exact-offset (word lang &optional file)
+(defun classicist--dict-exact-offset (word lang &optional file)
   "The offset of the entry whose key is WORD, or nil if there is none.
 Unlike `classicist--lookup-dict\=', a miss is a miss: nothing is displayed and
 no nearest entry offered, so this can be used to ask the dictionary whether
@@ -731,7 +731,7 @@ a spelling exists at all."
        word)
     (and exact-hit start)))
 
-(defun diogenes--assimilated-offset (lemma lang &optional file)
+(defun classicist--assimilated-offset (lemma lang &optional file)
   "The offset of the entry for the hyphenated LEMMA, or nil.
 The first of `classicist--latin-assimilations\=' that the dictionary has a key
 for.  See `classicist-latin-assimilate-prefixes\='."
@@ -739,14 +739,14 @@ for.  See `classicist-latin-assimilate-prefixes\='."
 	     (string= lang "latin")
 	     (string-search "-" lemma))
     (cl-loop for candidate in (classicist--latin-assimilations lemma)
-	     thereis (diogenes--dict-exact-offset candidate lang file))))
+	     thereis (classicist--dict-exact-offset candidate lang file))))
 
-(defun diogenes--expand-homographs (offset conf lemma lang &optional file)
+(defun classicist--expand-homographs (offset conf lemma lang &optional file)
   "The homographs of the entry at OFFSET, each carrying CONF.
 LEMMA settles their order: where it is hyphenated, an entry whose printed
 headword is hyphenated comes first, that being the same distinction between
 a compound and a simple verb."
-  (let* ((run (diogenes--dict-homograph-run offset lang file))
+  (let* ((run (classicist--dict-homograph-run offset lang file))
 	 (hyphenated (and lemma (string-search "-" lemma))))
     (cond
      ((< (length run) 2) (list (cons offset conf)))
@@ -755,23 +755,23 @@ a compound and a simple verb."
 	    (setq offsets
 		  (append
 		   (cl-loop for (start _end bytes) in run
-			    when (diogenes--dict-entry-hyphenated-p bytes)
+			    when (classicist--dict-entry-hyphenated-p bytes)
 			    collect start)
 		   (cl-loop for (start _end bytes) in run
-			    unless (diogenes--dict-entry-hyphenated-p bytes)
+			    unless (classicist--dict-entry-hyphenated-p bytes)
 			    collect start))))
 	  (mapcar (lambda (o) (cons o conf))
 		  (delete-dups offsets)))))))
 
-(defun diogenes--expand-uncertain-dicts (record dicts lang &optional file)
+(defun classicist--expand-uncertain-dicts (record dicts lang &optional file)
   "Add the homographs of any guessed entry in DICTS, an alist of (OFFSET . CONF).
 An entry whose confidence is 2 or less was reached by stripping the lemma
 down to its letters, which cannot tell numbered homographs apart, so its
 neighbours are included too.  Where the lemma is hyphenated, an entry whose
 printed headword is hyphenated is shown first, that being the same
 distinction; otherwise file order is kept.  Governed by
-`diogenes-lookup-expand-homographs'."
-  (if (not diogenes-lookup-expand-homographs)
+`classicist-lookup-expand-homographs'."
+  (if (not classicist-lookup-expand-homographs)
       dicts
     (cl-loop
      for (offset . conf) in dicts
@@ -782,14 +782,14 @@ distinction; otherwise file order is kept.  Governed by
 			      thereis (and (= offset (plist-get a :offset))
 					   (plist-get a :lemma))))
 	      (assimilated (and lemma
-				(diogenes--assimilated-offset lemma lang file))))
+				(classicist--assimilated-offset lemma lang file))))
 	 (if assimilated
 	     ;; The dictionary has a key for the assimilated spelling, so the
 	     ;; guessed offset can be replaced outright rather than hedged.
 	     (list (cons assimilated -2))
-	   (diogenes--expand-homographs offset conf lemma lang file)))))))
+	   (classicist--expand-homographs offset conf lemma lang file)))))))
 
-(defun diogenes--show-analysis-entries (dicts lang &optional file)
+(defun classicist--show-analysis-entries (dicts lang &optional file)
   "Show the entries named by DICTS, an alist of (OFFSET . CONF).
 The first goes into a fresh lookup buffer and the rest are appended to
 it, as `$format_analysis' stacks them.  Returns that buffer."
@@ -797,7 +797,7 @@ it, as `$format_analysis' stacks them.  Returns that buffer."
   (let ((dict (or file (diogenes--dict-file lang)))
 	(buffer nil))
     (cl-loop for (offset . conf) in dicts
-	     for note = (diogenes--analysis-caveat conf)
+	     for note = (classicist--analysis-caveat conf)
 	     do (seq-let (xml-bytes start end)
 		    (classicist--get-dict-line dict offset)
 		  (cond
@@ -809,16 +809,16 @@ it, as `$format_analysis' stacks them.  Returns that buffer."
 				  xml-bytes start end lang file))
 		    (when note
 		      (with-current-buffer buffer
-			(diogenes--lookup-insert-at-top
+			(classicist--lookup-insert-at-top
 			 (propertize (concat note "\n\n")
 				     'font-lock-face 'italic)))))
 		   (t
 		    (with-current-buffer buffer
-		      (diogenes--lookup-append-entry
+		      (classicist--lookup-append-entry
 		       xml-bytes start end note))))))
     (or buffer (error "None of the offsets could be read"))))
 
-(defun diogenes--try-parse (word lang)
+(defun classicist--try-parse (word lang)
   "Look WORD up in LANG's analyses file; return the raw record or nil.
 `$try_parse': the .idt index gives the byte range of the bucket for the
 first three characters of WORD and the binary search is confined to it.
@@ -840,7 +840,7 @@ computed looks in the wrong bucket and can never match `Itys'."
 					  start end)))
     (and (nth 3 result) (car result))))
 
-(defun diogenes--do-parse (word lang)
+(defun classicist--do-parse (word lang)
   "Return the raw analyses record for WORD in LANG, or nil.
 `$do_parse': the form is tried as it stands and a capitalised Latin form
 is then retried in lower case -- Diogenes' \"Fixed parsing of capitalized
@@ -869,9 +869,9 @@ and i exchanged (see `classicist--latin-form-variants')."
             (classicist--greek-parse-candidates word))))
     (or
      (cl-loop for variant in (delete-dups variants)
-              thereis (or (diogenes--try-parse variant lang)
+              thereis (or (classicist--try-parse variant lang)
                           (and (string-match-p "[[:upper:]]" variant)
-                               (diogenes--try-parse (downcase variant) lang))))
+                               (classicist--try-parse (downcase variant) lang))))
      ;; THE WORDLIST'S OWN SPELLING, found by letting the accents go.
      ;;
      ;; An editor's accentuation is not always the file's: Ross prints
@@ -890,9 +890,9 @@ and i exchanged (see `classicist--latin-form-variants')."
      ;;
      ;; THE ACCENT MOVED, tried a few cheap ways before the dear one.
      ;;
-     ;; `diogenes--try-parse' costs almost nothing: the .idt index gives the
+     ;; `classicist--try-parse' costs almost nothing: the .idt index gives the
      ;; bucket for the first three characters and the binary search stays
-     ;; inside it.  `diogenes--parse-all' costs a great deal: the whole
+     ;; inside it.  `classicist--parse-all' costs a great deal: the whole
      ;; analyses file -- nine hundred thousand keys -- read into a hashtable,
      ;; and then every key of it transformed to build a second table without
      ;; diacritics.  Seconds, the first time in a session, for one word.
@@ -904,18 +904,18 @@ and i exchanged (see `classicist--latin-form-variants')."
      ;; for a long word, and every one of them a binary search in one bucket.
      (and (string= lang "greek")
           (cl-loop for candidate in (classicist--greek-accent-variants word)
-                   thereis (diogenes--try-parse candidate lang)))
+                   thereis (classicist--try-parse candidate lang)))
      ;; AND ONLY THEN THE WHOLE FILE, for a form the accents alone do not
      ;; explain -- a breathing misread, an iota subscript dropped.  Dear, but
      ;; once per session, and better than not finding the word.
      (and (string= lang "greek")
           (let ((found (ignore-errors
-                         (diogenes--parse-all word lang nil t t))))
+                         (classicist--parse-all word lang nil t t))))
             (cl-loop for (key . _) in found
                      thereis (and (stringp key)
-                                  (diogenes--try-parse key lang))))))))
+                                  (classicist--try-parse key lang))))))))
 
-(defun diogenes--choose-analysis (record dicts word)
+(defun classicist--choose-analysis (record dicts word)
   "Ask which lemma of RECORD to show; return its (OFFSET . CONF) alone.
 Used when `classicist-lookup-show-all-entries' is nil."
   (let* ((alist (cl-loop
@@ -944,11 +944,11 @@ Used when `classicist-lookup-show-all-entries' is nil."
 	(list (or (assq offset dicts) (cons offset 9)))
       dicts)))
 
-(defcustom diogenes-greek-extra-lemmata nil
+(defcustom classicist-greek-extra-lemmata nil
   "Greek forms the wordlists have no analysis for, and the headword to show.
 An alist of (FORM . HEADWORD), as `classicist-latin-extra-lemmata\=' is for Latin:
 
-    (setq diogenes-greek-extra-lemmata
+    (setq classicist-greek-extra-lemmata
           \='((\"οὑτοσί\" . \"οὗτος\")
             (\"ταὐτόν\"  . \"αὐτός\")))
 
@@ -963,7 +963,7 @@ plain word and not `οὑτοσί\=', and Morpheus does not always oblige."
                 :value-type (string :tag "Headword"))
   :group 'diogenes)
 
-(defcustom diogenes-greek-analysis-corrections nil
+(defcustom classicist-greek-analysis-corrections nil
   "Greek analyses the shipped data gets wrong, and what to say instead.
 Keyed by the form, as `classicist-latin-analysis-corrections\=' is for Latin, and
 taking the same three keys:
@@ -972,7 +972,7 @@ taking the same three keys:
   :lemma STRING    -- the headword, and the entry the dictionary keys open
   :add ENTRIES     -- ((LEMMA . INFO) ...), readings to show as well
 
-    (setq diogenes-greek-analysis-corrections
+    (setq classicist-greek-analysis-corrections
           \='((\"ᾖ\" :info \"pres subj act 3rd sg\")))
 
 The Greek data is wrong more often than the Latin, not less: Morpheus knows
@@ -982,32 +982,32 @@ record it."
   :type '(alist :key-type (string :tag "Form") :value-type plist)
   :group 'diogenes)
 
-(defun diogenes--extra-lemmata-for (lang)
+(defun classicist--extra-lemmata-for (lang)
   "The extra-lemmata table for LANG."
   (if (string= lang "greek")
-      diogenes-greek-extra-lemmata
+      classicist-greek-extra-lemmata
     classicist-latin-extra-lemmata))
 
-(defun diogenes--analysis-corrections-for (lang)
+(defun classicist--analysis-corrections-for (lang)
   "The corrections table for LANG."
   (if (string= lang "greek")
-      diogenes-greek-analysis-corrections
+      classicist-greek-analysis-corrections
     classicist-latin-analysis-corrections))
 
-(defun diogenes--extra-lemma (word lang)
+(defun classicist--extra-lemma (word lang)
   "The headword the extra-lemmata table for LANG gives WORD, or nil.
 Latin tries every spelling variant, so an entry written with v and j answers
 for the form written with u and i; Greek compares the form as it stands and
 again stripped of its accents, so an entry written unaccented answers for the
 accented word."
-  (let ((table (diogenes--extra-lemmata-for lang)))
+  (let ((table (classicist--extra-lemmata-for lang)))
     (when table
       (cl-loop for variant in (if (string= lang "greek")
                                   (list word (diogenes--ascii-alpha-only word))
                                 (classicist--latin-form-variants word))
                thereis (cdr (assoc-string variant table t))))))
 
-(defun diogenes--latin-extra-lemma (word)
+(defun classicist--latin-extra-lemma (word)
   "The headword `classicist-latin-extra-lemmata\=' gives for WORD, or nil.
 Every spelling variant of WORD is tried, so an entry written with v and j
 also answers for the form written with u and i."
@@ -1015,17 +1015,17 @@ also answers for the form written with u and i."
 	   thereis (cdr (assoc-string variant
 				    classicist-latin-extra-lemmata t))))
 
-(defun diogenes--analysis-correction (form lang)
+(defun classicist--analysis-correction (form lang)
   "The correction plist for FORM in LANG, or nil.
 The Greek and Latin tables are read the same way; only the table differs."
-  (let ((table (diogenes--analysis-corrections-for lang)))
+  (let ((table (classicist--analysis-corrections-for lang)))
     (and table
          (cl-loop for variant in (if (string= lang "greek")
                                      (list form (diogenes--ascii-alpha-only form))
                                    (classicist--latin-form-variants form))
                   thereis (cdr (assoc-string variant table t))))))
 
-(defun diogenes--latin-analysis-correction (form)
+(defun classicist--latin-analysis-correction (form)
   "The correction plist `classicist-latin-analysis-corrections' gives FORM.
 Every spelling variant is tried, so an entry written with v and j answers
 for the form written with u and i."
@@ -1034,24 +1034,24 @@ for the form written with u and i."
                 thereis (cdr (assoc-string
                               variant classicist-latin-analysis-corrections t)))))
 
-(defun diogenes--mark-correction (info)
+(defun classicist--mark-correction (info)
   "INFO marked as corrected, if `classicist-latin-mark-corrections' says so."
   (if classicist-latin-mark-corrections
       (concat info " [corr.]")
     info))
 
-(defun diogenes--corrected-info (info spec)
+(defun classicist--corrected-info (info spec)
   "INFO as SPEC would have it: SPEC itself, its alist entry, or INFO."
   (cond ((stringp spec) spec)
         ((consp spec) (or (cdr (assoc-string info spec t)) info))
         (t info)))
 
-(defun diogenes--added-analysis (lemma info model lang)
+(defun classicist--added-analysis (lemma info model lang)
   "An analysis of LEMMA reading INFO, shaped like the file's own.
 LEMMA nil takes the lemma and the byte offset of MODEL, the analysis the
 file gave, so a missing reading of the same word costs no lookup and lands
 on the same entry.  A LEMMA given is resolved against the dictionary's own
-keys, as `diogenes--morpheus-analyses' resolves one: found, it carries that
+keys, as `classicist--morpheus-analyses' resolves one: found, it carries that
 offset and a confidence of 5; not found, 0, which prints the caveat about
 the headword being a guess."
   (if (null lemma)
@@ -1060,23 +1060,23 @@ the headword being a guess."
             :lemma (plist-get model :lemma)
             :display (plist-get model :display)
             :trans ""
-            :info (diogenes--mark-correction info))
-    (let ((offset (diogenes--dict-exact-offset
+            :info (classicist--mark-correction info))
+    (let ((offset (classicist--dict-exact-offset
                    (diogenes--ascii-alpha-only lemma) lang)))
       (list :offset (or offset 0)
             :conf (if offset 5 0)
             :lemma lemma
-            :display (diogenes--munge-ls-lemma lemma lang)
+            :display (classicist--munge-ls-lemma lemma lang)
             :trans ""
-            :info (diogenes--mark-correction info)))))
+            :info (classicist--mark-correction info)))))
 
-(defun diogenes--correct-analyses (form analyses lang)
+(defun classicist--correct-analyses (form analyses lang)
   "ANALYSES of FORM, with `classicist-latin-analysis-corrections' applied.
 Returns ANALYSES unchanged when there is no entry for FORM, which is the
 usual case and costs one `assoc-string' per lookup.  Either language: the
 table is `classicist-latin-analysis-corrections' or
-`diogenes-greek-analysis-corrections' according to LANG."
-  (let ((spec (diogenes--analysis-correction form lang)))
+`classicist-greek-analysis-corrections' according to LANG."
+  (let ((spec (classicist--analysis-correction form lang)))
     (if (null spec)
         analyses
       (let ((info-spec (plist-get spec :info))
@@ -1085,16 +1085,16 @@ table is `classicist-latin-analysis-corrections' or
         (append
          (mapcar (lambda (analysis)
                    (let* ((old (plist-get analysis :info))
-                          (new (diogenes--corrected-info old info-spec))
+                          (new (classicist--corrected-info old info-spec))
                           (analysis (if (equal old new)
                                         analysis
                                       (plist-put (copy-sequence analysis) :info
-                                                 (diogenes--mark-correction new)))))
+                                                 (classicist--mark-correction new)))))
                      ;; A corrected LEMMA is the headword the reader has
                      ;; supplied, so its ENTRY is found the way a Morpheus
                      ;; lemma's is -- by name among the dictionary's keys, and
                      ;; under the assimilated spellings if it is a compound.
-                     ;; See `diogenes--morpheus-analyses'.
+                     ;; See `classicist--morpheus-analyses'.
                      ;;
                      ;; Three fields and not one.  `:display' is what is
                      ;; printed, `:lemma' what the assimilation machinery
@@ -1112,10 +1112,10 @@ table is `classicist-latin-analysis-corrections' or
                               ;; with the caveat that its entry is a guess.
                               (offset
                                (ignore-errors
-                                 (or (diogenes--dict-exact-offset plain lang)
-                                     (diogenes--assimilated-offset lemma-spec
+                                 (or (classicist--dict-exact-offset plain lang)
+                                     (classicist--assimilated-offset lemma-spec
                                                                    lang))))
-                              (shown (diogenes--mark-correction lemma-spec))
+                              (shown (classicist--mark-correction lemma-spec))
                               (copy (copy-sequence analysis)))
                          (setq copy (plist-put copy :lemma lemma-spec))
                          (setq copy (plist-put copy :display shown))
@@ -1129,7 +1129,7 @@ table is `classicist-latin-analysis-corrections' or
                                         (plist-get analysis :offset)))))))
                  analyses)
          (cl-loop for (lemma . info) in (plist-get spec :add)
-                  collect (diogenes--added-analysis lemma info model lang)))))))
+                  collect (classicist--added-analysis lemma info model lang)))))))
 
 
 ;;; Morpheus as a fallback
@@ -1150,11 +1150,11 @@ table is `classicist-latin-analysis-corrections' or
 ;;
 ;; It also emits the same hyphenated compounds the shipped data does --
 ;; `in-mitto', `con-pello', flagged `raw_preverb' -- so its lemmas go through
-;; `diogenes--assimilated-offset' like any other.  And it is fast: 2.7 ms for
+;; `classicist--assimilated-offset' like any other.  And it is fast: 2.7 ms for
 ;; one word, startup included, so a process per lookup is simpler than
 ;; keeping one alive and costs nothing measurable.
 
-(defcustom diogenes-morpheus-directory nil
+(defcustom classicist-morpheus-directory nil
   "Directory of a built Morpheus, or nil not to use one.
 Must hold `bin/cruncher' and `stemlib/', which is how the tree is laid out
 by
@@ -1170,7 +1170,7 @@ Nothing here requires it.  Any Morpheus laid out the same way is run the
 same way -- the cruncher reading forms from stdin, `-L' for Latin, MORPHLIB
 naming `stemlib' -- and two things have to hold of whichever is used.  Its
 output must carry the `<NL>...</NL>' wrappers the parser reads (see
-`diogenes--morpheus-analysis-re'), and it must spell a lemma as Lewis & Short
+`classicist--morpheus-analysis-re'), and it must spell a lemma as Lewis & Short
 keys it, since Morpheus has no notion of where an entry sits in a file and
 the lemma is resolved against the dictionary's own keys.  Beyond the initial
 `j' that `classicist-latin-fold-letters' folds and the prefixes
@@ -1183,28 +1183,28 @@ installation without this set behaves as before."
   :type '(choice (const :tag "Do not use Morpheus" nil) directory)
   :group 'diogenes)
 
-(defcustom diogenes-morpheus-timeout 10
+(defcustom classicist-morpheus-timeout 10
   "Seconds to wait for Morpheus before giving up on a form."
   :type 'natnum
   :group 'diogenes)
 
-(defun diogenes-morpheus-available-p ()
-  "Whether `diogenes-morpheus-directory' holds a usable Morpheus."
-  (and diogenes-morpheus-directory
+(defun classicist-morpheus-available-p ()
+  "Whether `classicist-morpheus-directory' holds a usable Morpheus."
+  (and classicist-morpheus-directory
        (let ((bin (expand-file-name "bin/cruncher"
-				    diogenes-morpheus-directory))
-	     (lib (expand-file-name "stemlib" diogenes-morpheus-directory)))
+				    classicist-morpheus-directory))
+	     (lib (expand-file-name "stemlib" classicist-morpheus-directory)))
 	 (and (file-executable-p bin) (file-directory-p lib)))))
 
-(defun diogenes--morpheus-run (word lang)
+(defun classicist--morpheus-run (word lang)
   "Ask Morpheus about WORD in LANG; return its raw output, or nil.
 The cruncher reads forms from stdin, one per line, and wants beta code for
-Greek -- which is what it gets, `diogenes--do-parse' having converted the
+Greek -- which is what it gets, `classicist--do-parse' having converted the
 form already.  MORPHLIB must name the `stemlib' directory itself, not its
 parent: the cruncher appends the language to it."
-  (when (diogenes-morpheus-available-p)
+  (when (classicist-morpheus-available-p)
     (let* ((dir (file-name-as-directory
-		 (expand-file-name diogenes-morpheus-directory)))
+		 (expand-file-name classicist-morpheus-directory)))
 	   (process-environment
 	    (cons (concat "MORPHLIB=" dir "stemlib") process-environment))
 	   (args (append (when (string= lang "latin") '("-L"))
@@ -1220,7 +1220,7 @@ parent: the cruncher appends the language to it."
 	  (when (and exit (or (eq exit 0) (integerp exit)))
 	    (buffer-string)))))))
 
-(defconst diogenes--morpheus-analysis-re
+(defconst classicist--morpheus-analysis-re
   "<NL>\\([^<]*\\)</NL>"
   "One analysis in Morpheus' output.
 The cruncher answers with the form, then its analyses run together:
@@ -1230,7 +1230,7 @@ The cruncher answers with the form, then its analyses run together:
 which is part of speech, then form and lemma, then the morphology, then
 dialect and stem-class fields separated by tabs.")
 
-(defcustom diogenes-morpheus-lemma-markers
+(defcustom classicist-morpheus-lemma-markers
   '(("pl" . "lemma listed under the plural")
     ("dual" . "lemma listed under the dual")
     ("indecl" . "indeclinable"))
@@ -1247,30 +1247,30 @@ better than pretending to translate it."
                 :value-type (string :tag "What to say"))
   :group 'diogenes)
 
-(defun diogenes--morpheus-lemma-marker (lemma)
+(defun classicist--morpheus-lemma-marker (lemma)
   "The marker at the end of LEMMA, or nil.
-Only what `diogenes-morpheus-lemma-markers\=' names.  A hyphen in a Morpheus
+Only what `classicist-morpheus-lemma-markers\=' names.  A hyphen in a Morpheus
 lemma is usually a COMPOUND -- `a)mfi/-pla/ssw\=' is one word -- so a rule that
 took whatever followed the last hyphen would cut real lemmata in half wherever
 the second element happened to carry no accent.  Nothing comes off unless it is
 known to be a marker."
   (when (and lemma (string-match-p "-" lemma))
     (let ((tail (car (last (split-string lemma "-")))))
-      (and (assoc tail diogenes-morpheus-lemma-markers) tail))))
+      (and (assoc tail classicist-morpheus-lemma-markers) tail))))
 
-(defun diogenes--morpheus-parse-output (output lang)
+(defun classicist--morpheus-parse-output (output lang)
   "Turn Morpheus' OUTPUT into analyses shaped like an analyses record's.
 Each is a plist (:offset :conf :lemma :display :trans :info), the same
-shape `diogenes--parse-analyses-record' produces, so that everything
+shape `classicist--parse-analyses-record' produces, so that everything
 downstream -- the stacking, the notes, the homograph sweep, navigation --
 works on it unchanged.
 
-:offset is filled in later by `diogenes--morpheus-analyses': the lemma has
+:offset is filled in later by `classicist--morpheus-analyses': the lemma has
 to be resolved against the dictionary's own keys, Morpheus having no notion
 of where an entry sits in a file.  :trans is empty, Morpheus giving no
 glosses."
   (let ((pos 0) out)
-    (while (string-match diogenes--morpheus-analysis-re (or output "") pos)
+    (while (string-match classicist--morpheus-analysis-re (or output "") pos)
       (setq pos (match-end 0))
       (let* ((body (match-string 1 output))
 	     (fields (split-string body "\t" nil))
@@ -1293,7 +1293,7 @@ glosses."
 	     ;; it cannot stay on a string that will be asked of a dictionary --
 	     ;; `Briareos-pl' matches no headword, and the search fell to the
 	     ;; dictionary's first entry with a note that it had found nothing.
-	     (marker (diogenes--morpheus-lemma-marker lemma))
+	     (marker (classicist--morpheus-lemma-marker lemma))
 	     (lemma (if marker
 			(substring lemma 0 (- (length lemma) (length marker) 1))
 		      lemma))
@@ -1307,7 +1307,7 @@ glosses."
 	     (info (if marker
 		       (concat info " ("
 			       (or (cdr (assoc marker
-					       diogenes-morpheus-lemma-markers))
+					       classicist-morpheus-lemma-markers))
 				   marker)
 			       ")")
 		     info)))
@@ -1315,7 +1315,7 @@ glosses."
 	  (push (list :offset 0
 		      :conf 5
 		      :lemma lemma
-		      :display (diogenes--munge-ls-lemma lemma lang)
+		      :display (classicist--munge-ls-lemma lemma lang)
 		      :trans ""
 		      :info (string-trim
 			     (concat info (if (string-empty-p extra)
@@ -1324,7 +1324,7 @@ glosses."
 		out))))
     (nreverse out)))
 
-(defun diogenes--morpheus-analyses (word lang)
+(defun classicist--morpheus-analyses (word lang)
   "Analyses of WORD from Morpheus, with their entries resolved, or nil.
 A lemma is looked for among the dictionary's keys as it stands and, being
 possibly a hyphenated compound, under its assimilated spellings as well.
@@ -1332,18 +1332,18 @@ An analysis whose lemma is found carries that offset and a confidence of 5;
 one whose lemma is not carries 0, which prints the caveat about the headword
 being a guess -- the morphology is worth showing either way, and it is more
 than the alternative of an unrelated entry and no analysis at all."
-  (let ((analyses (diogenes--morpheus-parse-output
-		   (diogenes--morpheus-run word lang) lang)))
+  (let ((analyses (classicist--morpheus-parse-output
+		   (classicist--morpheus-run word lang) lang)))
     (cl-loop
      for a in analyses
      for lemma = (plist-get a :lemma)
      for plain = (diogenes--ascii-alpha-only lemma)
-     for offset = (or (diogenes--dict-exact-offset plain lang)
-		      (diogenes--assimilated-offset lemma lang))
+     for offset = (or (classicist--dict-exact-offset plain lang)
+		      (classicist--assimilated-offset lemma lang))
      collect (plist-put (plist-put (copy-sequence a) :offset (or offset 0))
 			:conf (if offset 5 0)))))
 
-(defun diogenes--parse-and-lookup (word lang)
+(defun classicist--parse-and-lookup (word lang)
   "Try to parse a word by looking it up in the morphological files,
 and show the entry for it in the lexica. Dispatcher function.
 
@@ -1351,26 +1351,26 @@ A port of `$do_parse' followed by `$format_analysis': every entry named
 in the analyses record is fetched from the byte offset recorded there.
 Only a form that will not parse falls back on searching the dictionary by
 headword, exactly as the application does."
-  (let* ((raw (diogenes--do-parse word lang))
-	 (extra (diogenes--extra-lemma word lang))
+  (let* ((raw (classicist--do-parse word lang))
+	 (extra (classicist--extra-lemma word lang))
 	 ;; Only where the shipped data has nothing: its offsets and glosses
 	 ;; are better than anything that can be recovered from a lemma.
 	 (morpheus (and (not raw) (not extra)
-			(diogenes-morpheus-available-p)
-			(diogenes--morpheus-analyses word lang))))
+			(classicist-morpheus-available-p)
+			(classicist--morpheus-analyses word lang))))
     (if (not raw)
 	(cond
 	 (morpheus
 	  (let* ((record (list :analyses morpheus :suppl nil))
-		 (dicts (diogenes--analyses-dicts record)))
+		 (dicts (classicist--analyses-dicts record)))
 	    (message "%s does not parse; analysed by Morpheus" word)
-	    (let ((buffer (diogenes--show-analysis-entries
-			   (diogenes--expand-uncertain-dicts record dicts lang)
+	    (let ((buffer (classicist--show-analysis-entries
+			   (classicist--expand-uncertain-dicts record dicts lang)
 			   lang)))
 	      (when classicist-lookup-show-analysis
 		(with-current-buffer buffer
-		  (diogenes--lookup-insert-at-top
-		   (diogenes--format-analysis-header word lang record))
+		  (classicist--lookup-insert-at-top
+		   (classicist--format-analysis-header word lang record))
 		  (goto-char (point-min))))
 	      buffer)))
 	 ;; A form the wordlists never had.  The headword is known, even
@@ -1383,25 +1383,25 @@ headword, exactly as the application does."
 	  (message "No results for %s, trying to look it up in the dictionaries!"
 		   word)
 	  (classicist--lookup-dict word lang)))
-      (let* ((record (diogenes--parse-analyses-record raw lang))
-	     (dicts (diogenes--analyses-dicts record)))
+      (let* ((record (classicist--parse-analyses-record raw lang))
+	     (dicts (classicist--analyses-dicts record)))
 	(if (null dicts)
 	    (progn
 	      (message "No dictionary entry for %s; searching by headword" word)
 	      (classicist--lookup-dict word lang))
-	  (let ((buffer (diogenes--show-analysis-entries
+	  (let ((buffer (classicist--show-analysis-entries
 			 (if classicist-lookup-show-all-entries
-			     (diogenes--expand-uncertain-dicts record dicts lang)
-			   (diogenes--choose-analysis record dicts word))
+			     (classicist--expand-uncertain-dicts record dicts lang)
+			   (classicist--choose-analysis record dicts word))
 			 lang)))
 	    (when classicist-lookup-show-analysis
 	      (with-current-buffer buffer
-		(diogenes--lookup-insert-at-top
-		 (diogenes--format-analysis-header word lang record))
+		(classicist--lookup-insert-at-top
+		 (classicist--format-analysis-header word lang record))
 		(goto-char (point-min))))
 	    buffer))))))
 
-(defun diogenes--add-parse-entry ()
+(defun classicist--add-parse-entry ()
   "Get or create an Diogenes Analysis buffer, and begin a new entry."
   ;; `morphology' and not `lookup': an analysis is not an entry, and displaying
   ;; it as one made it replace whatever entry the reader was consulting -- which
@@ -1409,13 +1409,13 @@ headword, exactly as the application does."
   (classicist-display-buffer (get-buffer-create "*Diogenes Analysis*")
 			    :kind 'morphology)
   (goto-char (point-max))
-  (unless (eq major-mode #'diogenes-analysis-mode)
-    (diogenes-analysis-mode))
+  (unless (eq major-mode #'classicist-analysis-mode)
+    (classicist-analysis-mode))
   (unless (diogenes--first-line-p)
     (insert "\n")))
 
-(defun diogenes--parse-and-show-choose-filter (filter ignore-case no-diacritics)
-  "Choose an approriate filter function for `diogenes--parse-and-show'."
+(defun classicist--parse-and-show-choose-filter (filter ignore-case no-diacritics)
+  "Choose an approriate filter function for `classicist--parse-and-show'."
   (cons
    (or filter
        (let* ((functions '((?l . string-equal)
@@ -1450,8 +1450,8 @@ headword, exactly as the application does."
 	   (t t)))))
 
 
-(defun diogenes--assign-parse-result-to-lemmata (parse-results)
-  "Loop through the result of `diogenes--process-parse-result',
+(defun classicist--assign-parse-result-to-lemmata (parse-results)
+  "Loop through the result of `classicist--process-parse-result',
 assigning the single results to their respective lemmata. Returns the lemmata as a list,
 where each lemma is itself a list consisting of the LEMMA-NR, the LEMMA-WORD, the TRANSLATION
 and the list on ANALYSES."
@@ -1471,11 +1471,11 @@ and the list on ANALYSES."
    else do (push entry (cl-fourth existent-lemma))
    finally return lemmata))
 
-(defun diogenes--format-parse-results (query lang results)
-  "Process and format the results of `diogenes--process-parse-result'.
+(defun classicist--format-parse-results (query lang results)
+  "Process and format the results of `classicist--process-parse-result'.
 Besides the fontification, it also checks for duplicate lemma
 entries and orders them accordingly."
-  (let ((lemmata (diogenes--assign-parse-result-to-lemmata results)))
+  (let ((lemmata (classicist--assign-parse-result-to-lemmata results)))
     (cl-loop
      for lemma in lemmata
      for (lemma-word lemma-nr translation entries) = lemma
@@ -1510,15 +1510,15 @@ entries and orders them accordingly."
 				     'h3 t))
 		    "\n"))))
 
-(defun diogenes--parse-and-show (query lang &optional filter ignore-case no-diacritics)
+(defun classicist--parse-and-show (query lang &optional filter ignore-case no-diacritics)
   "Display all possible morphological analyses for query, with FILTER applied.
  Dispatcher function. IGNORE-CASE and NO-DIACRITICS should be either t or 'ignore;
 if nil, query interactively for their values"
   (seq-let (filter ignore-case no-diacritics)
-      (diogenes--parse-and-show-choose-filter filter ignore-case no-diacritics)
-    (let ((results (diogenes--parse-all query lang filter ignore-case no-diacritics)))
+      (classicist--parse-and-show-choose-filter filter ignore-case no-diacritics)
+    (let ((results (classicist--parse-all query lang filter ignore-case no-diacritics)))
       (unless results (error "No results for %s!" query))
-      (diogenes--add-parse-entry)
+      (classicist--add-parse-entry)
       (insert (propertize (format "Results for %s:\n" query)
 			  'font-lock-face 'shr-h1
 			  'heading 'h1))
@@ -1542,14 +1542,14 @@ if nil, query interactively for their values"
 			       'h1 t
 			       'heading 'h2))
 	       do (insert
-		   (propertize (diogenes--format-parse-results headword lang analyses)
+		   (propertize (classicist--format-parse-results headword lang analyses)
 			       'h1 t
 			       'h2 t))))))
 
 
 ;;; Show all attested forms of lemma
-(defun diogenes--format-lemma-and-forms (lemma lang)
-  "Format a LEMMA entry as returned by `diogenes--get-all-forms'."
+(defun classicist--format-lemma-and-forms (lemma lang)
+  "Format a LEMMA entry as returned by `classicist--get-all-forms'."
   (concat (propertize (car lemma)
 		      'font-lock-face 'shr-h2
 		      'heading 'h2
@@ -1576,34 +1576,34 @@ if nil, query interactively for their values"
 		   'h2 t))
 	  "\n"))
 
-(defun diogenes--show-all-forms (lemma lang)
+(defun classicist--show-all-forms (lemma lang)
   "Show all attested forms of LEMMA in LANG."
-  (let ((results (diogenes--get-all-forms lemma lang)))
+  (let ((results (classicist--get-all-forms lemma lang)))
     (unless results (error "No result for %s in %s" lemma lang))
     (classicist-display-buffer (get-buffer-create "*Diogenes Forms*")
 			      :kind 'morphology)
-    (diogenes-analysis-mode)
+    (classicist-analysis-mode)
     (goto-char (point-max))
     (save-excursion
       (mapc (lambda (x)
-	      (insert (diogenes--format-lemma-and-forms x lang)))
+	      (insert (classicist--format-lemma-and-forms x lang)))
 	    (sort results (lambda (a b)
 		     (diogenes--sort-alphabetically-no-diacritics (car a)
 								  (car b))))))
     t))
 
 ;;; Show all lemmata that match query
-(defun diogenes--show-all-lemmata (query lang &optional filter ignore-case no-diacritics)
+(defun classicist--show-all-lemmata (query lang &optional filter ignore-case no-diacritics)
   "Show all lemmata that match QUERY in lang, with FILTER applied.
 IGNORE-CASE and NO-DIACRITICS should be either t or 'ignore;
 if nil, query interactively for their values"
  (seq-let (filter ignore-case no-diacritics)
-      (diogenes--parse-and-show-choose-filter filter ignore-case no-diacritics)
-   (let ((results (diogenes--query-all-lemmata query lang filter ignore-case no-diacritics)))
+      (classicist--parse-and-show-choose-filter filter ignore-case no-diacritics)
+   (let ((results (classicist--query-all-lemmata query lang filter ignore-case no-diacritics)))
      (unless results (error "No results for lemma %s!" query))
      (classicist-display-buffer (get-buffer-create "*Diogenes Forms*")
 			      :kind 'morphology)
-     (diogenes-analysis-mode)
+     (classicist-analysis-mode)
      (goto-char (point-max))
      (insert (propertize (format "Results for %s:\n" query)
 			 'font-lock-face 'shr-h1
@@ -1620,7 +1620,7 @@ if nil, query interactively for their values"
 			 'h1 t))
      (save-excursion
        (mapc (lambda (x)
-	       (insert (diogenes--format-lemma-and-forms x lang)))
+	       (insert (classicist--format-lemma-and-forms x lang)))
 	     (sort results
 		   (lambda (a b)
 		     (diogenes--sort-alphabetically-no-diacritics (car a)
@@ -1629,7 +1629,7 @@ if nil, query interactively for their values"
 
 ;;; Callback function
 
-(defun diogenes-lookup-open-tll-or-tgl ()
+(defun classicist-lookup-open-tll-or-tgl ()
   "Open the print thesaurus appropriate to the current entry's language.
 For a Latin entry this opens the TLL (Thesaurus Linguae Latinae); for
 a Greek entry, Estienne's TGL (Thesaurus Graecae Linguae).  Bound to
@@ -1645,6 +1645,6 @@ TLL, the historical binding of this key."
       (_       (call-interactively #'diogenes-lookup-open-tll)))))
 
 
-(provide 'diogenes-perseus)
+(provide 'classicist-morphology)
 
-;;; diogenes-perseus.el ends here
+;;; classicist-morphology.el ends here
