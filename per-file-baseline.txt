@@ -1,5 +1,5 @@
 45 diogenes-perseus.el
-28 diogenes-browser.el
+25 diogenes-browser.el
 17 diogenes-search.el
 17 diogenes-perl-interface.el
 17 diogenes-corpora.el
