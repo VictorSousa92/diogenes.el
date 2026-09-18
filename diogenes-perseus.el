@@ -418,10 +418,6 @@ detectable headword."
 	(when hw
 	  (diogenes--lookup-insert-dict-links hw lang))))))
 
-(defvar classicist--lookup-headword nil
-  "Headword of the entry shown in the current lookup buffer.
-Buffer-local in `diogenes-lookup-mode' buffers; used by the
-print-dictionary openers.")
 (defvar diogenes--lookup-lang nil
   "Language (\"greek\" or \"latin\") of the current lookup buffer's entry.
 Buffer-local in `diogenes-lookup-mode' buffers.")
