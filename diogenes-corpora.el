@@ -470,8 +470,7 @@ inside the region."
 		  (cl-loop
 		   for new-name = (read-from-minibuffer
 				   (format "Rename %s to: "
-					   (or name)
-					   "anonymous corpus"))
+					   (or name "anonymous corpus")))
 		   unless (member new-name
 				  (diogenes--get-defined-corpus-names))
 		   return (progn (setq corpus
