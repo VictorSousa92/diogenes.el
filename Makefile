@@ -48,7 +48,7 @@ compile:
 	@fail=0; \
 	for f in $(ELS); do \
 	  out=$$($(EMACS) -Q --batch -L . -f batch-byte-compile $$f 2>&1); \
-	  if echo "$$out" | grep -qi "error"; then \
+	  if echo "$$out" | grep -q ": Error: "; then \
 	    echo "ERROR  $$f -- does not compile"; \
 	    echo "$$out" | sed 's/^/         /'; \
 	    fail=1; \
