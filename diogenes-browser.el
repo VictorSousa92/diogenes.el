@@ -32,6 +32,15 @@
 (require 'diogenes-perl-interface)
 (require 'classicist-citation)
 
+;; IN `diogenes.el', WHICH REQUIRES THIS FILE, so declared rather than
+;; required.  `diogenes-browser-lookup' calls whichever of the two the
+;; passage's language names; both were assembled with `intern' until now, and
+;; a declaration cannot cover a name that does not exist until it is called.
+(declare-function diogenes-parse-and-lookup-greek "diogenes"
+                  (word &optional dictionary))
+(declare-function diogenes-parse-and-lookup-latin "diogenes"
+                  (word &optional dictionary))
+
 ;; Called across files that cannot be required from here without a
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
@@ -530,9 +539,25 @@ presses on a passage -- calling `thing-at-point\=' as before, and looking up
 		       (diogenes-browser--word-at-point-joined))
 		  (thing-at-point 'word))))
     (unless word (user-error "No word at point"))
-    (funcall (intern (concat "diogenes-parse-and-lookup-"
-			     diogenes--browser-language))
-	     (replace-regexp-in-string "[^[:alpha:]]" "" word))))
+    ;; NAMED AND NOT ASSEMBLED.  It read `(intern (concat
+    ;; "diogenes-parse-and-lookup-" diogenes--browser-language))', which is a
+    ;; reference no grep finds and no `declare-function' can cover -- the name
+    ;; does not exist until the call is made.  Two consequences, and the second
+    ;; is the one that would have shown:
+    ;;
+    ;; A RENAME CANNOT REACH IT.  These two are in `diogenes.el' and are not
+    ;; moving, so it was safe; the same shape in the remap table above was not.
+    ;;
+    ;; AND A LANGUAGE THAT IS NEITHER gave `void-function
+    ;; diogenes-parse-and-lookup-coptic' and a backtrace, where a message
+    ;; would have done.  `diogenes--browser-language' is set from the corpus,
+    ;; and nothing promises it is one of two.
+    (funcall (pcase diogenes--browser-language
+               ("greek" #'diogenes-parse-and-lookup-greek)
+               ("latin" #'diogenes-parse-and-lookup-latin)
+               (lang (user-error "No lookup for language %s"
+                                 (or lang "unknown"))))
+             (replace-regexp-in-string "[^[:alpha:]]" "" word))))
 
 ;;; Browser Mode
 (defcustom diogenes-browser-mouse-keys nil
