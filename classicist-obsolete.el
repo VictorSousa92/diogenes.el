@@ -127,6 +127,76 @@
 (define-obsolete-variable-alias 'diogenes-window-behaviour
                                 'classicist-window-behaviour "0.1")
 
+
+;;; The browser, renamed
+;; `diogenes-browser.el' is `classicist-browser.el' and its sixty names
+;; went with it.  32 public ones answered here.
+
+(define-obsolete-variable-alias 'diogenes-browser-add-lines
+                                'classicist-browser-add-lines "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-addition-face
+                                'classicist-browser-addition-face "0.1")
+(define-obsolete-function-alias 'diogenes-browser-backward
+                                'classicist-browser-backward "0.1")
+(define-obsolete-function-alias 'diogenes-browser-backward-line
+                                'classicist-browser-backward-line "0.1")
+(define-obsolete-function-alias 'diogenes-browser-beginning-of-buffer
+                                'classicist-browser-beginning-of-buffer "0.1")
+(define-obsolete-function-alias 'diogenes-browser-end-of-buffer
+                                'classicist-browser-end-of-buffer "0.1")
+(define-obsolete-function-alias 'diogenes-browser-forward
+                                'classicist-browser-forward "0.1")
+(define-obsolete-function-alias 'diogenes-browser-forward-line
+                                'classicist-browser-forward-line "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-goto-by-level
+                                'classicist-browser-goto-by-level "0.1")
+(define-obsolete-function-alias 'diogenes-browser-goto-passage
+                                'classicist-browser-goto-passage "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-header-button
+                                'classicist-browser-header-button "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-header-line
+                                'classicist-browser-header-line "0.1")
+(define-obsolete-function-alias 'diogenes-browser-header-line
+                                'classicist-browser-header-line "0.1")
+(define-obsolete-function-alias 'diogenes-browser-install-mouse-keys
+                                'classicist-browser-install-mouse-keys "0.1")
+(define-obsolete-function-alias 'diogenes-browser-install-turn-keys
+                                'classicist-browser-install-turn-keys "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-join-broken-words
+                                'classicist-browser-join-broken-words "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-key-page-fraction
+                                'classicist-browser-key-page-fraction "0.1")
+(define-obsolete-function-alias 'diogenes-browser-lookup
+                                'classicist-browser-lookup "0.1")
+(define-obsolete-function-alias 'diogenes-browser-mode
+                                'classicist-browser-mode "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-mode-map
+                                'classicist-browser-mode-map "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-mouse-keys
+                                'classicist-browser-mouse-keys "0.1")
+(define-obsolete-function-alias 'diogenes-browser-page-backward
+                                'classicist-browser-page-backward "0.1")
+(define-obsolete-function-alias 'diogenes-browser-page-forward
+                                'classicist-browser-page-forward "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-page-lines
+                                'classicist-browser-page-lines "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-page-margin
+                                'classicist-browser-page-margin "0.1")
+(define-obsolete-function-alias 'diogenes-browser-quit
+                                'classicist-browser-quit "0.1")
+(define-obsolete-function-alias 'diogenes-browser-reinsert-hyphenation
+                                'classicist-browser-reinsert-hyphenation "0.1")
+(define-obsolete-function-alias 'diogenes-browser-remove-hyphenation
+                                'classicist-browser-remove-hyphenation "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-show-citations
+                                'classicist-browser-show-citations "0.1")
+(define-obsolete-function-alias 'diogenes-browser-toggle-citations
+                                'classicist-browser-toggle-citations "0.1")
+(define-obsolete-variable-alias 'diogenes-browser-turn-keys
+                                'classicist-browser-turn-keys "0.1")
+(define-obsolete-function-alias 'diogenes-open-passage
+                                'classicist-open-passage "0.1")
+
 (provide 'classicist-obsolete)
 
 ;;; classicist-obsolete.el ends here

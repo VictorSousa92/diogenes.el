@@ -42,6 +42,68 @@
 (define-obsolete-function-alias 'diogenes--citation-runs-on-p
                                 'classicist--citation-runs-on-p "0.1")
 
+
+;;; The browser, renamed
+;; `diogenes-browser.el' is `classicist-browser.el' and its sixty names
+;; went with it.  28 private ones answered here.
+
+(define-obsolete-function-alias 'diogenes--browse-database
+                                'classicist--browse-database "0.1")
+(define-obsolete-function-alias 'diogenes--browse-work
+                                'classicist--browse-work "0.1")
+(define-obsolete-variable-alias 'diogenes--browser-addition
+                                'classicist--browser-addition "0.1")
+(define-obsolete-function-alias 'diogenes--browser-filter
+                                'classicist--browser-filter "0.1")
+(define-obsolete-function-alias 'diogenes--browser-format-header
+                                'classicist--browser-format-header "0.1")
+(define-obsolete-variable-alias 'diogenes--browser-output-buffer
+                                'classicist--browser-output-buffer "0.1")
+(define-obsolete-variable-alias 'diogenes--browser-page-lines
+                                'classicist--browser-page-lines "0.1")
+(define-obsolete-function-alias 'diogenes--browser-remove-duplicate-header
+                                'classicist--browser-remove-duplicate-header "0.1")
+(define-obsolete-variable-alias 'diogenes--browser-replace
+                                'classicist--browser-replace "0.1")
+(define-obsolete-function-alias 'diogenes--browser-set-height
+                                'classicist--browser-set-height "0.1")
+(define-obsolete-variable-alias 'diogenes--browser-turned
+                                'classicist--browser-turned "0.1")
+(define-obsolete-function-alias 'diogenes--dump-from-database
+                                'classicist--dump-from-database "0.1")
+(define-obsolete-function-alias 'diogenes--dump-from-database-sentinel
+                                'classicist--dump-from-database-sentinel "0.1")
+(define-obsolete-function-alias 'diogenes--dump-work
+                                'classicist--dump-work "0.1")
+(define-obsolete-function-alias 'diogenes--read-browser-output
+                                'classicist--browser-read-output "0.1")
+(define-obsolete-function-alias 'diogenes--send-cmd-to-browser
+                                'classicist--browser-send-cmd "0.1")
+(define-obsolete-function-alias 'diogenes-browser--at-click
+                                'classicist-browser--at-click "0.1")
+(define-obsolete-function-alias 'diogenes-browser--header-button
+                                'classicist-browser--header-button "0.1")
+(define-obsolete-function-alias 'diogenes-browser--header-button-runner
+                                'classicist-browser--header-button-runner "0.1")
+(define-obsolete-function-alias 'diogenes-browser--knows-its-work-p
+                                'classicist-browser--knows-its-work-p "0.1")
+(define-obsolete-function-alias 'diogenes-browser--lines-to-add
+                                'classicist-browser--lines-to-add "0.1")
+(define-obsolete-function-alias 'diogenes-browser--lines-to-request
+                                'classicist-browser--lines-to-request "0.1")
+(define-obsolete-function-alias 'diogenes-browser--mark-addition
+                                'classicist-browser--mark-addition "0.1")
+(define-obsolete-function-alias 'diogenes-browser--page-size
+                                'classicist-browser--page-size "0.1")
+(define-obsolete-function-alias 'diogenes-browser--read-levels
+                                'classicist-browser--read-levels "0.1")
+(define-obsolete-function-alias 'diogenes-browser--second-half
+                                'classicist-browser--second-half "0.1")
+(define-obsolete-function-alias 'diogenes-browser--unmark-addition
+                                'classicist-browser--unmark-addition "0.1")
+(define-obsolete-function-alias 'diogenes-browser--word-at-point-joined
+                                'classicist-browser--word-at-point-joined "0.1")
+
 (provide 'diogenes-browser-compat)
 
 ;;; diogenes-browser-compat.el ends here
