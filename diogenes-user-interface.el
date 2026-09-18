@@ -23,12 +23,12 @@
 	     (concat "\t"
 		     (cdr (assoc s minibuffer-completion-table)))))))
     (completing-read "Please choose search corpus: "
-		     diogenes--corpora)))
+		     diogenes--corpora nil t)))
 
 (defun diogenes--select-author-num (options &optional author-regex)
   "Select one author from a diogenes database using a prompt."
   (let ((author-list (diogenes--get-author-list options author-regex)))
-    (cadr (assoc (completing-read "Author: " author-list)
+    (cadr (assoc (completing-read "Author: " author-list nil t)
 		 author-list))))
 
 (defun diogenes--select-work-num (options author)
@@ -36,7 +36,7 @@
   (let ((works-list (diogenes--get-works-list options
 					      author)))
     (cadr (assoc (completing-read "Work: "
-				  works-list)
+				  works-list nil t)
 		 works-list))))
 
 (defun diogenes--select-passage (options author work)
@@ -49,8 +49,8 @@
   (let* ((categories (diogenes--get-tlg-categories))
 	 (category (intern
 		    (completing-read "Select an category: "
-				     (diogenes--plist-keys categories)))))
-    (completing-read "Please select: " (plist-get categories category))))
+				     (diogenes--plist-keys categories) nil t))))
+    (completing-read "Please select: " (plist-get categories category) nil t)))
 
 
 ;;; TODO: Selection with multiple regexes
