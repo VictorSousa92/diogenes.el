@@ -58,8 +58,8 @@
 ;; ---------------------------------------------------------------------
 ;;
 ;; Diogenes looks a word up by binary search over a file of ONE ENTRY PER
-;; LINE, sorted by an ASCII `key' attribute (see `diogenes--binary-search'
-;; and `diogenes--ascii-sort-function').  The Gaffiot TEI is a single
+;; LINE, sorted by an ASCII `key' attribute (see `classicist--binary-search'
+;; and `classicist--ascii-sort-function').  The Gaffiot TEI is a single
 ;; document with entries spread over many lines and headwords full of
 ;; macrons, so it has to be converted once:
 ;;
@@ -107,9 +107,9 @@
 
 (declare-function diogenes--search-dict "diogenes-perseus"
                   (word lang sort-fn key-fn &optional file))
-(declare-function diogenes--ascii-sort-function "diogenes-perseus" (a b))
-(declare-function diogenes--xml-key-fn "diogenes-perseus" (buf))
-(declare-function diogenes--binary-search "diogenes-perseus"
+(declare-function classicist--ascii-sort-function "classicist-lexicon" (a b))
+(declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
+(declare-function classicist--binary-search "classicist-lexicon"
                   (dict-file comp-fn key-fn word &optional start stop))
 (declare-function diogenes--lookup-headword-at-point "diogenes-perseus"
                   (&optional pos))
@@ -207,7 +207,7 @@ Gaffiot's own additions first, so they win, then the shared TEI faces."
 
 (defun diogenes-gaffiot--key (headword)
   "Return the ASCII key HEADWORD is filed under.
-`diogenes--ascii-sort-function' compares keys after discarding everything
+`classicist--ascii-sort-function' compares keys after discarding everything
 but ASCII letters, so a key must survive that: macrons and breves are
 stripped by NFD decomposition, ligatures spelt out, and case folded.  A
 leading homograph numeral (\"1 ăbactus\") is not part of the word, and
@@ -283,7 +283,7 @@ SOURCE defaults to `diogenes-gaffiot-source-file', TARGET to
 `diogenes-gaffiot-file'.  Each <entryFree> becomes one line: its first
 <orth> is renamed <head> (the element the formatter treats as a headword),
 the whole entry is flattened, and it is given the ASCII `key' attribute
-that `diogenes--binary-search' sorts on -- see `diogenes-gaffiot--key'.
+that `classicist--binary-search' sorts on -- see `diogenes-gaffiot--key'.
 Entries keep their printed order within a key, so \"1 a\", \"2 ā\" and
 \"3 ā, ăb, abs\" stay in sequence.
 
@@ -397,12 +397,12 @@ range the file spans: this dictionary ends on an entry filed under P
 though it were covered, and asking for one would show the nearest entry --
 the last of F -- as if it were a near miss.
 
-`diogenes--binary-search' reports an exact hit as the fourth element of
+`classicist--binary-search' reports an exact hit as the fourth element of
 its result, so ask it first and let the caller send a word it does not
 have to the printed dictionary instead."
-  (nth 3 (diogenes--binary-search file
-                                  #'diogenes--ascii-sort-function
-                                  #'diogenes--xml-key-fn
+  (nth 3 (classicist--binary-search file
+                                  #'classicist--ascii-sort-function
+                                  #'classicist--xml-key-fn
                                   key)))
 
 ;;;; --------------------------------------------------------------------
@@ -470,7 +470,7 @@ nil -- see `diogenes-lookup-gaffiot'."
   "Signal a user-error unless FILE is a converted Gaffiot dictionary.
 The lookup wants one entry per line, each with a `key\' attribute; handed
 the TEI file instead it would fail deep inside
-`diogenes--xml-key-fn\' with an unhelpful message.  `diogenes-gaffiot-file\'
+`classicist--xml-key-fn\' with an unhelpful message.  `diogenes-gaffiot-file\'
 is the CONVERTED file; the TEI belongs in
 `diogenes-gaffiot-source-file\'."
   (with-temp-buffer
@@ -561,8 +561,8 @@ returns to Lewis & Short, `C-u g' looks up another word here"))
              (and diogenes-gaffiot-display-in-same-window
                   (derived-mode-p 'diogenes-lookup-mode))))
         (diogenes--search-dict key "latin"
-                               #'diogenes--ascii-sort-function
-                               #'diogenes--xml-key-fn
+                               #'classicist--ascii-sort-function
+                               #'classicist--xml-key-fn
                                file)))
      ;; It does not -- because the file is proofread only as far as F, or
      ;; because there is no converted XML here at all, or because the word

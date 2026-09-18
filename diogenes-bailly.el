@@ -69,9 +69,9 @@
 ;; ---------------------------------------------------------------------
 ;;
 ;; Diogenes looks a word up by binary search over a file of ONE ENTRY PER
-;; LINE, sorted by a `key' attribute (see `diogenes--binary-search').  For
+;; LINE, sorted by a `key' attribute (see `classicist--binary-search').  For
 ;; Greek that key is beta code, sorted in the order of the Greek alphabet
-;; rather than of ASCII -- see `diogenes--beta-sort-function' -- and the
+;; rather than of ASCII -- see `classicist--beta-sort-function' -- and the
 ;; TEI has Unicode headwords full of accents and breathings.  So it has to
 ;; be converted once:
 ;;
@@ -170,9 +170,9 @@
 
 (declare-function diogenes--search-dict "diogenes-perseus"
                   (word lang sort-fn key-fn &optional file))
-(declare-function diogenes--beta-sort-function "diogenes-perseus" (a b))
-(declare-function diogenes--xml-key-fn "diogenes-perseus" (buf))
-(declare-function diogenes--binary-search "diogenes-perseus"
+(declare-function classicist--beta-sort-function "classicist-lexicon" (a b))
+(declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
+(declare-function classicist--binary-search "classicist-lexicon"
                   (dict-file comp-fn key-fn word &optional start stop))
 (declare-function diogenes--lookup-current-headword "diogenes-perseus" ())
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus"
@@ -270,7 +270,7 @@ somewhere to go.")
 
 (defconst diogenes-bailly--beta-letters "abgdevzhqiklmncoprstufxyw"
   "The letters a beta-code key may consist of, and nothing else.
-`diogenes--beta-sort-function' looks every character up in
+`classicist--beta-sort-function' looks every character up in
 `diogenes--beta-code-alphabet' and SIGNALS on one it does not find, so a
 stray Latin letter in a key would not merely sort oddly but break every
 search that walked past it.  Hence a key is filtered down to these, in
@@ -323,7 +323,7 @@ its `match-beginning' quietly redirected here."
 
 (defun diogenes-bailly--key (headword)
   "Return the beta-code key HEADWORD is filed under.
-`diogenes--beta-sort-function' compares keys after discarding everything
+`classicist--beta-sort-function' compares keys after discarding everything
 but ASCII letters, so a key must survive that: the headword is normalised
 by `diogenes-bailly--prepare', its variant letter shapes folded (ϐ to β
 above all -- see the Commentary), its diacritics dropped with the
@@ -348,7 +348,7 @@ is expected to refuse rather than search for."
 
 (defun diogenes-bailly--key< (a b)
   "Non-nil if key A sorts before key B, as the binary search expects.
-Delegates to `diogenes--beta-sort-function', which returns `a' when A is
+Delegates to `classicist--beta-sort-function', which returns `a' when A is
 the greater, `b' when B is, and nil when they are equal; A precedes B
 exactly when the answer is `b'.
 
@@ -359,7 +359,7 @@ sorts after ν and before ο, but between b and d in ASCII -- so a
 dictionary sorted by `string<' would send every binary search for a word
 from ο onwards down the wrong half of the file, and the failure would look
 like missing entries rather than a sorting bug."
-  (eq 'b (diogenes--beta-sort-function a b)))
+  (eq 'b (classicist--beta-sort-function a b)))
 
 ;;;; --------------------------------------------------------------------
 ;;;; BUILDING THE DICTIONARY FILE
@@ -521,7 +521,7 @@ searches Greek -- the rest is rewritten by
 `diogenes-bailly--rewrite-entry', newlines are folded to spaces so the
 line-oriented binary search stays line-oriented, and a fresh `key' is put
 on the opening tag.  The key goes on a tag of our own writing because
-`diogenes--xml-key-fn' takes the FIRST `key=' it finds in the line, and
+`classicist--xml-key-fn' takes the FIRST `key=' it finds in the line, and
 an <entry> may already carry attributes of its own."
   (let ((rows nil)
         (skipped 0))
@@ -627,7 +627,7 @@ two."
 (defun diogenes-bailly--assert-converted (file)
   "Signal a user-error unless FILE is a converted Bailly dictionary.
 The lookup wants one entry per line, each with a `key' attribute; handed
-the TEI file instead it would fail deep inside `diogenes--xml-key-fn' with
+the TEI file instead it would fail deep inside `classicist--xml-key-fn' with
 an unhelpful message.  `diogenes-bailly-file' is the CONVERTED file; the
 TEI belongs in `diogenes-bailly-source-file'."
   (with-temp-buffer
@@ -764,8 +764,8 @@ to the LSJ, `C-u B' looks up another word here"))
                  (and diogenes-bailly-display-in-same-window
                       (derived-mode-p 'diogenes-lookup-mode))))
             (diogenes--search-dict key "greek"
-                                   #'diogenes--beta-sort-function
-                                   #'diogenes--xml-key-fn
+                                   #'classicist--beta-sort-function
+                                   #'classicist--xml-key-fn
                                    file))))))))
 
 ;;;; --------------------------------------------------------------------

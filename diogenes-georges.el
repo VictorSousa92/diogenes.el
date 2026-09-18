@@ -42,7 +42,7 @@
 ;; Georges prints the quantity of every vowel he can -- 15 247 headwords
 ;; carry a macron on an a alone -- numbers his homographs with superscripts
 ;; ("ā,²"), and has 220 headwords of more than one word ("Acca Lārentia").
-;; None of that can appear in a key: `diogenes--ascii-sort-function', the
+;; None of that can appear in a key: `classicist--ascii-sort-function', the
 ;; comparator the search uses, throws away everything but ASCII letters
 ;; before it compares, so a key that kept a space or a numeral would sit in
 ;; the file at a place the search would never look.
@@ -72,8 +72,8 @@
 (declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 (declare-function diogenes--search-dict "diogenes-perseus"
                   (word lang sort-fn key-fn &optional file))
-(declare-function diogenes--ascii-sort-function "diogenes-perseus" (a b))
-(declare-function diogenes--xml-key-fn "diogenes-perseus" (buf))
+(declare-function classicist--ascii-sort-function "classicist-lexicon" (a b))
+(declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus"
                   (expected dict-name))
 (declare-function diogenes--lookup-current-headword "diogenes-perseus" ())
@@ -166,7 +166,7 @@ headwords carry an a-macron alone -- are dropped by decomposing to NFD and
 discarding the combining marks.  The superscript numeral that
 distinguishes homographs goes with them (\"ā,²\" keys as a).  And the word
 space of a multi-word headword goes too: there are 220 of them, \"Acca
-Lārentia\" among the rest, and `diogenes--ascii-sort-function' -- the
+Lārentia\" among the rest, and `classicist--ascii-sort-function' -- the
 comparator the search uses -- discards everything but letters before
 comparing, so a key that kept its space would sort in this file at a
 place the search would never look for it.
@@ -191,7 +191,7 @@ does, and folding them would merge two letters the dictionary separates."
 
 (defun diogenes-georges--key< (a b)
   "Non-nil if key A sorts before key B, as the binary search expects.
-Delegates to `diogenes--ascii-sort-function', which answers `a' when A is
+Delegates to `classicist--ascii-sort-function', which answers `a' when A is
 the greater, `b' when B is, and nil when they are equal, so A precedes B
 exactly when the answer is `b'.
 
@@ -201,7 +201,7 @@ the search discards everything but ASCII letters before it compares, and a
 file sorted on anything else -- spaces, numerals, macrons -- would send a
 binary search down the wrong half and look for all the world like missing
 entries."
-  (eq 'b (diogenes--ascii-sort-function a b)))
+  (eq 'b (classicist--ascii-sort-function a b)))
 
 ;;;; --------------------------------------------------------------------
 ;;;; BUILDING THE DICTIONARY FILE
@@ -287,7 +287,7 @@ its attributes so that `C-c C-c' on the headword searches Latin, the rest
 is rewritten by `diogenes-georges--rewrite-entry', newlines are folded to
 spaces so the line-oriented binary search stays line-oriented, and a fresh
 `key' is put on the opening tag.  The key goes on a tag of our own writing
-because `diogenes--xml-key-fn' takes the FIRST `key=' in the line."
+because `classicist--xml-key-fn' takes the FIRST `key=' in the line."
   (let ((rows nil)
         (skipped 0))
     (goto-char (point-min))
@@ -395,7 +395,7 @@ some 54 700 entries over 40 MB of TEI and takes a minute or so."
 (defun diogenes-georges--assert-converted (file)
   "Signal a user-error unless FILE is a converted Georges dictionary.
 The lookup wants one entry per line, each with a `key' attribute; handed
-the TEI instead it would fail deep inside `diogenes--xml-key-fn' with an
+the TEI instead it would fail deep inside `classicist--xml-key-fn' with an
 unhelpful message."
   (with-temp-buffer
     (insert-file-contents file nil 0 400)
@@ -528,8 +528,8 @@ returns to Lewis & Short, `C-u G' looks up another word here"))
                  (and diogenes-georges-display-in-same-window
                       (derived-mode-p 'diogenes-lookup-mode))))
             (diogenes--search-dict key "latin"
-                                   #'diogenes--ascii-sort-function
-                                   #'diogenes--xml-key-fn
+                                   #'classicist--ascii-sort-function
+                                   #'classicist--xml-key-fn
                                    file))))))))
 
 ;;;; --------------------------------------------------------------------

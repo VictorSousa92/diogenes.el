@@ -221,6 +221,15 @@
 (define-obsolete-variable-alias 'diogenes-latin-try-spelling-variants
                                 'classicist-latin-try-spelling-variants "0.1")
 
+
+;;; The lexicon layer, moved
+;; `classicist-lexicon.el' holds them now.
+
+(define-obsolete-function-alias 'diogenes-perseus-action
+                                'classicist-perseus-action "0.1")
+(define-obsolete-variable-alias 'diogenes-perseus-action-map
+                                'classicist-perseus-action-map "0.1")
+
 (provide 'classicist-obsolete)
 
 ;;; classicist-obsolete.el ends here

@@ -1,4 +1,4 @@
-43 diogenes-perseus.el
+40 diogenes-perseus.el
 17 diogenes-search.el
 15 diogenes-corpora.el
 14 classicist-browser.el
@@ -43,5 +43,6 @@
 0 classicist-windows-compat.el
 0 classicist-variants.el
 0 classicist-obsolete.el
+0 classicist-lexicon.el
 0 classicist-groups.el
 0 classicist-citation.el

@@ -448,10 +448,10 @@ headword truncated and return the preceding page.  The length floor
 keeps genuinely short, distinct guide words (`ua', `uir', `pes') from
 swallowing later words that merely share their opening letters.")
 
-(declare-function diogenes--binary-search "diogenes-perseus"
+(declare-function classicist--binary-search "classicist-lexicon"
                   (dict-file comp-fn key-fn word &optional start stop))
-(declare-function diogenes--ascii-sort-function "diogenes-perseus" (a b))
-(declare-function diogenes--xml-key-fn "diogenes-perseus" (buf))
+(declare-function classicist--ascii-sort-function "classicist-lexicon" (a b))
+(declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
 (declare-function diogenes--dict-file "diogenes" (lang))
 
 (defun diogenes-old--headword-p (guide)
@@ -464,16 +464,16 @@ so the u and i spellings are tried as well.
 
 Returns nil when the dictionary is unavailable, which leaves the caller
 to fall back on assuming a truncation."
-  (when (and (fboundp 'diogenes--binary-search)
+  (when (and (fboundp 'classicist--binary-search)
              (fboundp 'diogenes--dict-file))
     (let ((file (ignore-errors (diogenes--dict-file "latin"))))
       (when (and file (file-readable-p file))
         (cl-some (lambda (spelling)
                    (nth 3 (ignore-errors
-                            (diogenes--binary-search
+                            (classicist--binary-search
                              file
-                             #'diogenes--ascii-sort-function
-                             #'diogenes--xml-key-fn
+                             #'classicist--ascii-sort-function
+                             #'classicist--xml-key-fn
                              spelling))))
                  (delete-dups
                   (list guide

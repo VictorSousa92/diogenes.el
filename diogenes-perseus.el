@@ -29,6 +29,7 @@
 (require 'shr)                          ; for the shr-h1/h2/h3 faces used below
 (require 'diogenes-lisp-utils)
 (require 'classicist-variants)  ; the spellings a word might be keyed under
+(require 'classicist-lexicon)   ; reading a dictionary file
 (require 'diogenes-utils)
 (require 'diogenes-perl-interface)
 
@@ -48,7 +49,7 @@
 (declare-function diogenes--lookup-insert-xml "diogenes-perseus" (xml start end buffer))
 
 (declare-function rng-first-error "rng-valid" ())
-(declare-function diogenes-perseus-action "diogenes-perseus" (char))
+(declare-function classicist-perseus-action "diogenes-perseus" (char))
 (declare-function diogenes-lookup-open-old "diogenes-old" (&optional word))
 (declare-function diogenes-lookup-open-tll "diogenes-tll" (&optional word))
 (declare-function diogenes-lookup-open-montanari "diogenes-montanari" (&optional word))
@@ -68,26 +69,6 @@
 ;;;; --------------------------------------------------------------------
 ;;;; UTILITIES
 ;;;; --------------------------------------------------------------------
-(defsubst diogenes--perseus-ensure-utf8 (str lang)
-  (if (string= lang "greek")
-      (diogenes--perseus-beta-to-utf8 str)
-    (diogenes--replace-regexes-in-string str
-      ("_" "\N{COMBINING MACRON}")
-      ("\\^" "\N{COMBINING BREVE}"))))
-
-(defconst diogenes-perseus-action-map
-  (let ((map (make-sparse-keymap)))
-    (keymap-set map "RET" #'diogenes-perseus-action)
-    (keymap-set map "<double-mouse-1>" #'diogenes-perseus-action)
-    (keymap-set map "<mouse-2>" #'diogenes-perseus-action)
-    map)
-  "Keymap that calls the perseus-action-command on certain
-words.")
-
-(defvar-local diogenes--lookup-headword nil
-  "Headword of the entry currently shown in a lookup buffer.
-Used by `diogenes-lookup-open-old' to find the corresponding page
-of the Oxford Latin Dictionary PDF.")
 
 
 ;;;; --------------------------------------------------------------------
@@ -95,245 +76,23 @@ of the Oxford Latin Dictionary PDF.")
 ;;;; --------------------------------------------------------------------
 
 ;;; "Readline"
-(defun diogenes--read-forward-until-newline (file file-pos bufsize)
-  "Try to read forward from a file until the next newline."
-  (when file-pos
-    (cl-loop for newline = (re-search-forward "\n" nil t)
-	     when newline return (list newline file-pos)
-	     for chars-read = (progn (goto-char (point-max))
-				     (cadr (insert-file-contents-literally
-					    file nil
-					    file-pos (+ file-pos bufsize))))
-	     when (zerop chars-read) return nil
-	     do (cl-incf file-pos chars-read))))
-
-(defun diogenes--read-backward-until-newline (file file-pos bufsize)
-  "Try to read backward from a file untilg the next newline."
-  (when file-pos
-    (cl-loop for newline = (re-search-backward "\n" nil t)
-	     when newline return (list (1+ newline) file-pos)
-	     when (cl-minusp file-pos) do (error "No further entries!")
-	     for chars-read = (progn (goto-char (point-min))
-				     (cadr (insert-file-contents-literally
-					    file nil
-					    (let ((start (- file-pos bufsize)))
-					      (if (> start 0) start 0))
-					    file-pos)))
-	     when (zerop chars-read) return (list 1 0)
-	     do (forward-char chars-read)
-	     do (cl-decf file-pos chars-read))))
-
-(defun diogenes--get-dict-line (file pos &optional file-length)
-  "Jump at POS into a FILE, and returns the next complete line.
-It returns additionally the start and end offsets of the line.
-If file-length is not supplied, it will be determined."
-  (setq file-length (or file-length
-			(file-attribute-size (file-attributes file))))
-  (let ((bufsize 5000)
-	(buf-start 0)
-	(line-start 1)
-	line-end)
-    (with-temp-buffer
-      (unless (zerop pos)
-	(seq-setq (line-start buf-start)
-		  (diogenes--read-backward-until-newline file pos bufsize))
-	(goto-char (point-max)))
-      (seq-setq (line-end)
-		(diogenes--read-forward-until-newline file pos bufsize))
-      (when (and line-start line-end)
-	(cl-decf line-end)		; Chop off newline
-	(list (buffer-substring line-start line-end)
-	      (+ buf-start (1- line-start))
-	      (+ buf-start (1- line-end)))))))
 
 ;;; Binary search
 ;; Sort functions
 ;; ASCII
-(defun diogenes--ascii-sort-function (a b)
-  (let ((word-a (downcase (diogenes--ascii-alpha-only a)))
-	(word-b (downcase (diogenes--ascii-alpha-only b))))
-    (cond ((string-greaterp word-a word-b) 'a)
-	  ((string-greaterp word-b word-a) 'b)
-	  (t nil))))
 
 ;; C, i.e. raw byte order
-(defun diogenes--c-sort-function (a b)
-  "Compare A and B as `LC_ALL=C sort' ordered them: by character code.
-The comparator a binary search is given must agree with the order of the
-file it walks, and for the analyses and lemmata files that order is over
-the RAW beta-code keys, in which `)', `(' and `/' precede every letter:
-
-    o)mi/xlh   o)mi/xlhn   o)mi/xlhs   o)mi/xlh|   o)mi/xlh|sin
-
-`diogenes--ascii-sort-function' cannot be used on them, because it
-compares `diogenes--ascii-alpha-only' -- accents and breathings thrown
-away -- and the two orders disagree wherever one key accents an earlier
-syllable than another: the file puts `o)mi/xlh' before `o)mikro/n', while
-letters-only makes `omikron' the lesser of the two.  A search then walks
-into the wrong half and reports no hit, so a form that IS in the file
-fails to parse and the caller falls back to searching the dictionary for
-the inflected form itself -- which lands on whatever sorts nearest, one
-entry or so away from the word wanted.
-
-The failure is per-bucket, which is what makes it look arbitrary: the
-three-character bucket `lo/\=' holds keys accented alike and parses
-correctly, while `o)m\=' holds `o)mi/xl-\=', `o)mikr-\=', `o)mo/-\=' and
-`o)moi-\=' together and had 55 inversions under the wrong comparator.
-
-These keys are pure ASCII, so `string>' is byte order."
-  (cond ((string> a b) 'a)
-        ((string> b a) 'b)
-        (t nil)))
-
-(defun diogenes--latin-sort-function (a b)
-  "Compare two Lewis & Short keys as the dictionary itself orders them.
-`diogenes--ascii-sort-function' with `classicist-latin-fold-letters' applied
-to both sides; see that variable for why the Latin dictionary needs it."
-  (let ((word-a (classicist--latin-fold-key a))
-	(word-b (classicist--latin-fold-key b)))
-    (cond ((string-greaterp word-a word-b) 'a)
-	  ((string-greaterp word-b word-a) 'b)
-	  (t nil))))
-
-(defconst diogenes--beta-code-alphabet
-  [?0 ?a ?b ?g ?d ?e ?v ?z ?h ?q
-      ?i ?k ?l ?m ?n ?c ?o ?p
-      ?r ?s ?t ?u ?f ?x ?y ?w]
-  "The greek alphabet in beta code.")
 
 ;;; BETA CODE
-(defun diogenes--beta-sort-function (a b)
-  (let ((a (downcase (diogenes--ascii-alpha-only a)))
-	(b (downcase (diogenes--ascii-alpha-only b))))
-    (cl-case
-	(cl-loop for i from 0 to (1- (min (length a) (length b)))
-		 for pos-char-a = (cl-position (elt a i)
-					       diogenes--beta-code-alphabet)
-		 for pos-char-b = (cl-position (elt b i)
-					       diogenes--beta-code-alphabet)
-		 do (cond ((not pos-char-a)
-			   (error "Illegal character %c" (elt a i)))
-			  ((not pos-char-b)
-			   (error "Illegal character %c" (elt b i))))
-		 if (> pos-char-a pos-char-b) return 'a
-		 if (> pos-char-b pos-char-a) return 'b)
-      (a 'a)
-      (b 'b)
-      (t (cond ((> (length a) (length b)) 'a)
-	       ((> (length b) (length a)) 'b)
-	       (t nil))))))
 
 ;; Key function
-(defun diogenes--tab-key-fn (buf)
-  (let ((split (string-match "\t" buf)))
-    (when split (list (substring buf 0 split)
-		      (substring buf (1+ split))))))
-
-(defun diogenes--xml-key-fn (buf)
-  (if (string-match "key\\s-*=\\s-*\"\\([^\"]*\\)\""
-		    buf)
-      (list (match-string-no-properties 1 buf)
-	    buf)
-    (error "Could not find key in str:\n %s" buf)))
 
 ;; The actual search function
-(defun diogenes--binary-search (dict-file comp-fn key-fn word &optional start stop)
-  "A binary search for finding entries in the lexicographical files.
-Upon success, it returns a list containing the entry, its start
-and end offsets, and the symbol t to indicate success. Otherwise,
-the nearest entry and its offsets are returned."
-  (cl-loop with size = (file-attribute-size (file-attributes dict-file))
-	   with left = (or start 0)
-	   with right = (or stop size)
-	   unless (< left right) return (list buf buf-start buf-end)
-	   for mid = (floor (+ left right) 2)
-	   for (buf buf-start buf-end)
-	   = (diogenes--get-dict-line dict-file mid size)
-	   for (key value) = (funcall key-fn buf)
-	   for comp-result = (funcall comp-fn key word)
-	   unless comp-result return (list buf buf-start buf-end t)
-	   do (cond ((eq comp-result 'a) (setq right (1- buf-start)))
-		    ((eq comp-result 'b) (setq left (1+ buf-end))))))
 
 
 ;;; Parse whole files and load them into memory
-(defun diogenes--analyses-file-to-hashtable (file)
-  "Loads a whole analyses file as a hashtable into memory."
-  (message "Parsing %s, this may take a while..." file)
-  (prog1
-      (with-temp-buffer
-	(insert-file-contents-literally file)
-	(cl-loop with analyses = (make-hash-table :test 'equal :size 950000)
-		 with begin = 1
-		 for tab = (re-search-forward "\t" nil t)
-		 unless tab return analyses
-		 for key = (buffer-substring begin (1- tab))
-		 for newline = (or (re-search-forward "\n" nil t)
-				   (point-max))
-		 do (setf (gethash key analyses)
-			  (buffer-substring begin (1- newline)))
-		 do (setf begin newline)))
-    (message "Parsed.")))
-
-(defun diogenes--lemmata-file-to-hashtable (file)
-  "Loads a whole lemmata file into memory."
-  (message "Parsing %s, this may take a while..." file)
-  (with-temp-buffer
-    (insert-file-contents-literally file)
-    (prog1
-	(cl-loop with lemmata = (make-hash-table :test 'equal :size 950000)
-		 ;; with numbers = (make-hash-table :test 'equal :size 950000)
-		 with begin = 1
-		 for tab-1 = (re-search-forward "\t" nil t)
-		 for tab-2 = (re-search-forward "\t" nil t)
-		 ;; unless tab-2 return (cons lemmata numbers)
-		 unless tab-2 return lemmata
-		 for full-lemma = (buffer-substring begin (1- tab-1))
-		 for lemma = (if (string-match "[0-9]$" full-lemma)
-				 (substring full-lemma 0 (match-beginning 0))
-			       full-lemma)
-		 for nr  = (string-to-number (buffer-substring tab-1 (1- tab-2)))
-		 for newline = (or (re-search-forward "\n" nil t)
-				   (point-max))
-		 for entries = (split-string (buffer-substring tab-2 (1- newline))
-					     "\t")
-		 for record = (nconc (list full-lemma nr) entries)
-		 do (push record (gethash lemma lemmata))
-		 ;; do (setf (gethash nr numbers)  record)
-		 do (setf begin newline))
-      (message "Parsed."))))
 
 ;;; Get file indices
-(defun diogenes--read-analyses-index-script (file)
-  (diogenes--perl-script
-   "sub quote {"
-   "  local $_ = shift;"
-   "  s/\\\\/\\\\\\\\/g;"
-   "  s/\\\"/\\\\\\\"/gr"
-   "}"
-   "my (%index_start, %index_end, $index_max);"
-   (format "open my $fh, '<', '%s' or die $!;" file)
-   "eval do { undef local $/; <$fh> };"
-   "print '(:index-start (';"
-   "while ( my ($k, $v) = each %index_start ) { printf '(\"%s\" . %s)', quote($k), $v }"
-   "print ') :index-end (';"
-   "while ( my ($k, $v) = each %index_end   ) { printf '(\"%s\" . %s)', quote($k), $v }"
-   "print qq') :index-max $index_max)';"))
-
-(defun diogenes--read-analyses-index (lang)
-  (let ((file (concat (diogenes--perseus-path) "/" lang "-analyses.idt")))
-    (unless (file-exists-p file)
-      (error "Cannot find %s idt file %s" lang file))
-    (unless (file-readable-p file)
-      (error "Cannot read %s idt file %s" lang file))
-    (read
-     (with-temp-buffer
-       (unless (zerop (call-process
-		       diogenes-perl-executable
-		       nil '(t nil) nil
-		       "-e" (diogenes--read-analyses-index-script file)))
-	 (error "Perl exited with errors, no data received!"))
-       (buffer-string)))))
 
 
 ;;;; --------------------------------------------------------------------
@@ -341,200 +100,8 @@ the nearest entry and its offsets are returned."
 ;;;; --------------------------------------------------------------------
 
 ;;; Format and insert contents
-(defun diogenes--lookup-insert-and-format (str)
-  (let ((start (point))
-	(inhibit-read-only t))
-    (insert str)
-    (fill-region start (point))
-    (recenter -1)
-    (goto-char start)))
-
-(defun diogenes--lookup-print-separator ()
-  "Print a separator line between entries"
-  (insert "\n\n")
-  (cl-loop repeat fill-column do (insert "—"))
-  (insert "\n\n"))
 
 ;;; Parse XML
-(defun diogenes--dict-parse-xml (str begin end)
-  "Try to parse a string containing the XML of a dictionary entry."
-  (let ((parsed (with-temp-buffer (insert (diogenes--try-correct-xml str))
-				  (ignore-errors (car (xml-parse-region))))))
-    (when parsed
-      ;; The enclosing entry element carries a `key' attribute holding
-      ;; the canonical, hyphen-free lemma (e.g. "tamquam" for the entry
-      ;; displayed as "tam-quam").  Seed it into the properties so the
-      ;; `head' handler can prefer it as the headword for OLD/TLL.
-      (let ((entry-key (cdr (assq 'key (cadr parsed))))
-	    ;; ONE ENTRY, ONE STACK.  Otherwise the senses of the last entry
-	    ;; shown would still be in force at the top of the next.
-	    (diogenes--dict-sense-stack nil))
-	(diogenes--dict-process-elt
-	 parsed (list 'begin begin 'end end 'entry-key entry-key))))))
-
-(defun diogenes--element-text (elt)
-  "Return the concatenated text of a parsed XML element ELT.
-ELT is a node as produced by `xml-parse-region': a string, or a
-list (TAG ATTRS . CHILDREN).  All descendant text is joined in
-document order; markup is ignored.  Used to recover a full
-headword such as \"tam-quam\" that is split across child nodes."
-  (cl-typecase elt
-    (string elt)
-    (list (mapconcat #'diogenes--element-text (cddr elt) ""))
-    (t "")))
-
-(defvar diogenes--dict-sense-stack nil
-  "The sense labels in force, outermost first, as an entry is walked.
-
-A stack and not a tree, because the senses of an entry are FLAT: the LSJ
-writes them as siblings and says how deep each is with a `level' attribute.
-Bound afresh for each entry by `diogenes--dict-process-entry'.")
-
-(defun diogenes--dict-sense-path (label level)
-  "The path to a sense of LEVEL labelled LABEL, or nil where it has none.
-
-Kept in `diogenes--dict-sense-stack\='.  A sense of level n replaces everything
-at n and deeper, that being what makes it a new branch rather than a
-continuation, and the path is what remains joined by stops.
-
-A sense with no label of its own takes no place on the stack -- Gaffiot and
-Georges write bare senses, and a path with an empty level in it names
-nothing -- but it does close the levels below it, a new sense being a new
-sense whether it is numbered or not."
-  (let ((depth (max 1 level)))
-    ;; BY LEVEL, AND NOT BY POSITION.  The stack holds (LEVEL . LABEL) pairs
-    ;; because an UNLABELLED sense takes no place on it -- the LSJ writes
-    ;; level-1 senses with no number, as mere paragraph breaks -- and after
-    ;; one of those the nth entry is no longer the nth level.  Truncating by
-    ;; position then kept a sibling as a parent, and two level-2 senses came
-    ;; out `II\=' and `II.III\=' where `II\=' and `III\=' were meant.
-    (setq diogenes--dict-sense-stack
-          (seq-remove (lambda (pair) (>= (car pair) depth))
-                      diogenes--dict-sense-stack))
-    (unless (string-empty-p label)
-      (setq diogenes--dict-sense-stack
-            (append diogenes--dict-sense-stack (list (cons depth label)))))
-    (and diogenes--dict-sense-stack
-         (string-join (mapcar #'cdr diogenes--dict-sense-stack) "."))))
-
-(defun diogenes--dict-process-elt (elt properties)
-  "Process a parsed XML element of a dictionary entry recursively.
-The properties list is an accumulator that holds all properties
-of the active element."
-  (cl-typecase elt
-    (string (apply #'propertize elt properties))
-    (list (let ((p (append (diogenes--dict-handle-elt elt properties)
-			   properties)))
-	    (mapconcat (lambda (e) (diogenes--dict-process-elt e p))
-		       (cddr elt))))))
-
-(defun diogenes--try-correct-xml (xml)
-  "Try to hotfix invalid xml in the greek LSJ files."
-  (diogenes--replace-regexes-in-string xml
-    ("<\\([[:multibyte:][:space:]]+\\)>" "&lt;\\1&gt;")))
-
-(defvar diogenes--dict-xml-handlers-extra
-  '(
-    ;;(author . '(font-lock-face bold))
-    ;;(title . '(font-lock-face italic))
-    (i . (font-lock-face warning))
-    (b . (font-lock-face bold)))
-  "An alist of property lists to be applied to a simple tag in a dictionary.")
-
-(defun diogenes--dict-handle-elt (elt &optional properties)
-  "Handle the more complicated tags of a Diogenes dictionary file.
-Each element is a list whose car is the element, whose cadr is an
-a-list containing all the properties, and whose cddr is the
-actual contents of the list. This function selects an approriate
-handler based on the car and returns a property list that
-represents the properties of the element. It may also manipulate
-the contents of the element (cddr). Elements that only require
-special formatting are handled by th
-diogenes--dict-xml-handlers-extra variable.
-PROPERTIES is the accumulator from `diogenes--dict-process-elt';
-it may carry an `entry-key' (the canonical lemma of the entry)."
-  (let ((tag (car elt))
-	(lang (or (alist-get 'lang (cadr elt))
-		  "english")))
-    (nconc
-     (list 'lang lang)
-     (cl-case tag
-       (div2
-	;; THE HEADWORD OVER THE WHOLE ENTRY.  The `head' handler puts `orth'
-	;; on the head text, which is where the headword is printed -- but a
-	;; reader standing in the middle of an article is not standing on it,
-	;; and a command that wants to know which entry this is had to search
-	;; the buffer backwards to find out.
-	;;
-	;; The entry element carries the key, so it can be put on everything
-	;; the entry renders to and read at point.  Betacode, as the
-	;; dictionaries write it.
-	(let ((key (cdr (assoc 'key (cadr elt)))))
-	  (and key (list 'entry-key key))))
-       (head (let* ((entry-key (plist-get properties 'entry-key))
-		    (orth-orig (cdr (assoc 'orth_orig (cadr elt))))
-		    ;; The headword shown as "tam-quam" is the compound
-		    ;; "tamquam"; a lookup must use the whole word.  Prefer
-		    ;; the entry's canonical `key' (hyphen-free, exactly
-		    ;; what the dictionary sorts on), then the full head
-		    ;; text, then orth_orig, then the first child.
-		    (full (string-trim (diogenes--element-text elt)))
-		    (hw (cond ((and entry-key (> (length entry-key) 0)) entry-key)
-			      ((> (length full) 0) full)
-			      (orth-orig orth-orig)
-			      ((stringp (caddr elt)) (caddr elt)))))
-	       (when orth-orig
-		 (setf (cddr elt) (list orth-orig)))
-	       ;; Tag the head text with an `orth' property carrying this
-	       ;; entry's headword, so `diogenes-lookup-open-old' /
-	       ;; `diogenes-lookup-open-tll' can find the right page from
-	       ;; any point inside the entry.
-	       (list 'font-lock-face 'shr-h1
-		     'orth hw)))
-       (sense
-	;; THE PLACE IN THE ENTRY, and not only the label.  A reader citing a
-	;; dictionary cites `LSJ s.v. pe/mpw III.2', not the whole of a long
-	;; article: the sense is the citation.
-	;;
-	;; Built without knowing the tree, because it need not be known.
-	;; `diogenes--dict-process-elt' hands each handler the properties of
-	;; its ANCESTORS and passes what comes back down to the children, so
-	;; a sense has only to read the path it inherited and add its own
-	;; label.  The nesting takes care of itself.
-	;;
-	;; A sense with no `n' adds nothing and passes its parent's path on
-	;; unchanged -- Gaffiot and Georges have bare <sense> elements, and a
-	;; path with an empty level in it would name nothing.
-	;; FLAT, AND DEEP BY ATTRIBUTE.  The senses of an LSJ entry are
-	;; siblings -- every one closes before the next opens -- and their
-	;; depth is the `level' attribute, not the nesting.  So a sense
-	;; cannot read its place from its ancestors: it has none, and
-	;; inheriting from them gave `2' where `III.2' was wanted.
-	;;
-	;; What is kept instead is a stack, one label to a level, as the
-	;; senses are met in order.  A sense of level n throws away
-	;; everything at n and deeper -- that is what makes it a new branch
-	;; -- and puts its own label at n.  The path is the stack joined.
-	(let* ((label (string-trim (or (cdr (assoc 'n (cadr elt))) "")))
-	       (level (string-to-number
-		       (or (cdr (assoc 'level (cadr elt))) "1")))
-	       (path (diogenes--dict-sense-path label level)))
-	  (push (concat "\n\n"
-			(propertize label 'font-lock-face 'success)
-			" ")
-		(cddr elt))
-	  (and path (list 'sense-path path))))
-       (bibl (let ((reference (cdr (assoc 'n (cadr elt)))))
-	       (list 'font-lock-face 'link
-		     'keymap diogenes-perseus-action-map
-		     'action 'bibl
-		     'bibl reference
-		     'help-echo reference
-		     'rear-nonsticky t)))
-       (quote (when (stringp (caddr elt))
-		(setf (caddr elt) (concat (caddr elt) " ")))
-	      nil)
-       (t (or (cdr (assoc tag diogenes--dict-xml-handlers-extra))))))))
 
 
 ;;; Let the user handle corrupt XML
@@ -570,11 +137,11 @@ it may carry an `entry-key' (the canonical lemma of the entry)."
 	 (prop-boundaries (diogenes--get-text-prop-boundaries (point)
 							      'invalid-xml))
 	 (xml (apply #'buffer-substring prop-boundaries))
-	 (parsed (diogenes--dict-parse-xml xml line-start line-end))
+	 (parsed (classicist--dict-parse-xml xml line-start line-end))
 	 (inhibit-read-only t))
     (apply #'delete-region prop-boundaries)
     (if parsed
-	(diogenes--lookup-insert-and-format parsed)
+	(classicist--lookup-insert-and-format parsed)
       (insert (propertize (diogenes--fontify-nxml xml)
 			  'invalid-xml id
 			  'inhibit-read-only t
@@ -647,14 +214,14 @@ properties."
 	(prop-end (prop-match-end invalid-xml))
 	(line-start (get-text-property prop-start 'begin))
 	(line-end (get-text-property prop-start 'end))
-	(parsed (diogenes--dict-parse-xml (buffer-string) line-start line-end))
+	(parsed (classicist--dict-parse-xml (buffer-string) line-start line-end))
 	(inhibit-read-only t))
     (cond (parsed (kill-buffer xml-buffer)
 		  ;; Back to the entry being edited, which is where we were.
 		  (classicist-display-buffer lookup-buffer
 					    :kind 'lookup :same-window t)
 		  (delete-region prop-start prop-end)
-		  (diogenes--lookup-insert-and-format parsed))
+		  (classicist--lookup-insert-and-format parsed))
 	  (t (rng-first-error)))))
 
 
@@ -683,7 +250,7 @@ reuse another window.  When this variable is non-nil the fresh buffer
 is shown in the window that was selected when the lookup was invoked
 \(via `pop-to-buffer-same-window'), so a `C-c C-c' chain stays in one
 window while the previous entry's buffer remains live (reachable with
-the usual buffer/window history).  Bound by `diogenes-perseus-action';
+the usual buffer/window history).  Bound by `classicist-perseus-action';
 nil everywhere else keeps the old behaviour.")
 
 (defun diogenes--search-dict (word lang sort-fn key-fn &optional file)
@@ -707,7 +274,7 @@ it has the same flaw there; the parse path avoids it by using the byte
 offset recorded in the analyses file -- see
 `diogenes--lookup-dict-offset\'."
   (seq-let (xml-bytes start end exact-hit)
-      (diogenes--binary-search (or file (diogenes--dict-file lang))
+      (classicist--binary-search (or file (diogenes--dict-file lang))
 			       sort-fn key-fn word)
     (unless exact-hit (message "No results for %s! Showing nearest entry" word))
     (diogenes--show-dict-entry xml-bytes start end lang file)))
@@ -733,7 +300,7 @@ morphological data was built against, with no headword to get wrong.
 LANG is the language of the entry; FILE defaults to LANG\'s own
 dictionary."
   (let ((dict (or file (diogenes--dict-file lang))))
-    (seq-let (xml-bytes start end) (diogenes--get-dict-line dict offset)
+    (seq-let (xml-bytes start end) (classicist--get-dict-line dict offset)
       (unless xml-bytes
 	(error "No dictionary entry at offset %d of %s" offset dict))
       (diogenes--show-dict-entry xml-bytes start end lang file))))
@@ -741,7 +308,7 @@ dictionary."
 (defun diogenes--show-dict-entry (xml-bytes start end lang &optional file)
   "Show the dictionary entry in XML-BYTES in a fresh lookup buffer.
 START and END are its offsets in the dictionary file, as returned by
-`diogenes--binary-search\' or `diogenes--get-dict-line\'; they are what
+`classicist--binary-search\' or `classicist--get-dict-line\'; they are what
 `diogenes-lookup-next\' and `-previous\' walk from.  LANG says which
 language the ENTRY is in, FILE which dictionary it came from.
 
@@ -805,7 +372,7 @@ Returns the lookup buffer."
 	    diogenes--lookup-bufstart start
 	    diogenes--lookup-bufend end
 	    diogenes--lookup-lang lang)
-      ;; Paint the window BEFORE parsing.  `diogenes--dict-parse-xml' runs
+      ;; Paint the window BEFORE parsing.  `classicist--dict-parse-xml' runs
       ;; `xml-parse-region', which is Lisp, over the whole of the entry --
       ;; and an entry can be large: Georges gives 26 KB to `a' as a
       ;; preposition alone.  Emacs is single-threaded, so nothing is redrawn
@@ -818,16 +385,16 @@ Returns the lookup buffer."
 	(erase-buffer)
 	(insert (propertize "Looking up ...\n" 'font-lock-face 'italic)))
       (redisplay t)
-      (setq formatted (diogenes--dict-parse-xml xml start end))
+      (setq formatted (classicist--dict-parse-xml xml start end))
       (let ((inhibit-read-only t))
 	(erase-buffer))
-      (cond (formatted (diogenes--lookup-insert-and-format formatted))
+      (cond (formatted (classicist--lookup-insert-and-format formatted))
 	    (t (diogenes--lookup-insert-xml xml start end lookup-buffer)))
       ;; Record the first entry's headword (a fallback for the openers) and
       ;; give the entry its own clickable link banner (OLD/TLL for Latin;
       ;; Montanari, CGL, BDAG, Passow, TGL for Greek).  Navigation adds a
       ;; banner per entry too, so links follow you between entries.
-      (setq diogenes--lookup-headword
+      (setq classicist--lookup-headword
 	    (diogenes--lookup-first-headword))
       (save-excursion
 	(goto-char (point-min))
@@ -851,7 +418,7 @@ detectable headword."
 	(when hw
 	  (diogenes--lookup-insert-dict-links hw lang))))))
 
-(defvar diogenes--lookup-headword nil
+(defvar classicist--lookup-headword nil
   "Headword of the entry shown in the current lookup buffer.
 Buffer-local in `diogenes-lookup-mode' buffers; used by the
 print-dictionary openers.")
@@ -900,7 +467,7 @@ or, in your init file,
 
 (defun diogenes--lookup-dict-link (name key action headword help)
   "Return a clickable link reading \"[NAME (KEY)]\" for HEADWORD.
-ACTION is the symbol `diogenes-perseus-action' dispatches on, HELP a format
+ACTION is the symbol `classicist-perseus-action' dispatches on, HELP a format
 string taking the headword, and KEY the key bound to the same command --
 shown in parentheses, in `diogenes-lookup-link-key', so the binding can be
 read off the entry instead of looked up.  KEY may be nil for a link with no
@@ -908,7 +475,7 @@ key of its own."
   (let* ((label (if key (format "[%s (%s)]" name key) (format "[%s]" name)))
          (link (propertize label
                            'font-lock-face 'link
-                           'keymap diogenes-perseus-action-map
+                           'keymap classicist-perseus-action-map
                            'action action
                            'headword headword
                            'help-echo (format help headword)
@@ -958,8 +525,8 @@ which route, and what their paths are doing."
   :group 'diogenes)
 
 (defcustom diogenes-lookup-keys
-  '((diogenes-perseus-action        . "RET")
-    (diogenes-perseus-action        . "C-c C-c")
+  '((classicist-perseus-action        . "RET")
+    (classicist-perseus-action        . "C-c C-c")
     (diogenes-lookup-in-dictionary  . "C-c C-o")
     (diogenes-lookup-next           . "C-c C-n")
     (diogenes-lookup-previous       . "C-c C-p")
@@ -969,7 +536,7 @@ which route, and what their paths are doing."
   "The keys of a lookup buffer, as (COMMAND . KEY).
 Every key the lookup buffer binds for itself is here, so that any of them can
 be moved or removed -- nil for a KEY binds nothing.  A command may appear
-twice, `diogenes-perseus-action\=' being on `RET\=' and `C-c C-c\=' both.
+twice, `classicist-perseus-action\=' being on `RET\=' and `C-c C-c\=' both.
 
 The dictionary letters are NOT here: they belong to the dictionaries, which
 come and go with the modules that provide them, and
@@ -1018,7 +585,7 @@ caller must distinguish `no preference\=' from `no key\=', and consult
 Registering an ID already present replaces it, so a module may be reloaded.
 
 ID is the symbol the link carries as its `action' property and the symbol
-`diogenes-perseus-action' dispatches on; keep it unique.  NAME is the label
+`classicist-perseus-action' dispatches on; keep it unique.  NAME is the label
 shown in brackets, KEY the key bound to the same command -- shown after the
 name, so the binding can be read off the entry -- and HELP a format string
 taking the headword, for the echo area.  LANG is \"greek\" or \"latin\": the
@@ -1471,7 +1038,7 @@ is omitted."
 (defun diogenes--lookup-first-headword ()
   "Return the first entry headword in the current lookup buffer.
 Reads the `orth' text property placed on head elements by
-`diogenes--dict-handle-elt'.  Returns nil if none is found."
+`classicist--dict-handle-elt'.  Returns nil if none is found."
   (save-excursion
     (goto-char (point-min))
     (let ((match (text-property-search-forward 'orth nil
@@ -1483,7 +1050,7 @@ Reads the `orth' text property placed on head elements by
 A lookup buffer accumulates entries as you navigate with
 `diogenes-lookup-next' / `diogenes-lookup-previous'; each entry's
 headword carries the `orth' text property (placed by
-`diogenes--dict-handle-elt').  The entry POS sits in is the one whose
+`classicist--dict-handle-elt').  The entry POS sits in is the one whose
 headword is the NEAREST `orth' at or before POS, so this reads the
 `orth' at POS when point is inside a headword, else searches backward;
 if POS precedes the first headword, it falls back to the first `orth'
@@ -1511,11 +1078,11 @@ the entry the buffer was first opened on."
     ("greek" (let ((normalized (diogenes--beta-normalize-gravis
 		     (diogenes--greek-ensure-beta word))))
 	       (diogenes--search-dict normalized "greek"
-				      #'diogenes--beta-sort-function
-				      #'diogenes--xml-key-fn)))
+				      #'classicist--beta-sort-function
+				      #'classicist--xml-key-fn)))
     ("latin" (diogenes--search-dict word "latin"
-			 #'diogenes--latin-sort-function
-			 #'diogenes--xml-key-fn))))
+			 #'classicist--latin-sort-function
+			 #'classicist--xml-key-fn))))
 
 (defun diogenes--lookup-own-dictionary-p ()
   "Non-nil if this lookup buffer shows the language\'s own Diogenes dictionary.
@@ -1558,7 +1125,7 @@ and in those buffers there is nothing to guess from."
   "Return the headword of the entry point is in, for the lookup commands."
   (or (diogenes--lookup-headword-at-point)
       (get-text-property (point) 'orth)
-      (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
+      (and (boundp 'classicist--lookup-headword) classicist--lookup-headword)
       (diogenes--word-at-point-for-lookup)
       (user-error "No headword found at point")))
 
@@ -1898,18 +1465,18 @@ BEFORE is non-nil, since the entry then precedes what is already there, and
 before it otherwise.  The inserted text is marked with its offsets by
 `diogenes--lookup-mark-entry\=', and given its own link banner."
   (let* ((xml (decode-coding-string xml-bytes 'utf-8))
-	 (formatted (diogenes--dict-parse-xml xml start end))
+	 (formatted (classicist--dict-parse-xml xml start end))
 	 (inhibit-read-only t)
 	 (beg (copy-marker position nil))
 	 (fin (copy-marker position t)))
     (goto-char position)
-    (unless before (diogenes--lookup-print-separator))
+    (unless before (classicist--lookup-print-separator))
     (let ((entry-start (point)))
       (if formatted
-	  (diogenes--lookup-insert-and-format formatted)
+	  (classicist--lookup-insert-and-format formatted)
 	(diogenes--lookup-insert-xml xml start end (current-buffer)))
       (goto-char fin)
-      (when before (diogenes--lookup-print-separator))
+      (when before (classicist--lookup-print-separator))
       (diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))
     (diogenes--lookup-mark-entry beg fin start end)
     (setq diogenes--lookup-bufstart (min diogenes--lookup-bufstart start)
@@ -1937,7 +1504,7 @@ buffer keeps the dictionary\='s own order."
       (if shown
 	  (goto-char shown)
 	(seq-let (xml-bytes start end)
-	    (diogenes--get-dict-line diogenes--lookup-file wanted)
+	    (classicist--get-dict-line diogenes--lookup-file wanted)
 	  (unless xml-bytes (error "No further entries!"))
 	  (goto-char (or (cdr (diogenes--lookup-entry-region here))
 			 (point-max)))
@@ -1956,7 +1523,7 @@ With a numerical prefix, move back N entries.  The counterpart of
 		     (cons diogenes--lookup-bufstart diogenes--lookup-bufend)))
 	   (wanted (1- (car here))))
       (seq-let (xml-bytes start end)
-	  (diogenes--get-dict-line diogenes--lookup-file wanted)
+	  (classicist--get-dict-line diogenes--lookup-file wanted)
 	(unless xml-bytes (error "No further entries!"))
 	(let ((shown (diogenes--lookup-entry-starting-at start)))
 	  (if shown
@@ -2040,7 +1607,7 @@ Returns a list that classicist--browse-work can be applied to."
   (make-local-variable 'diogenes--lookup-bufstart)
   (make-local-variable 'diogenes--lookup-bufend)
   (make-local-variable 'diogenes--lookup-lang)
-  (make-local-variable 'diogenes--lookup-headword)
+  (make-local-variable 'classicist--lookup-headword)
   (setq buffer-read-only t))
 
 
@@ -2056,7 +1623,7 @@ This function is cached, so that it actually reads and parses teh
 file only at the first call."
     (or (gethash (cons lang 'analyses) cache)
 	(setf (gethash (cons lang 'analyses) cache)
-	      (diogenes--analyses-file-to-hashtable
+	      (classicist--analyses-file-to-hashtable
 	       (file-name-concat (diogenes--perseus-path)
 				 (concat lang "-analyses.txt"))))))
 
@@ -2066,7 +1633,7 @@ file only at the first call."
 the file only at the first call."
     (or (gethash (cons lang 'index) cache)
 	(setf (gethash (cons lang 'index) cache)
-	      (diogenes--read-analyses-index lang))))
+	      (classicist--read-analyses-index lang))))
 
   (defun diogenes--get-all-lemmata (lang)
     "Returns the entirety of a lemmata file as a hash table.
@@ -2074,7 +1641,7 @@ the file only at the first call."
 the file only at the first call."
     (or (gethash (cons lang 'lemmata) cache)
 	(setf (gethash (cons lang 'lemmata) cache)
-	      (diogenes--lemmata-file-to-hashtable
+	      (classicist--lemmata-file-to-hashtable
 	       (file-name-concat (diogenes--perseus-path)
 				 (concat lang "-lemmata.txt")))))))
 
@@ -2127,14 +1694,14 @@ lemma, the lemma-number, translation and analysis."
   "Process a lemma entry as returned from `diogenes--get-all-lemmata'.
 Returns a list with the form (lemma raw-lemma lemma-nr &rest analyses)"
   (when lemma
-    (nconc (list (diogenes--perseus-ensure-utf8 (car lemma)
+    (nconc (list (classicist--perseus-ensure-utf8 (car lemma)
 						lang)
 		 (car lemma)
 		 (cadr lemma))
 	   (mapcar (lambda (e)
 		     (seq-let (form analysis)
 			 (diogenes--split-once "\\s-" e)
-		       (cons (diogenes--perseus-ensure-utf8 form lang)
+		       (cons (classicist--perseus-ensure-utf8 form lang)
 			     (with-temp-buffer
 			       (insert analysis)
 			       (goto-char (point-min))
@@ -2184,9 +1751,9 @@ spelling rather than answered with its alphabetical neighbour."
 			   (if s (- s 2) 0))
 	     for end = (or (cdr (assoc key (plist-get index :index-end)))
 			   (plist-get index :index-max))
-	     for result = (diogenes--binary-search analyses-file
-						   #'diogenes--c-sort-function
-						   #'diogenes--tab-key-fn
+	     for result = (classicist--binary-search analyses-file
+						   #'classicist--c-sort-function
+						   #'classicist--tab-key-fn
 						   candidate
 						   start end)
 	     ;; The first miss is kept: where every key misses, the nearest entry
@@ -2294,7 +1861,7 @@ Unless specified, filter defaults to string-equal."
 ;; and so never compares the lemma against anything.  That matters, because
 ;; the lemma keeps Lewis & Short's j-spelling while the dictionary is
 ;; ordered by the i-spelling: `jacio' cannot be found by
-;; `diogenes--binary-search', but offset 34221511 is exact.  Searching for
+;; `classicist--binary-search', but offset 34221511 is exact.  Searching for
 ;; the lemma is only the fallback for a form that would not parse at all.
 
 (defconst diogenes--analysis-group-re
@@ -2336,9 +1903,9 @@ Mirrors Perl's $munge_ls_lemma for Latin -- the vowel-quantity markers
 become combining diacritics and a trailing homograph numeral is set off
 by a space -- and beta-code conversion for Greek."
   (if (string= lang "greek")
-      (diogenes--perseus-ensure-utf8 lemma lang)
+      (classicist--perseus-ensure-utf8 lemma lang)
     (diogenes--replace-regexes-in-string
-	(diogenes--perseus-ensure-utf8
+	(classicist--perseus-ensure-utf8
 	 (replace-regexp-in-string "#?\\([0-9]\\)\\'" " \\1" lemma)
 	 lang)
       ("&lt;" "<")
@@ -2451,18 +2018,18 @@ The body of `diogenes-lookup-next' minus the reading, plus an optional
 NOTE above the entry.  Stacks the several entries of one analysis the way
 the application does."
   (let* ((xml (decode-coding-string xml-bytes 'utf-8))
-	 (formatted (diogenes--dict-parse-xml xml start end))
+	 (formatted (classicist--dict-parse-xml xml start end))
 	 (inhibit-read-only t))
     (setq diogenes--lookup-bufend (max diogenes--lookup-bufend end))
     (goto-char (point-max))
     (let ((beg (copy-marker (point) nil))
 	  (fin (copy-marker (point) t)))
-      (diogenes--lookup-print-separator)
+      (classicist--lookup-print-separator)
       (when note
 	(insert (propertize (concat note "\n\n") 'font-lock-face 'italic)))
       (let ((entry-start (point)))
 	(if formatted
-	    (diogenes--lookup-insert-and-format formatted)
+	    (classicist--lookup-insert-and-format formatted)
 	  (diogenes--lookup-insert-xml xml start end (current-buffer)))
 	(diogenes--lookup-insert-entry-links diogenes--lookup-lang entry-start))
       (diogenes--lookup-mark-entry beg fin start end))))
@@ -2488,7 +2055,7 @@ the application does."
        (propertize (format "Perseus analys%s of %s:\n\n"
 			   (if (= 1 (length analyses)) "is" "es")
 			   (if (string= lang "greek")
-			       (diogenes--perseus-ensure-utf8 query lang)
+			       (classicist--perseus-ensure-utf8 query lang)
 			     query))
 		   'font-lock-face 'shr-h2)
        (if (= 1 (length analyses))
@@ -2540,10 +2107,10 @@ each direction (six by default).  Returns them in file order, OFFSET's own
 entry among them."
   (let* ((dict (or file (diogenes--dict-file lang)))
 	 (limit (or limit 6))
-	 (here (diogenes--get-dict-line dict offset)))
+	 (here (classicist--get-dict-line dict offset)))
     (if (not (car here))
 	nil
-      ;; `diogenes--get-dict-line' returns (BYTES START END); a run entry is
+      ;; `classicist--get-dict-line' returns (BYTES START END); a run entry is
       ;; (START END BYTES).
       (let* ((key (diogenes--dict-basic-key (car here)))
 	     (self (list (nth 1 here) (nth 2 here) (nth 0 here)))
@@ -2557,7 +2124,7 @@ entry among them."
 	  (let ((pos (1- (nth 0 self)))
 		(n 0))
 	    (while (and (< n limit) (> pos 0))
-	      (let ((line (diogenes--get-dict-line dict pos)))
+	      (let ((line (classicist--get-dict-line dict pos)))
 		(if (and (car line)
 			 (equal key (diogenes--dict-basic-key (car line)))
 			 (< (nth 1 line) (nth 0 (or (car before) self))))
@@ -2570,7 +2137,7 @@ entry among them."
 	  (let ((pos (1+ (nth 1 self)))
 		(n 0))
 	    (while (< n limit)
-	      (let ((line (diogenes--get-dict-line dict pos)))
+	      (let ((line (classicist--get-dict-line dict pos)))
 		(if (and (car line)
 			 (equal key (diogenes--dict-basic-key (car line)))
 			 (> (nth 1 line)
@@ -2598,12 +2165,12 @@ Unlike `diogenes--lookup-dict\=', a miss is a miss: nothing is displayed and
 no nearest entry offered, so this can be used to ask the dictionary whether
 a spelling exists at all."
   (seq-let (_bytes start _end exact-hit)
-      (diogenes--binary-search
+      (classicist--binary-search
        (or file (diogenes--dict-file lang))
        (if (string= lang "latin")
-	   #'diogenes--latin-sort-function
-	 #'diogenes--ascii-sort-function)
-       #'diogenes--xml-key-fn
+	   #'classicist--latin-sort-function
+	 #'classicist--ascii-sort-function)
+       #'classicist--xml-key-fn
        word)
     (and exact-hit start)))
 
@@ -2675,7 +2242,7 @@ it, as `$format_analysis' stacks them.  Returns that buffer."
     (cl-loop for (offset . conf) in dicts
 	     for note = (diogenes--analysis-caveat conf)
 	     do (seq-let (xml-bytes start end)
-		    (diogenes--get-dict-line dict offset)
+		    (classicist--get-dict-line dict offset)
 		  (cond
 		   ((not xml-bytes)
 		    (message "Diogenes: no dictionary entry at offset %d"
@@ -2709,9 +2276,9 @@ computed looks in the wrong bucket and can never match `Itys'."
 		  (if s (- s 2) 0)))
 	 (end (or (cdr (assoc key (plist-get index :index-end)))
 		  (plist-get index :index-max)))
-	 (result (diogenes--binary-search analyses-file
-					  #'diogenes--c-sort-function
-					  #'diogenes--tab-key-fn
+	 (result (classicist--binary-search analyses-file
+					  #'classicist--c-sort-function
+					  #'classicist--tab-key-fn
 					  word
 					  start end)))
     (and (nth 3 result) (car result))))
@@ -3357,7 +2924,7 @@ entries and orders them accordingly."
      for (lemma-word lemma-nr translation entries) = lemma
      concat (concat (propertize (string-trim
 				 (format "%s (%s)"
-					 (diogenes--perseus-ensure-utf8 lemma-word
+					 (classicist--perseus-ensure-utf8 lemma-word
 									lang)
 					 translation))
 				'font-lock-face 'link
@@ -3366,7 +2933,7 @@ entries and orders them accordingly."
 				'action 'lookup
 				'lemma lemma-word
 				'lang lang
-				'keymap diogenes-perseus-action-map
+				'keymap classicist-perseus-action-map
 				'rear-nonsticky t)
 		    " "
 		    (propertize "[Attested Forms]"
@@ -3374,13 +2941,13 @@ entries and orders them accordingly."
 				'action 'forms
 				'lemma lemma-word
 				'lang lang
-				'keymap diogenes-perseus-action-map
+				'keymap classicist-perseus-action-map
 				'rear-nonsticky t)
 		    "\n\n"
 		    (cl-loop for (headword . analysis) in entries
 			     concat (propertize
 				     (format "%-20s → %s\n"
-					     (diogenes--perseus-ensure-utf8 headword
+					     (classicist--perseus-ensure-utf8 headword
 									    lang)
 					     analysis)
 				     'h3 t))
@@ -3433,7 +3000,7 @@ if nil, query interactively for their values"
 		      'lemma (cadr lemma)
 		      'lang lang
 		      'lemma-nr (caddr lemma)
-		      'keymap diogenes-perseus-action-map
+		      'keymap classicist-perseus-action-map
 		      'rear-nonsticky t)
 	  " \n"
 	  (cl-loop
@@ -3504,7 +3071,7 @@ if nil, query interactively for their values"
 
 
 ;;; Callback function
-(defun diogenes-perseus-action (char)
+(defun classicist-perseus-action (char)
   "Callback for the links in Diogenes Lookup and Analysis Mode."
   (interactive "d")
   (let* ((action (get-text-property char 'action))

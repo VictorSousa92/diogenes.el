@@ -80,9 +80,9 @@
 ;; ---------------------------------------------------------------------
 ;;
 ;; Diogenes looks a word up by binary search over a file of ONE ENTRY PER
-;; LINE, sorted by a `key' attribute (see `diogenes--binary-search').  For
+;; LINE, sorted by a `key' attribute (see `classicist--binary-search').  For
 ;; Greek that key is beta code, sorted in the order of the Greek alphabet
-;; rather than of ASCII -- see `diogenes--beta-sort-function' -- and the DGE
+;; rather than of ASCII -- see `classicist--beta-sort-function' -- and the DGE
 ;; TEI has Unicode headwords full of accents, quantities and editorial
 ;; sigla, spread over one document per volume.  So it has to be converted
 ;; once:
@@ -176,7 +176,7 @@
 ;; diacritics and quantities gone with the combining marks NFD exposes,
 ;; everything that is not a Greek letter discarded, and what is left
 ;; transliterated into beta code and filtered down to the letters
-;; `diogenes--beta-sort-function' can sort.
+;; `classicist--beta-sort-function' can sort.
 ;;
 ;; Discarding the non-Greek is the step that does the work here, because the
 ;; DGE writes letters INTO a Greek word from outside the Greek alphabet:
@@ -247,8 +247,8 @@
 
 (declare-function diogenes--search-dict "diogenes-perseus"
                   (word lang sort-fn key-fn &optional file))
-(declare-function diogenes--beta-sort-function "diogenes-perseus" (a b))
-(declare-function diogenes--xml-key-fn "diogenes-perseus" (buf))
+(declare-function classicist--beta-sort-function "classicist-lexicon" (a b))
+(declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
 (declare-function diogenes--lookup-current-headword "diogenes-perseus" ())
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus"
                   (expected dict-name))
@@ -465,7 +465,7 @@ is empty.")
 
 (defconst diogenes-dge--beta-letters "abgdevzhqiklmncoprstufxyw"
   "The letters a beta-code key may consist of, and nothing else.
-`diogenes--beta-sort-function' looks every character up in
+`classicist--beta-sort-function' looks every character up in
 `diogenes--beta-code-alphabet' and SIGNALS on one it does not find, so one
 character that is not a beta-code letter -- the `_' or `^' of a quantity,
 the `(' of a breathing, whatever a transliteration table hands back for a
@@ -529,7 +529,7 @@ has just located something with `string-match' would otherwise find its
 
 (defun diogenes-dge--key (headword)
   "Return the beta-code key HEADWORD is filed under.
-`diogenes--beta-sort-function' compares keys after discarding everything
+`classicist--beta-sort-function' compares keys after discarding everything
 but ASCII letters, so a key must survive that: HEADWORD is normalised by
 `diogenes-dge--prepare', its combining marks dropped -- accents,
 breathings, the iota subscript, and the quantities the DGE prints on nearly
@@ -564,7 +564,7 @@ is expected to refuse rather than search for."
 
 (defun diogenes-dge--key< (a b)
   "Non-nil if key A sorts before key B, as the binary search expects.
-Delegates to `diogenes--beta-sort-function', which returns `a' when A is
+Delegates to `classicist--beta-sort-function', which returns `a' when A is
 the greater, `b' when B is, and nil when they are equal; A precedes B
 exactly when the answer is `b'.
 
@@ -575,7 +575,7 @@ sorts after ν and before ο, but between b and d in ASCII -- so a dictionary
 sorted by `string<' would send every binary search for a word from ο
 onwards down the wrong half of the file, and the failure would look like
 missing entries rather than a sorting bug."
-  (eq 'b (diogenes--beta-sort-function a b)))
+  (eq 'b (classicist--beta-sort-function a b)))
 
 ;;;; --------------------------------------------------------------------
 ;;;; REWRITING AN ENTRY
@@ -753,7 +753,7 @@ and told it is Greek, the rest is rewritten by
 `diogenes-dge--rewrite-entry', newlines are folded to spaces so the
 line-oriented binary search stays line-oriented, and a fresh opening tag is
 written carrying the beta-code key.  The tag is fresh because
-`diogenes--xml-key-fn' takes the FIRST `key=' it finds in the line; the
+`classicist--xml-key-fn' takes the FIRST `key=' it finds in the line; the
 entry's `xml:id' is copied onto it, being the name of the article in the
 DGE's own system, and the other attributes are dropped."
   (let ((rows nil)
@@ -937,7 +937,7 @@ behaviour, not to refuse the lookup."
 (defun diogenes-dge--assert-converted (file)
   "Signal a user-error unless FILE is a converted DGE dictionary.
 The lookup wants one entry per line, each with a `key' attribute; handed
-the TEI file instead it would fail deep inside `diogenes--xml-key-fn' with
+the TEI file instead it would fail deep inside `classicist--xml-key-fn' with
 an unhelpful message.  `diogenes-dge-file' is the CONVERTED file; the TEI
 belongs in `diogenes-dge-source-file'."
   (with-temp-buffer
@@ -1037,8 +1037,8 @@ Requires a converted dictionary file; see
            (and diogenes-dge-display-in-same-window
                 (derived-mode-p 'diogenes-lookup-mode))))
       (diogenes--search-dict key "greek"
-                             #'diogenes--beta-sort-function
-                             #'diogenes--xml-key-fn
+                             #'classicist--beta-sort-function
+                             #'classicist--xml-key-fn
                              file))))
 
 ;;;; --------------------------------------------------------------------
