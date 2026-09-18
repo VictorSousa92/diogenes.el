@@ -1390,8 +1390,7 @@ running."
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
-                  (id &rest keys))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 
 ;;;###autoload
 (defun diogenes-old-available-p ()

@@ -69,16 +69,15 @@
 (require 'ucs-normalize)
 (require 'diogenes-lisp-utils)          ; diogenes--path-usable-p
 
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
-                  (id &rest keys))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 (declare-function diogenes--search-dict "diogenes-perseus"
                   (word lang sort-fn key-fn &optional file))
-(declare-function diogenes--ascii-sort-function "diogenes-lisp-utils" (a b))
+(declare-function diogenes--ascii-sort-function "diogenes-perseus" (a b))
 (declare-function diogenes--xml-key-fn "diogenes-perseus" (buf))
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus"
                   (expected dict-name))
 (declare-function diogenes--lookup-current-headword "diogenes-perseus" ())
-(declare-function diogenes-dict-flatten-hi "diogenes-dict-faces" (body))
+(declare-function diogenes-dict-flatten-hi "diogenes-dict-faces" (line))
 (declare-function diogenes-dict-install-faces "diogenes-dict-faces" ())
 (declare-function diogenes-georges-pdf-available-p "diogenes-georges-pdf" ())
 (declare-function diogenes-lookup-open-georges-pdf "diogenes-georges-pdf"

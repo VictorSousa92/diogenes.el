@@ -153,8 +153,7 @@
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 (declare-function pdf-info-number-of-pages "pdf-info" (&optional file-or-buffer))
 (declare-function diogenes--perseus-beta-to-utf8 "diogenes-utils" (str))
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
-                  (id &rest keys))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 
 ;;;; --------------------------------------------------------------------
 ;;;; CUSTOMIZATION

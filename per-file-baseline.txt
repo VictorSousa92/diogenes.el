@@ -5,7 +5,7 @@
 13 diogenes-tgl.el
 12 diogenes-archive.el
 9 diogenes-org.el
-4 diogenes-user-interface.el
+3 diogenes-user-interface.el
 3 diogenes-perl-interface.el
 2 diogenes-utils.el
 2 diogenes-purpose.el

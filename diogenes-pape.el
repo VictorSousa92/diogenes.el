@@ -121,8 +121,7 @@
                   (&optional word))
 (declare-function diogenes--perseus-path "diogenes" ())
 (declare-function diogenes--strip-diacritics "diogenes-utils" (str))
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
-                  (id &rest keys))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 
 (defvar diogenes-lookup-mode-map)

@@ -116,8 +116,7 @@
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus"
                   (expected dict-name))
 (declare-function diogenes--perseus-path "diogenes" ())
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
-                  (id &rest keys))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 (declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
                   (&optional word))
 (defvar diogenes-gaffiot-pdf-fallback)

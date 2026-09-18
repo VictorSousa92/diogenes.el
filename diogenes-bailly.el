@@ -180,8 +180,7 @@
 (declare-function diogenes--perseus-path "diogenes" ())
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 (declare-function diogenes--perseus-beta-to-utf8 "diogenes-utils" (str))
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
-                  (id &rest keys))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 (declare-function diogenes-lookup-open-bailly-pdf "diogenes-bailly-pdf"
                   (&optional word))
 (declare-function diogenes-bailly-pdf-available-p "diogenes-bailly-pdf" ())

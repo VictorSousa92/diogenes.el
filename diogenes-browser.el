@@ -45,10 +45,10 @@
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
-(declare-function diogenes--select-author-num "diogenes-user-interface" (options &optional regex))
+(declare-function diogenes--select-author-num "diogenes-user-interface" (options &optional author-regex))
 (declare-function diogenes--select-work-num "diogenes-user-interface" (options author))
 (declare-function diogenes--select-passage "diogenes-user-interface" (options author work))
-(declare-function diogenes-lookup-in-dictionary "diogenes-perseus" (&optional word parse))
+(declare-function diogenes-lookup-in-dictionary "diogenes-perseus" (&optional word dictionary))
 
 ;;;; --------------------------------------------------------------------
 ;;;; BROWSER

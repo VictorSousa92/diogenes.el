@@ -57,11 +57,10 @@
 ;; and `diogenes.el\=' requires that, so requiring either from here closes a
 ;; circle.  `diogenes-abbreviations\=' is a table and could be required
 ;; honestly; it is declared with the rest for the sake of one rule.
-(declare-function diogenes--get-work-labels "diogenes-perl-interface"
-                  (options work))
+(declare-function diogenes--get-work-labels "diogenes-perl-interface" (options author-and-work))
 (declare-function diogenes--select-passage "diogenes-user-interface"
                   (options author work))
-(declare-function diogenes-browse-tlg "diogenes" ())
+(declare-function diogenes-browse-tlg "diogenes" (&optional author work))
 (defvar diogenes-abbreviations)
 
 ;; STAYED IN THE BROWSER, because it opens a passage there, and opening one is

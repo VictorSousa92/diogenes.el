@@ -71,13 +71,13 @@
 ;; Diogenes' own, called at run time.  Declared rather than required, so this
 ;; file compiles without a configured Diogenes and fails only where it should:
 ;; at the point a reader asks for something Diogenes has to answer.
-(declare-function classicist-browser-reference "diogenes-browser" ())
-(declare-function classicist-reference-to-string "diogenes-browser" (reference))
+(declare-function classicist-browser-reference "classicist-citation" ())
+(declare-function classicist-reference-to-string "classicist-citation" (reference))
 (declare-function diogenes-open-passage "diogenes-browser"
                   (corpus author work &optional passage))
-(declare-function classicist-citation-interval-from-key "diogenes-browser" (key))
-(declare-function diogenes-lookup-greek "diogenes-perseus" (word))
-(declare-function diogenes-lookup-latin "diogenes-perseus" (word))
+(declare-function classicist-citation-interval-from-key "classicist-citation" (key))
+(declare-function diogenes-lookup-greek "diogenes" (word &optional dictionary))
+(declare-function diogenes-lookup-latin "diogenes" (word &optional dictionary))
 
 (defvar diogenes-browser-mode-hook)
 (defvar diogenes-lookup-mode-hook)
@@ -559,9 +559,9 @@ Called at load; called again after changing `diogenes-org-link-type\\='."
 (declare-function org-roam-node-create "org-roam-node" (&rest args))
 (declare-function org-roam-capture- "org-roam-capture"
                   (&key goto keys node info props templates))
-(declare-function classicist-browser-citation-at "diogenes-browser"
+(declare-function classicist-browser-citation-at "classicist-citation"
                   (&optional position))
-(declare-function classicist-citation-to-key "diogenes-utils" (citation))
+(declare-function classicist-citation-to-key "classicist-citation" (citation))
 (declare-function diogenes--get-works-list "diogenes-perl-interface"
                   (options author))
 (declare-function diogenes--assoc-cadr "diogenes-lisp-utils" (key alist))

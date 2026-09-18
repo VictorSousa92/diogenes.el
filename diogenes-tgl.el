@@ -4254,8 +4254,7 @@ next look-up, so use this only when you know the file is current."
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
-                  (id &rest keys))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 
 ;;;###autoload
 (defun diogenes-tgl-available-p ()

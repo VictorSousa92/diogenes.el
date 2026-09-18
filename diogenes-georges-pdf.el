@@ -81,14 +81,12 @@
 (require 'diogenes-cambridge)           ; monotone backbone over OCR'd headwords
 
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
-                  (id &rest keys))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus"
                   (expected dict-name))
 (declare-function diogenes--lookup-headword-at-point "diogenes-perseus"
                   (&optional pos))
-(declare-function diogenes--require-path "diogenes-lisp-utils"
-                  (value name dictionary &optional kind))
+(declare-function diogenes--require-path "diogenes-lisp-utils" (value variable dictionary kind))
 (declare-function diogenes-georges-lookup-buffer-p "diogenes-georges" ())
 
 (defvar diogenes--lookup-headword)

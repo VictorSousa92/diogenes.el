@@ -50,12 +50,12 @@
 (defvar diogenes--corpora)
 (defvar diogenes--corpora-abbrevs)
 
-(declare-function diogenes--get-filter-file "diogenes-perl-interface" (&optional type))
-(declare-function diogenes--get-author-list "diogenes-perl-interface" (options &optional regex))
+(declare-function diogenes--get-filter-file "diogenes-perl-interface" ())
+(declare-function diogenes--get-author-list "diogenes-perl-interface" (options &optional author-regex))
 (declare-function diogenes--get-works-list "diogenes-perl-interface" (options author))
 (declare-function diogenes--get-tlg-categories "diogenes-perl-interface" ())
-(declare-function diogenes--define-corpus-script "diogenes-perl-interface" (options plist))
-(declare-function diogenes--get-info "diogenes-perl-interface" (script &optional a b))
+(declare-function diogenes--define-corpus-script "diogenes-perl-interface" (option-plist authors-plist))
+(declare-function diogenes--get-info "diogenes-perl-interface" (script &optional options1 options2))
 
 ;;; EDIT EXISTING CORPORA
 (defvar diogenes--user-corpora []

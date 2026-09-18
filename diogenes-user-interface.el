@@ -32,9 +32,9 @@
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
-(declare-function diogenes--get-author-list "diogenes-perl-interface" (options &optional regex))
+(declare-function diogenes--get-author-list "diogenes-perl-interface" (options &optional author-regex))
 (declare-function diogenes--get-works-list "diogenes-perl-interface" (options author))
-(declare-function diogenes--get-work-labels "diogenes-perl-interface" (options author work))
+(declare-function diogenes--get-work-labels "diogenes-perl-interface" (options author-and-work))
 (declare-function diogenes--get-tlg-categories "diogenes-perl-interface" ())
 
 ;;; Selectors

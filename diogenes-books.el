@@ -54,9 +54,8 @@
 (declare-function diogenes--dump-work "diogenes-browser" (options passage))
 (declare-function diogenes-open-passage "diogenes-browser"
                   (corpus author work &optional passage))
-(declare-function classicist-browser-reference "diogenes-browser" ())
-(declare-function diogenes--get-author-list "diogenes-perl-interface"
-                  (options))
+(declare-function classicist-browser-reference "classicist-citation" ())
+(declare-function diogenes--get-author-list "diogenes-perl-interface" (options &optional author-regex))
 (declare-function diogenes--get-works-list "diogenes-perl-interface"
                   (options author))
 (declare-function diogenes--assoc-cadr "diogenes-lisp-utils" (key alist))

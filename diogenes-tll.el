@@ -323,8 +323,7 @@ cleared with `diogenes-old-clear-cache'.)"
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus"
-                  (id &rest keys))
+(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
 
 ;;;###autoload
 (defun diogenes-tll-available-p ()
