@@ -31,9 +31,9 @@
 ;;
 ;; This is a sibling of `diogenes-pape.el' and `diogenes-bailly.el', and it
 ;; works the same way: the DGE comes as TEI XML, entry by entry, exactly the
-;; kind of thing `diogenes-lookup-mode' already displays for the LSJ and
+;; kind of thing `classicist-lookup-mode' already displays for the LSJ and
 ;; Lewis & Short, so this module adds no display machinery of its own.  It
-;; hands the DGE to `diogenes--search-dict' as one more dictionary file, and
+;; hands the DGE to `classicist--search-dict' as one more dictionary file, and
 ;; everything the lookup buffer can do comes with it --
 ;;
 ;;   * `C-c C-n' / `C-c C-p' walk to the next and previous entry;
@@ -127,7 +127,7 @@
 ;;     citation out of an `n' attribute holding a Perseus reference, and the
 ;;     DGE's 405,561 citations have no such attribute: every one of them
 ;;     would be drawn as a link with nothing behind it, and clicking one
-;;     would fail inside `diogenes--lookup-parse-bibl-string'.  Their
+;;     would fail inside `classicist--lookup-parse-bibl-string'.  Their
 ;;     <author>, <title> and <biblScope> keep their own faces, so a citation
 ;;     still looks like one.
 ;;
@@ -245,14 +245,14 @@
 (require 'diogenes-utils)
 (require 'diogenes-dict-faces)
 
-(declare-function diogenes--search-dict "diogenes-perseus"
+(declare-function classicist--search-dict "classicist-lookup"
                   (word lang sort-fn key-fn &optional file))
 (declare-function classicist--beta-sort-function "classicist-lexicon" (a b))
 (declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
-(declare-function diogenes--lookup-current-headword "diogenes-perseus" ())
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+(declare-function classicist--lookup-current-headword "classicist-lookup" ())
+(declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 (declare-function diogenes--perseus-path "diogenes" ())
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 (declare-function diogenes--beta-to-utf8 "diogenes-utils" (str))
@@ -261,7 +261,7 @@
 (declare-function diogenes-dict-flatten-hi "diogenes-dict-faces" (line))
 
 (defvar diogenes--lookup-file)
-(defvar diogenes--lookup-same-window)
+(defvar classicist--lookup-same-window)
 (defvar diogenes--dict-xml-handlers-extra)
 
 (defvar diogenes-dge--coverage-cache nil
@@ -335,7 +335,7 @@ the text is in -- and where it says nil, `diogenes-lookup-display-action\=' and
 (defcustom diogenes-dge-check-coverage t
   "If non-nil, refuse a word beyond the volumes the DGE has published.
 The DGE is unfinished, and the last entry of the converted file is the
-edge of what exists.  Beyond it `diogenes--search-dict' would show that
+edge of what exists.  Beyond it `classicist--search-dict' would show that
 last entry as the nearest to, say, ὕβρις -- true, and useless.  With this
 set, such a word gets a message naming the boundary instead.
 
@@ -988,7 +988,7 @@ Diogenes loads, or through M-x customize-variable")))))
   "Non-nil if the current lookup buffer is showing the DGE.
 Read from the buffer-local `diogenes--lookup-file', which records the
 dictionary the entries were read from.  Used by
-`diogenes--lookup-insert-dict-links' to offer \"[DGE]\" in an LSJ entry and
+`classicist--lookup-insert-dict-links' to offer \"[DGE]\" in an LSJ entry and
 \"[LSJ]\" here, so the link always leads to another dictionary rather than
 the one you are reading."
   (and (boundp 'diogenes--lookup-file)
@@ -1019,24 +1019,24 @@ Requires a converted dictionary file; see
 \\[diogenes-dge-build-dictionary]."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "greek" "DGE")
+     (classicist--lookup-assert-lang "greek" "DGE")
      ;; Already here: `l' leads back to the LSJ.
      (when (and (not current-prefix-arg) (diogenes-dge-lookup-buffer-p))
        (user-error "This entry is the DGE already; `l' returns to the LSJ, \
 `C-u d' looks up another word here"))
      (list (if current-prefix-arg
                (read-string "Look up in the DGE: ")
-             (diogenes--lookup-current-headword)))))
-  (let* ((word (string-trim (or word (diogenes--lookup-current-headword))))
+             (classicist--lookup-current-headword)))))
+  (let* ((word (string-trim (or word (classicist--lookup-current-headword))))
          (file (diogenes-dge--file))
          (key (diogenes-dge--key word)))
     (when (string-empty-p key)
       (user-error "Nothing to look up in \"%s\"" word))
     (diogenes-dge--assert-covered word key file)
-    (let ((diogenes--lookup-same-window
+    (let ((classicist--lookup-same-window
            (and diogenes-dge-display-in-same-window
-                (derived-mode-p 'diogenes-lookup-mode))))
-      (diogenes--search-dict key "greek"
+                (derived-mode-p 'classicist-lookup-mode))))
+      (classicist--search-dict key "greek"
                              #'classicist--beta-sort-function
                              #'classicist--xml-key-fn
                              file))))
@@ -1055,12 +1055,12 @@ say.  See `diogenes--loading-bundle'.")
   "Announce the DGE to the lookup banner, on \\`d'.  Idempotent.
 `:show unless-current', so the DGE is not offered inside the DGE; the way
 back is the \"[LSJ]\" link `diogenes-pape.el' registers, which appears here
-because `diogenes--lookup-own-dictionary-p' is false in a DGE buffer.
+because `classicist--lookup-own-dictionary-p' is false in a DGE buffer.
 
 `d' is bound here and not shared with a Latin command, unlike `P' and `l':
 Latin has nothing to put on it.  Pressed in a Latin entry, the command
-declines through `diogenes--lookup-assert-lang'."
-  (diogenes-lookup-register-dictionary
+declines through `classicist--lookup-assert-lang'."
+  (classicist-lookup-register-dictionary
    'dge :lang "greek" :name "DGE" :key "d" :order 65
    :command #'diogenes-lookup-dge
    :show 'unless-current

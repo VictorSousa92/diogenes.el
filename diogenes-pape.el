@@ -30,9 +30,9 @@
 ;;
 ;; This is the Greek counterpart of `diogenes-gaffiot.el', and it works the
 ;; same way: Pape comes as TEI XML, entry by entry, exactly the kind of
-;; thing `diogenes-lookup-mode' already displays for the LSJ and Lewis &
+;; thing `classicist-lookup-mode' already displays for the LSJ and Lewis &
 ;; Short, so this module adds no display machinery of its own.  It hands
-;; Pape to `diogenes--search-dict' as one more dictionary file, and
+;; Pape to `classicist--search-dict' as one more dictionary file, and
 ;; everything the lookup buffer can do comes with it --
 ;;
 ;;   * `C-c C-n' / `C-c C-p' walk to the next and previous entry;
@@ -107,27 +107,25 @@
 (require 'subr-x)
 (require 'diogenes-utils)
 
-(declare-function diogenes--search-dict "diogenes-perseus"
+(declare-function classicist--search-dict "classicist-lookup"
                   (word lang sort-fn key-fn &optional file))
 (declare-function classicist--beta-sort-function "classicist-lexicon" (a b))
 (declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
-(declare-function diogenes--lookup-current-headword "diogenes-perseus" ())
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+(declare-function classicist--lookup-current-headword "classicist-lookup" ())
+(declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
-(declare-function diogenes--lookup-own-dictionary-p "diogenes-perseus" ())
-(declare-function diogenes--lookup-dict "diogenes-perseus" (word lang))
-(declare-function diogenes-lookup-lewis "diogenes-perseus" (&optional word))
+(declare-function classicist--lookup-own-dictionary-p "classicist-lookup" ())
+(declare-function classicist--lookup-dict "classicist-lookup" (word lang))
+(declare-function classicist-lookup-lewis "classicist-lookup" (&optional word))
 (declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
                   (&optional word))
 (declare-function diogenes--perseus-path "diogenes" ())
 (declare-function diogenes--strip-diacritics "diogenes-utils" (str))
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 
-(defvar diogenes-lookup-mode-map)
-(defvar diogenes--lookup-file)
-(defvar diogenes--lookup-lang)
-(defvar diogenes--lookup-same-window)
+(defvar classicist-lookup-mode-map)
+(defvar classicist--lookup-same-window)
 (defvar diogenes--dict-xml-handlers-extra)
 
 ;;;; --------------------------------------------------------------------
@@ -515,17 +513,17 @@ Diogenes loads, or through M-x customize-variable")))))
 
 (defun diogenes-pape-lookup-buffer-p ()
   "Non-nil if the current lookup buffer is showing Pape.
-Read from the buffer-local `diogenes--lookup-file', which records the
+Read from the buffer-local `classicist--lookup-file', which records the
 dictionary the entries were read from.  Used by
-`diogenes--lookup-insert-dict-links' to offer \"[Pape]\" in an LSJ entry
+`classicist--lookup-insert-dict-links' to offer \"[Pape]\" in an LSJ entry
 and \"[LSJ]\" here, so the link always leads to the other Greek
 dictionary rather than the one you are reading."
-  (and (boundp 'diogenes--lookup-file)
-       diogenes--lookup-file
+  (and (boundp 'classicist--lookup-file)
+       classicist--lookup-file
        (let ((pape (diogenes-pape--dictionary-file)))
          (and (file-exists-p pape)
-              (file-exists-p diogenes--lookup-file)
-              (string= (file-truename diogenes--lookup-file)
+              (file-exists-p classicist--lookup-file)
+              (string= (file-truename classicist--lookup-file)
                        (file-truename pape))))))
 
 ;;;###autoload
@@ -545,23 +543,23 @@ Requires a converted dictionary file; see
 \\[diogenes-pape-build-dictionary]."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "greek" "Pape")
+     (classicist--lookup-assert-lang "greek" "Pape")
      ;; Already here: `l' leads back to the LSJ.
      (when (and (not current-prefix-arg) (diogenes-pape-lookup-buffer-p))
        (user-error "This entry is Pape already; `l' returns to the LSJ, \
 `C-u P' looks up another word here"))
      (list (if current-prefix-arg
                (read-string "Look up in Pape: ")
-             (diogenes--lookup-current-headword)))))
-  (let* ((word (string-trim (or word (diogenes--lookup-current-headword))))
+             (classicist--lookup-current-headword)))))
+  (let* ((word (string-trim (or word (classicist--lookup-current-headword))))
          (file (diogenes-pape--file))
          (key (diogenes-pape--key word)))
     (when (string-empty-p key)
       (user-error "Nothing to look up in \"%s\"" word))
-    (let ((diogenes--lookup-same-window
+    (let ((classicist--lookup-same-window
            (and diogenes-pape-display-in-same-window
-                (derived-mode-p 'diogenes-lookup-mode))))
-      (diogenes--search-dict key "greek"
+                (derived-mode-p 'classicist-lookup-mode))))
+      (classicist--search-dict key "greek"
                              #'classicist--beta-sort-function
                              #'classicist--xml-key-fn
                              file))))
@@ -573,29 +571,29 @@ Interactively, WORD defaults to the headword of the Greek entry at point;
 with a prefix argument, prompt for it.  This is the way back from another
 Greek dictionary -- Pape, say -- to the one Diogenes searches by default,
 and it is what the \"[LSJ]\" link in a Pape entry runs.  The exact Greek
-counterpart of `diogenes-lookup-lewis', and it lives here only because
+counterpart of `classicist-lookup-lewis', and it lives here only because
 Pape is the first Greek dictionary to need a way back."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "greek" "LSJ")
+     (classicist--lookup-assert-lang "greek" "LSJ")
      (unless (or current-prefix-arg
-                 (not (diogenes--lookup-own-dictionary-p)))
+                 (not (classicist--lookup-own-dictionary-p)))
        (user-error "This entry is the LSJ already; `P' opens Pape, \
 `C-u l' looks up another word here"))
      (list (if current-prefix-arg
                (read-string "Look up in the LSJ: ")
-             (diogenes--lookup-current-headword)))))
-  (let ((word (string-trim (or word (diogenes--lookup-current-headword))))
-        (diogenes--lookup-same-window (derived-mode-p 'diogenes-lookup-mode)))
+             (classicist--lookup-current-headword)))))
+  (let ((word (string-trim (or word (classicist--lookup-current-headword))))
+        (classicist--lookup-same-window (derived-mode-p 'classicist-lookup-mode)))
     (when (string-empty-p word)
       (user-error "No word given"))
-    (diogenes--lookup-dict word "greek")))
+    (classicist--lookup-dict word "greek")))
 
 ;;;; --------------------------------------------------------------------
 ;;;; KEYS THAT SERVE BOTH LANGUAGES
 ;;;; --------------------------------------------------------------------
 
-;; `p' is Passow's, so Pape takes `P'.  In `diogenes-lookup-mode-map' that
+;; `p' is Passow's, so Pape takes `P'.  In `classicist-lookup-mode-map' that
 ;; was the printed Gaffiot, and `l' was Lewis & Short; both are Latin-only
 ;; and would refuse a Greek entry.  Rather than move anyone's keys, these
 ;; two dispatch on the language of the entry, as
@@ -611,7 +609,7 @@ so a Latin branch on \\`P' is a second route to somewhere that now has its
 own, and one that made \\`P' mean two unrelated dictionaries depending on
 the buffer.  \\`P' is Pape, and Greek."
   (interactive)
-  (let ((lang (and (boundp 'diogenes--lookup-lang) diogenes--lookup-lang)))
+  (let ((lang (and (boundp 'classicist--lookup-lang) classicist--lookup-lang)))
     (pcase lang
       ("greek" (call-interactively #'diogenes-lookup-pape))
       (_       (call-interactively #'diogenes-lookup-open-gaffiot-pdf)))))
@@ -619,16 +617,16 @@ the buffer.  \\`P' is Pape, and Greek."
 ;;;###autoload
 (defun diogenes-lookup-lewis-or-lsj ()
   "Return to the language's own dictionary: the LSJ in Greek, Lewis in Latin.
-Bound to \\`l' in `diogenes-lookup-mode'.  Before Pape, `l' was Lewis &
+Bound to \\`l' in `classicist-lookup-mode'.  Before Pape, `l' was Lewis &
 Short and Greek entries had no other electronic dictionary to come back
-from; now it dispatches on the buffer-local `diogenes--lookup-lang'.  A
+from; now it dispatches on the buffer-local `classicist--lookup-lang'.  A
 prefix argument is passed through.  If the language is unknown it falls
 back to Lewis & Short, the historical binding of this key."
   (interactive)
-  (let ((lang (and (boundp 'diogenes--lookup-lang) diogenes--lookup-lang)))
+  (let ((lang (and (boundp 'classicist--lookup-lang) classicist--lookup-lang)))
     (pcase lang
       ("greek" (call-interactively #'diogenes-lookup-lsj))
-      (_       (call-interactively #'diogenes-lookup-lewis)))))
+      (_       (call-interactively #'classicist-lookup-lewis)))))
 
 (defun diogenes-pape--install-keys ()
   "Point \\`l' at its language-dispatching command, and \\`P' at Pape.  Idempotent.
@@ -639,9 +637,9 @@ printed Gaffiot on a Latin entry, that PDF having no key of its own, but
 as `B\=' does in Bailly and `G\=' in Georges -- so the Latin branch only made
 one key stand for two unrelated dictionaries.  Pressed on a Latin entry
 `P\=' now says that Pape is Greek, which is the truth about the key."
-  (when (boundp 'diogenes-lookup-mode-map)
-    (keymap-set diogenes-lookup-mode-map "P" #'diogenes-lookup-pape)
-    (keymap-set diogenes-lookup-mode-map "l"
+  (when (boundp 'classicist-lookup-mode-map)
+    (keymap-set classicist-lookup-mode-map "P" #'diogenes-lookup-pape)
+    (keymap-set classicist-lookup-mode-map "l"
                 #'diogenes-lookup-lewis-or-lsj)))
 
 ;;;; --------------------------------------------------------------------
@@ -658,13 +656,13 @@ say.  See `diogenes--loading-bundle'.")
   "Announce Pape, and the LSJ as the way back, to the lookup banner.
 Idempotent.  Both are `:show unless-current': Pape is not offered inside
 Pape, and the LSJ is not offered inside the LSJ -- which
-`diogenes--lookup-own-dictionary-p' recognises -- so from Pape or from
+`classicist--lookup-own-dictionary-p' recognises -- so from Pape or from
 Bailly the LSJ link appears, and in the LSJ it does not.
 
 Neither binds its key here.  `P' and `l' have to serve both languages, so
 `diogenes-pape--install-keys' binds them: `l\=' to a dispatcher, since it has
 the LSJ and Lewis & Short to choose between, and `P\=' straight to Pape."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'pape :lang "greek" :name "Pape" :key "P" :order 60
    :command #'diogenes-lookup-pape
    :show 'unless-current
@@ -673,11 +671,11 @@ the LSJ and Lewis & Short to choose between, and `P\=' straight to Pape."
    :declared diogenes-pape--declared-at-load
    :paths '(diogenes-pape-file diogenes-pape-source-file)
    :help "Show Pape's entry for \"%s\"")
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'lsj :lang "greek" :name "LSJ" :key "l" :order 80
    :command #'diogenes-lookup-lsj
    :show 'unless-current
-   :buffer-p #'diogenes--lookup-own-dictionary-p
+   :buffer-p #'classicist--lookup-own-dictionary-p
    :help "Show the LSJ entry for \"%s\""))
 
 (with-eval-after-load 'diogenes-perseus

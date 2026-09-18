@@ -1,10 +1,11 @@
-40 diogenes-perseus.el
 17 diogenes-search.el
 15 diogenes-corpora.el
+14 diogenes-perseus.el
 14 classicist-browser.el
 13 diogenes-tgl.el
 12 diogenes-archive.el
 9 diogenes-org.el
+5 classicist-lookup.el
 3 diogenes-user-interface.el
 3 diogenes-perl-interface.el
 2 diogenes-utils.el

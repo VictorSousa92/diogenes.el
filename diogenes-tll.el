@@ -20,7 +20,7 @@
 ;;; Commentary:
 
 ;; This module lets you jump from a Diogenes dictionary entry (the
-;; buffer produced by `diogenes-lookup-mode') straight to the page of
+;; buffer produced by `classicist-lookup-mode') straight to the page of
 ;; the *Thesaurus Linguae Latinae* (TLL) that contains that entry,
 ;; displayed inside Emacs with `pdf-tools' (or, as a fallback,
 ;; `doc-view').  It is the TLL counterpart of `diogenes-old.el' and
@@ -54,7 +54,7 @@
 (require 'seq)
 (require 'diogenes-old)                 ; sort-key, diacritics, PDF display
 
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+(declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 (declare-function pdf-info-number-of-pages "pdf-info" (&optional file-or-buffer))
@@ -281,7 +281,7 @@ WORD's entry begins on.  Returns an integer page (with
 (defun diogenes-lookup-open-tll (&optional word)
   "Open the Thesaurus Linguae Latinae PDF at the entry for WORD.
 Interactively, WORD defaults to the headword of the entry at point
-in a `diogenes-lookup-mode' buffer.  With a prefix argument, prompt
+in a `classicist-lookup-mode' buffer.  With a prefix argument, prompt
 for the word.
 
 Requires `diogenes-tll-pdf-directory' to point at a folder of TLL
@@ -289,7 +289,7 @@ fascicle PDFs whose names carry \"(word-word)\" intervals, and
 `pdf-tools' (recommended) or `doc-view' for display."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "latin" "The Thesaurus Linguae Latinae")
+     (classicist--lookup-assert-lang "latin" "The Thesaurus Linguae Latinae")
      (list (if current-prefix-arg
                (read-string "Open TLL at word: ")
              (diogenes-old--current-headword)))))
@@ -323,7 +323,7 @@ cleared with `diogenes-old-clear-cache'.)"
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 
 ;;;###autoload
 (defun diogenes-tll-available-p ()
@@ -342,7 +342,7 @@ say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-tll--register ()
   "Announce the TLL to the lookup banner.  Idempotent."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'tll :lang "latin" :name "TLL" :key "t" :order 20
    :command #'diogenes-lookup-open-tll
    :available-p #'diogenes-tll-available-p

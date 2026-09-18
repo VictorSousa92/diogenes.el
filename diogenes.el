@@ -376,10 +376,10 @@ Accepts both Unicode and Beta Code as input.
 
 With a prefix argument, ask which Greek dictionary to search instead; see
 `diogenes-lookup-always-ask-dictionary\=' to be asked every time."
-  (interactive (diogenes--lookup-read-args "greek" "Search LSJ for: "))
+  (interactive (classicist--lookup-read-args "greek" "Search LSJ for: "))
   (if dictionary
-      (diogenes--lookup-word-in-dictionary word dictionary)
-    (diogenes--lookup-dict word "greek")))
+      (classicist--lookup-word-in-dictionary word dictionary)
+    (classicist--lookup-dict word "greek")))
 
 ;;;###autoload
 (defun diogenes-lookup-latin (word &optional dictionary)
@@ -387,10 +387,10 @@ With a prefix argument, ask which Greek dictionary to search instead; see
 
 With a prefix argument, ask which Latin dictionary to search instead; see
 `diogenes-lookup-always-ask-dictionary\=' to be asked every time."
-  (interactive (diogenes--lookup-read-args "latin" "Search Lewis & Short for: "))
+  (interactive (classicist--lookup-read-args "latin" "Search Lewis & Short for: "))
   (if dictionary
-      (diogenes--lookup-word-in-dictionary word dictionary)
-    (diogenes--lookup-dict word "latin")))
+      (classicist--lookup-word-in-dictionary word dictionary)
+    (classicist--lookup-dict word "latin")))
 
 ;;; MORPHEUS PARSING
 ;;;###autoload
@@ -401,9 +401,9 @@ With a prefix argument, ask which Greek dictionary to show it in.  The word
 is parsed either way -- an inflected form reaches its lemma -- but a chosen
 dictionary is reached by that lemma rather than by the offset Diogenes
 recorded, there being no offset for any dictionary but its own."
-  (interactive (diogenes--lookup-read-args "greek" "Parse greek word: "))
+  (interactive (classicist--lookup-read-args "greek" "Parse greek word: "))
   (if dictionary
-      (diogenes--lookup-word-in-dictionary word dictionary t)
+      (classicist--lookup-word-in-dictionary word dictionary t)
     (diogenes--parse-and-lookup (diogenes--greek-ensure-beta word)
 				"greek")))
 
@@ -413,9 +413,9 @@ recorded, there being no offset for any dictionary but its own."
 
 With a prefix argument, ask which Latin dictionary to show it in; see
 `diogenes-parse-and-lookup-greek\=' on what that changes."
-  (interactive (diogenes--lookup-read-args "latin" "Parse latin word: "))
+  (interactive (classicist--lookup-read-args "latin" "Parse latin word: "))
   (if dictionary
-      (diogenes--lookup-word-in-dictionary word dictionary t)
+      (classicist--lookup-word-in-dictionary word dictionary t)
     (diogenes--parse-and-lookup word "latin")))
 
 ;;;###autoload

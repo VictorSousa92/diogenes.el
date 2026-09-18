@@ -78,7 +78,7 @@
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 
@@ -266,7 +266,7 @@ The entry point `diogenes-pdf-search' uses; see
 ;;;; INTERACTIVE ENTRY POINTS
 ;;;; --------------------------------------------------------------------
 
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus" (expected dict-name))
+(declare-function classicist--lookup-assert-lang "classicist-lookup" (expected dict-name))
 
 ;;;###autoload
 (defun diogenes-lookup-open-gaffiot-pdf (&optional word)
@@ -281,7 +281,7 @@ Requires `diogenes-gaffiot-pdf-file', and `pdf-tools' (recommended) or
 `doc-view' for display."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "latin" "Gaffiot")
+     (classicist--lookup-assert-lang "latin" "Gaffiot")
      ;; `P' shows in print what the entry on screen gives electronically, so
      ;; it belongs to a Gaffiot entry.  Elsewhere `g' is the way in -- and it
      ;; comes here by itself for a word past F.  `C-u P' asks for a word and
@@ -356,7 +356,7 @@ half of `diogenes-lookup-pape-or-gaffiot-pdf' -- bound by
 `diogenes-pape--install-keys', which shares that key with Pape by
 language.  It is no longer the only way in, so it is no longer the key
 worth naming."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'gaffiot-pdf :lang "latin" :name "PDF" :key "g" :order 90
    :command #'diogenes-lookup-open-gaffiot-pdf
    :show 'when-current :of 'gaffiot

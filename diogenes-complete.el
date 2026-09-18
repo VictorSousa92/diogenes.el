@@ -40,7 +40,7 @@
 ;;
 ;; Get any of it wrong and the answer is an error, or silence.
 ;;
-;; AND THE LIST IS ALREADY IN MEMORY.  `diogenes--get-all-lemmata' reads
+;; AND THE LIST IS ALREADY IN MEMORY.  `classicist--get-all-lemmata' reads
 ;; `greek-lemmata.txt' or `latin-lemmata.txt' into a hash table and caches it.
 ;; Everything below is a way of letting a reader see into that table while
 ;; typing, which is what the prompt should have done all along.
@@ -74,7 +74,7 @@
 (require 'subr-x)
 (require 'ucs-normalize)
 
-(declare-function diogenes--get-all-lemmata "diogenes-perseus" (lang))
+(declare-function classicist--get-all-lemmata "classicist-lookup" (lang))
 (declare-function diogenes--beta-to-utf8 "diogenes-utils" (str))
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 
@@ -154,7 +154,7 @@ thing and is not used here, this file being loadable before it."
 
 ;;; The candidates, indexed once and kept on disk
 
-;; WHY A CACHE AT ALL.  `diogenes--get-all-lemmata' parses the whole of
+;; WHY A CACHE AT ALL.  `classicist--get-all-lemmata' parses the whole of
 ;; `greek-lemmata.txt' into a hash table -- every lemma with every attested
 ;; form and every analysis of it -- and says so while it works, because it
 ;; takes a while.  For the prompt that is a great deal of work to do before a

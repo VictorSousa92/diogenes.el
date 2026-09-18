@@ -48,7 +48,7 @@
 (declare-function diogenes--select-author-num "diogenes-user-interface" (options &optional author-regex))
 (declare-function diogenes--select-work-num "diogenes-user-interface" (options author))
 (declare-function diogenes--select-passage "diogenes-user-interface" (options author work))
-(declare-function diogenes-lookup-in-dictionary "diogenes-perseus" (&optional word dictionary))
+(declare-function classicist-lookup-in-dictionary "classicist-lookup" (&optional word dictionary))
 
 ;;;; --------------------------------------------------------------------
 ;;;; BROWSER
@@ -997,7 +997,7 @@ a Perl process on every page."
     (keymap-set map "C-c C-p"  #'classicist-browser-backward)
     ;; Actions
     (keymap-set map "C-c C-c" #'classicist-browser-lookup)
-    (keymap-set map "C-c C-o" #'diogenes-lookup-in-dictionary)
+    (keymap-set map "C-c C-o" #'classicist-lookup-in-dictionary)
     (keymap-set map "C-c C-q" #'classicist-browser-quit)
     ;; Utilities
     (keymap-set map "C-c C--" #'classicist-browser-remove-hyphenation)

@@ -31,9 +31,9 @@
 ;;
 ;; This is the Greek counterpart of `diogenes-gaffiot.el', and it works the
 ;; same way: Bailly comes as TEI XML, entry by entry, exactly the kind of
-;; thing `diogenes-lookup-mode' already displays for the LSJ and Lewis &
+;; thing `classicist-lookup-mode' already displays for the LSJ and Lewis &
 ;; Short, so this module adds no display machinery of its own.  It hands
-;; Bailly to `diogenes--search-dict' as one more dictionary file, and
+;; Bailly to `classicist--search-dict' as one more dictionary file, and
 ;; everything the lookup buffer can do comes with it --
 ;;
 ;;   * `C-c C-n' / `C-c C-p' walk to the next and previous entry;
@@ -121,7 +121,7 @@
 ;;     Bailly's sigla are not that: "PLUT. T. Gracch. 5" is resolved by a
 ;;     bibliography (biblio.2020) distributed apart from the dictionary, so
 ;;     an <bibl> here would be a link with nothing behind it, and clicking
-;;     it would fail inside `diogenes--lookup-parse-bibl-string'.  Its
+;;     it would fail inside `classicist--lookup-parse-bibl-string'.  Its
 ;;     <author> and <biblScope> keep their own faces, so a citation still
 ;;     looks like one.  Should the sigla ever be resolved, the place to
 ;;     undo this is `diogenes-bailly--rewrite-entry'.
@@ -168,25 +168,24 @@
 (require 'diogenes-dict-faces)
 (require 'diogenes-lisp-utils)          ; diogenes--path-usable-p
 
-(declare-function diogenes--search-dict "diogenes-perseus"
+(declare-function classicist--search-dict "classicist-lookup"
                   (word lang sort-fn key-fn &optional file))
 (declare-function classicist--beta-sort-function "classicist-lexicon" (a b))
 (declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
 (declare-function classicist--binary-search "classicist-lexicon"
                   (dict-file comp-fn key-fn word &optional start stop))
-(declare-function diogenes--lookup-current-headword "diogenes-perseus" ())
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+(declare-function classicist--lookup-current-headword "classicist-lookup" ())
+(declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
 (declare-function diogenes--perseus-path "diogenes" ())
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 (declare-function diogenes--perseus-beta-to-utf8 "diogenes-utils" (str))
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 (declare-function diogenes-lookup-open-bailly-pdf "diogenes-bailly-pdf"
                   (&optional word))
 (declare-function diogenes-bailly-pdf-available-p "diogenes-bailly-pdf" ())
 
-(defvar diogenes--lookup-file)
-(defvar diogenes--lookup-same-window)
+(defvar classicist--lookup-same-window)
 (defvar diogenes--dict-xml-handlers-extra)
 
 ;;;; --------------------------------------------------------------------
@@ -686,18 +685,18 @@ Diogenes loads, or through M-x customize-variable")))))
 
 (defun diogenes-bailly-lookup-buffer-p ()
   "Non-nil if the current lookup buffer is showing Bailly.
-Read from the buffer-local `diogenes--lookup-file', which records the
+Read from the buffer-local `classicist--lookup-file', which records the
 dictionary the entries were read from.  Used by
-`diogenes--lookup-insert-dict-links' to offer \"[Bailly (B)]\" in an LSJ or
+`classicist--lookup-insert-dict-links' to offer \"[Bailly (B)]\" in an LSJ or
 Pape entry and \"[PDF (B)]\" here, so the link always leads somewhere you
 are not; and by `diogenes-lookup-bailly', so that `B' pressed inside a
 Bailly entry opens the printed page instead of looking the word up again."
-  (and (boundp 'diogenes--lookup-file)
-       diogenes--lookup-file
+  (and (boundp 'classicist--lookup-file)
+       classicist--lookup-file
        (let ((bailly (diogenes-bailly--dictionary-file)))
          (and (file-exists-p bailly)
-              (file-exists-p diogenes--lookup-file)
-              (string= (file-truename diogenes--lookup-file)
+              (file-exists-p classicist--lookup-file)
+              (string= (file-truename classicist--lookup-file)
                        (file-truename bailly))))))
 
 ;;;###autoload
@@ -729,10 +728,10 @@ Requires either a converted dictionary file (see
 \\[diogenes-bailly-build-dictionary]) or a PDF of the printed edition."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "greek" "Bailly")
+     (classicist--lookup-assert-lang "greek" "Bailly")
      (list (if current-prefix-arg
                (read-string "Look up in Bailly: ")
-             (diogenes--lookup-current-headword)))))
+             (classicist--lookup-current-headword)))))
   ;; Already reading Bailly: this key's other job is the printed page.
   ;; Checked here rather than in the `interactive' form so that the link in
   ;; the banner, which calls us with a word, dispatches the same way.
@@ -743,7 +742,7 @@ Requires either a converted dictionary file (see
         (user-error "This entry is Bailly already; set \
 `diogenes-bailly-pdf-file' to reach the printed page from here, `l' returns \
 to the LSJ, `C-u B' looks up another word here"))
-    (let ((word (string-trim (or word (diogenes--lookup-current-headword)))))
+    (let ((word (string-trim (or word (classicist--lookup-current-headword)))))
       (cond
        ;; No XML, and none to build: whatever Bailly the user has is the
        ;; printed one, so send the word there instead of asking for a TEI
@@ -760,10 +759,10 @@ to the LSJ, `C-u B' looks up another word here"))
               (key (diogenes-bailly--key word)))
           (when (string-empty-p key)
             (user-error "Nothing to look up in \"%s\"" word))
-          (let ((diogenes--lookup-same-window
+          (let ((classicist--lookup-same-window
                  (and diogenes-bailly-display-in-same-window
-                      (derived-mode-p 'diogenes-lookup-mode))))
-            (diogenes--search-dict key "greek"
+                      (derived-mode-p 'classicist-lookup-mode))))
+            (classicist--search-dict key "greek"
                                    #'classicist--beta-sort-function
                                    #'classicist--xml-key-fn
                                    file))))))))
@@ -785,7 +784,7 @@ place is taken by \"[PDF (B)]\" -- registered by `diogenes-bailly-pdf.el',
 which is also what makes the printed page unreachable from anywhere else.
 `:bind t' puts `B' on `diogenes-lookup-bailly': the key is Greek-only, so
 it needs no language dispatcher of the kind `P' and `l' have."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'bailly :lang "greek" :name "Bailly" :key "B" :order 70
    :command #'diogenes-lookup-bailly
    :show 'unless-current

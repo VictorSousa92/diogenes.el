@@ -33,7 +33,7 @@
 ;;   M-x diogenes-georges-build-dictionary
 ;;
 ;; and thereafter searched like the LSJ or Lewis & Short, by
-;; `diogenes--search-dict' over the file the conversion wrote.
+;; `classicist--search-dict' over the file the conversion wrote.
 ;;
 ;; ---------------------------------------------------------------------
 ;; COLLATION
@@ -69,14 +69,14 @@
 (require 'ucs-normalize)
 (require 'diogenes-lisp-utils)          ; diogenes--path-usable-p
 
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
-(declare-function diogenes--search-dict "diogenes-perseus"
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
+(declare-function classicist--search-dict "classicist-lookup"
                   (word lang sort-fn key-fn &optional file))
 (declare-function classicist--ascii-sort-function "classicist-lexicon" (a b))
 (declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+(declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
-(declare-function diogenes--lookup-current-headword "diogenes-perseus" ())
+(declare-function classicist--lookup-current-headword "classicist-lookup" ())
 (declare-function diogenes-dict-flatten-hi "diogenes-dict-faces" (line))
 (declare-function diogenes-dict-install-faces "diogenes-dict-faces" ())
 (declare-function diogenes-georges-pdf-available-p "diogenes-georges-pdf" ())
@@ -84,7 +84,7 @@
                   (&optional word))
 
 (defvar diogenes--lookup-file)
-(defvar diogenes--lookup-same-window)
+(defvar classicist--lookup-same-window)
 (defvar diogenes--dict-xml-handlers-extra)
 
 ;;;; --------------------------------------------------------------------
@@ -493,10 +493,10 @@ Requires either a converted dictionary file (see
 \\[diogenes-georges-build-dictionary]) or the printed volumes."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "latin" "Georges")
+     (classicist--lookup-assert-lang "latin" "Georges")
      (list (if current-prefix-arg
                (read-string "Look up in Georges: ")
-             (diogenes--lookup-current-headword)))))
+             (classicist--lookup-current-headword)))))
   ;; Already reading Georges: this key's other job is the printed page.
   ;; Checked here rather than in the `interactive' form so that the banner
   ;; link, which calls us with a word, dispatches the same way.
@@ -507,7 +507,7 @@ Requires either a converted dictionary file (see
         (user-error "This entry is Georges already; set \
 `diogenes-georges-directory' to reach the printed page from here, `l' \
 returns to Lewis & Short, `C-u G' looks up another word here"))
-    (let ((word (string-trim (or word (diogenes--lookup-current-headword)))))
+    (let ((word (string-trim (or word (classicist--lookup-current-headword)))))
       (cond
        ;; No XML, and none to build: whatever Georges the user has is the
        ;; printed one, so send the word there instead of asking for a TEI
@@ -524,10 +524,10 @@ returns to Lewis & Short, `C-u G' looks up another word here"))
               (key (diogenes-georges--key word)))
           (when (string-empty-p key)
             (user-error "Nothing to look up in \"%s\"" word))
-          (let ((diogenes--lookup-same-window
+          (let ((classicist--lookup-same-window
                  (and diogenes-georges-display-in-same-window
-                      (derived-mode-p 'diogenes-lookup-mode))))
-            (diogenes--search-dict key "latin"
+                      (derived-mode-p 'classicist-lookup-mode))))
+            (classicist--search-dict key "latin"
                                    #'classicist--ascii-sort-function
                                    #'classicist--xml-key-fn
                                    file))))))))
@@ -550,7 +550,7 @@ which is also what makes the printed volumes unreachable from anywhere
 else.  `:bind t' puts `G' on `diogenes-lookup-georges': the key is
 Latin-only, so it needs no language dispatcher of the kind `P' and `l'
 have."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'georges :lang "latin" :name "Georges" :key "G" :order 75
    :command #'diogenes-lookup-georges
    :show 'unless-current

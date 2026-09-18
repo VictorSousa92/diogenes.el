@@ -21,7 +21,7 @@
 ;;; Commentary:
 
 ;; This module lets you jump from a Diogenes *Greek* dictionary entry
-;; (the buffer produced by `diogenes-lookup-mode') to the page of BDAG
+;; (the buffer produced by `classicist-lookup-mode') to the page of BDAG
 ;; -- Bauer's _Greek-English Lexicon of the New Testament_ (Bauer,
 ;; Danker, Arndt, Gingrich) -- that contains that entry, displayed with
 ;; `pdf-tools' (or `doc-view').  It is a Greek counterpart of
@@ -56,7 +56,7 @@
 (require 'diogenes-old)                 ; reuse PDF display + cache pattern
 (require 'diogenes-montanari)           ; reuse the Greek collation key
 
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+(declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 
@@ -218,16 +218,16 @@ applied), or the final page if WORD sorts after every guide word."
 
 (defvar diogenes--lookup-headword)      ; from diogenes-perseus.el
 
-(declare-function diogenes--lookup-headword-at-point "diogenes-perseus" (&optional pos))
+(declare-function classicist--lookup-headword-at-point "classicist-lookup" (&optional pos))
 
 (defun diogenes-bdag--current-headword ()
   "Return the headword to look up for the Greek entry point is in.
 Resolved from point on every call via
-`diogenes--lookup-headword-at-point', so the opener always acts on
+`classicist--lookup-headword-at-point', so the opener always acts on
 the entry the cursor is currently in -- including entries loaded
-later by `diogenes-lookup-next' / `diogenes-lookup-previous'."
-  (or (and (fboundp 'diogenes--lookup-headword-at-point)
-           (diogenes--lookup-headword-at-point))
+later by `classicist-lookup-next' / `classicist-lookup-previous'."
+  (or (and (fboundp 'classicist--lookup-headword-at-point)
+           (classicist--lookup-headword-at-point))
       (get-text-property (point) 'orth)
       (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
       (thing-at-point 'word t)
@@ -237,7 +237,7 @@ later by `diogenes-lookup-next' / `diogenes-lookup-previous'."
 (defun diogenes-lookup-open-bdag (&optional word)
   "Open the BDAG (Bauer) NT lexicon PDF at the entry for WORD.
 Interactively, WORD defaults to the headword of the Greek entry at
-point in a `diogenes-lookup-mode' buffer.  With a prefix argument,
+point in a `classicist-lookup-mode' buffer.  With a prefix argument,
 prompt for the word.
 
 Requires `diogenes-bdag-pdf-file' to point at a BDAG PDF with an
@@ -245,7 +245,7 @@ interval outline, and `pdf-tools' (recommended) or `doc-view' for
 display."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "greek" "BDAG (Bauer)")
+     (classicist--lookup-assert-lang "greek" "BDAG (Bauer)")
      (list (if current-prefix-arg
                (read-string "Open BDAG at word: ")
              (diogenes-bdag--current-headword)))))
@@ -271,7 +271,7 @@ is running."
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 
 ;;;###autoload
 (defun diogenes-bdag-available-p ()
@@ -288,7 +288,7 @@ say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-bdag--register ()
   "Announce BDAG (Bauer) to the lookup banner.  Idempotent."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'bdag :lang "greek" :name "BDAG" :key "b" :order 30
    :command #'diogenes-lookup-open-bdag
    :available-p #'diogenes-bdag-available-p

@@ -22,7 +22,7 @@
 ;;; Commentary:
 
 ;; This module lets you jump from a Diogenes *Greek* dictionary entry
-;; (the buffer produced by `diogenes-lookup-mode' after a Greek lookup
+;; (the buffer produced by `classicist-lookup-mode' after a Greek lookup
 ;; or parse) to the page of Montanari's _Brill Dictionary of Ancient
 ;; Greek_ that contains that entry, displayed inside Emacs with
 ;; `pdf-tools' (or `doc-view').  It is the Greek counterpart of
@@ -58,7 +58,7 @@
 (require 'ucs-normalize)
 (require 'diogenes-old)                 ; reuse PDF display + cache pattern
 
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+(declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 (declare-function diogenes--perseus-beta-to-utf8 "diogenes-utils" (str))
@@ -448,19 +448,17 @@ word is itself garbled can be off by a page or two; adjust
 ;;;; INTERACTIVE ENTRY POINTS
 ;;;; --------------------------------------------------------------------
 
-(defvar diogenes--lookup-headword)      ; from diogenes-perseus.el
-(defvar diogenes--lookup-lang)          ; from diogenes-perseus.el
 
-(declare-function diogenes--lookup-headword-at-point "diogenes-perseus" (&optional pos))
+(declare-function classicist--lookup-headword-at-point "classicist-lookup" (&optional pos))
 
 (defun diogenes-montanari--current-headword ()
   "Return the headword to look up for the Greek entry point is in.
 Resolved from point on every call via
-`diogenes--lookup-headword-at-point', so the opener always acts on
+`classicist--lookup-headword-at-point', so the opener always acts on
 the entry the cursor is currently in -- including entries loaded
-later by `diogenes-lookup-next' / `diogenes-lookup-previous'."
-  (or (and (fboundp 'diogenes--lookup-headword-at-point)
-           (diogenes--lookup-headword-at-point))
+later by `classicist-lookup-next' / `classicist-lookup-previous'."
+  (or (and (fboundp 'classicist--lookup-headword-at-point)
+           (classicist--lookup-headword-at-point))
       (get-text-property (point) 'orth)
       (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
       (thing-at-point 'word t)
@@ -470,7 +468,7 @@ later by `diogenes-lookup-next' / `diogenes-lookup-previous'."
 (defun diogenes-lookup-open-montanari (&optional word)
   "Open Montanari's Brill Dictionary PDF at the entry for WORD.
 Interactively, WORD defaults to the headword of the Greek entry at
-point in a `diogenes-lookup-mode' buffer.  With a prefix argument,
+point in a `classicist-lookup-mode' buffer.  With a prefix argument,
 prompt for the word.
 
 Requires `diogenes-montanari-pdf-file' to point at a Montanari PDF
@@ -478,7 +476,7 @@ with an interval outline, and `pdf-tools' (recommended) or
 `doc-view' for display."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "greek" "Montanari's Brill Dictionary")
+     (classicist--lookup-assert-lang "greek" "Montanari's Brill Dictionary")
      (list (if current-prefix-arg
                (read-string "Open Montanari at word: ")
              (diogenes-montanari--current-headword)))))
@@ -505,7 +503,7 @@ Emacs is running."
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 
 ;;;###autoload
 (defun diogenes-montanari-available-p ()
@@ -522,7 +520,7 @@ say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-montanari--register ()
   "Announce Montanari to the lookup banner.  Idempotent."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'montanari :lang "greek" :name "Montanari" :key "m" :order 10
    :command #'diogenes-lookup-open-montanari
    :available-p #'diogenes-montanari-available-p

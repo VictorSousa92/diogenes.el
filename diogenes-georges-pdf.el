@@ -81,10 +81,10 @@
 (require 'diogenes-cambridge)           ; monotone backbone over OCR'd headwords
 
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
+(declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
-(declare-function diogenes--lookup-headword-at-point "diogenes-perseus"
+(declare-function classicist--lookup-headword-at-point "classicist-lookup"
                   (&optional pos))
 (declare-function diogenes--require-path "diogenes-lisp-utils" (value variable dictionary kind))
 (declare-function diogenes-georges-lookup-buffer-p "diogenes-georges" ())
@@ -296,8 +296,8 @@ names."
 
 (defun diogenes-georges-pdf--current-headword ()
   "Return the headword of the Latin entry point is in."
-  (or (and (fboundp 'diogenes--lookup-headword-at-point)
-           (diogenes--lookup-headword-at-point))
+  (or (and (fboundp 'classicist--lookup-headword-at-point)
+           (classicist--lookup-headword-at-point))
       (get-text-property (point) 'orth)
       (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
       (thing-at-point 'word t)
@@ -319,7 +319,7 @@ Requires `diogenes-georges-directory', and `pdf-tools' (recommended) or
 `doc-view' for display."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "latin" "Georges")
+     (classicist--lookup-assert-lang "latin" "Georges")
      (list (if current-prefix-arg
                (read-string "Open Georges at word: ")
              (diogenes-georges-pdf--current-headword)))))
@@ -367,7 +367,7 @@ say.  See `diogenes--loading-bundle'.")
 which is where pressing `G' means the printed page rather than another
 lookup.  The key is shared with `diogenes-lookup-georges', which does that
 dispatching, so nothing is bound here."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'georges-pdf :lang "latin" :name "PDF" :key "G" :order 90
    :command #'diogenes-lookup-open-georges-pdf
    :show 'when-current :of 'georges

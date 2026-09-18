@@ -47,7 +47,7 @@
 ;; says nothing about the rest, so it guards every use with `fboundp' or
 ;; `boundp' rather than pulling the lookup machinery in.  Declared only to
 ;; keep the byte-compiler quiet about the reference.
-(declare-function diogenes--lookup-dict-available-p "diogenes-perseus"
+(declare-function classicist--lookup-dict-available-p "classicist-lookup"
                   (predicate))
 
 (defvar diogenes-lookup-mode-map)
@@ -333,9 +333,9 @@ TGL, and the command dispatches on the language anyway."
                    (and (boundp 'diogenes--lookup-dictionaries)
                         diogenes--lookup-dictionaries))))
     (or (null entries)
-        (not (fboundp 'diogenes--lookup-dict-available-p))
+        (not (fboundp 'classicist--lookup-dict-available-p))
         (cl-some (lambda (entry)
-                   (diogenes--lookup-dict-available-p
+                   (classicist--lookup-dict-available-p
                     (plist-get entry :available-p)))
                  entries))))
 

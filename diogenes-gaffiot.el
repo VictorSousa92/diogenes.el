@@ -30,9 +30,9 @@
 ;;
 ;; `diogenes-old.el' and its siblings jump a scanned PDF to a page.  Gaffiot
 ;; comes as TEI XML instead, entry by entry, exactly the kind of thing
-;; `diogenes-lookup-mode' already displays for the LSJ and Lewis & Short.  So
+;; `classicist-lookup-mode' already displays for the LSJ and Lewis & Short.  So
 ;; this module adds no display machinery of its own: it hands Gaffiot to
-;; `diogenes--search-dict' as one more dictionary file, and everything the
+;; `classicist--search-dict' as one more dictionary file, and everything the
 ;; lookup buffer can do comes with it --
 ;;
 ;;   * `C-c C-n' / `C-c C-p' walk to the next and previous entry;
@@ -105,18 +105,18 @@
 (require 'subr-x)
 (require 'ucs-normalize)
 
-(declare-function diogenes--search-dict "diogenes-perseus"
+(declare-function classicist--search-dict "classicist-lookup"
                   (word lang sort-fn key-fn &optional file))
 (declare-function classicist--ascii-sort-function "classicist-lexicon" (a b))
 (declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
 (declare-function classicist--binary-search "classicist-lexicon"
                   (dict-file comp-fn key-fn word &optional start stop))
-(declare-function diogenes--lookup-headword-at-point "diogenes-perseus"
+(declare-function classicist--lookup-headword-at-point "classicist-lookup"
                   (&optional pos))
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus"
+(declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
 (declare-function diogenes--perseus-path "diogenes" ())
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 (declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
                   (&optional word))
 (defvar diogenes-gaffiot-pdf-fallback)
@@ -124,7 +124,7 @@
 
 (defvar diogenes--lookup-headword)
 (defvar diogenes--lookup-file)
-(defvar diogenes--lookup-same-window)
+(defvar classicist--lookup-same-window)
 (defvar diogenes--dict-xml-handlers-extra)
 
 ;;;; --------------------------------------------------------------------
@@ -261,7 +261,7 @@ reads.  And <bibl> becomes <cit>: the shared <bibl> handler builds a
 clickable citation out of an `n' attribute holding a Perseus reference, and
 a conversion of a Dictan base has none, so every one of them would be drawn
 as a link with nothing behind it and clicking one would fail inside
-`diogenes--lookup-parse-bibl-string'.  Their <author>, <title> and
+`classicist--lookup-parse-bibl-string'.  Their <author>, <title> and
 <biblScope> keep their own faces, so a citation still looks like one.
 
 A no-op on TEI that has neither -- the partial edition this module was
@@ -487,7 +487,7 @@ M-x diogenes-gaffiot-build-dictionary"
   "Non-nil if the current lookup buffer is showing Gaffiot.
 Read from the buffer-local `diogenes--lookup-file\', which records the
 dictionary the entries were read from.  Used by
-`diogenes--lookup-insert-dict-links\' to offer \"[Lewis & Short]\" here and
+`classicist--lookup-insert-dict-links\' to offer \"[Lewis & Short]\" here and
 \"[Gaffiot]\" in a Lewis & Short entry, so the link always leads to the
 other Latin dictionary rather than the one you are reading."
   (and (boundp 'diogenes--lookup-file)
@@ -501,9 +501,9 @@ other Latin dictionary rather than the one you are reading."
 (defun diogenes-gaffiot--current-headword ()
   "Return the headword to look up: the one of the entry point is in.
 Resolved on every call, so the command acts on the entry the cursor is
-currently in, including entries appended by `diogenes-lookup-next'."
-  (or (and (fboundp 'diogenes--lookup-headword-at-point)
-           (diogenes--lookup-headword-at-point))
+currently in, including entries appended by `classicist-lookup-next'."
+  (or (and (fboundp 'classicist--lookup-headword-at-point)
+           (classicist--lookup-headword-at-point))
       (get-text-property (point) 'orth)
       (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
       (thing-at-point 'word t)
@@ -530,7 +530,7 @@ Requires a converted dictionary file; see
 \\[diogenes-gaffiot-build-dictionary]."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "latin" "Gaffiot")
+     (classicist--lookup-assert-lang "latin" "Gaffiot")
      (list (if current-prefix-arg
                (read-string "Look up in Gaffiot: ")
              (diogenes-gaffiot--current-headword)))))
@@ -557,10 +557,10 @@ returns to Lewis & Short, `C-u g' looks up another word here"))
     (cond
      ;; The converted XML has this word: show the entry.
      ((and file (diogenes-gaffiot--entry-exists-p key file))
-      (let ((diogenes--lookup-same-window
+      (let ((classicist--lookup-same-window
              (and diogenes-gaffiot-display-in-same-window
-                  (derived-mode-p 'diogenes-lookup-mode))))
-        (diogenes--search-dict key "latin"
+                  (derived-mode-p 'classicist-lookup-mode))))
+        (classicist--search-dict key "latin"
                                #'classicist--ascii-sort-function
                                #'classicist--xml-key-fn
                                file)))
@@ -611,7 +611,7 @@ converted XML nor a PDF of the printed edition; with only one of them,
 `diogenes-lookup-gaffiot' takes the word to whichever it is.  Lewis &
 Short, the way back, is registered by `diogenes-perseus.el' itself, being
 the dictionary Diogenes searches by default."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'gaffiot :lang "latin" :name "Gaffiot" :key "g" :order 60
    :command #'diogenes-lookup-gaffiot
    :show 'unless-current

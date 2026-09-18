@@ -20,7 +20,7 @@
 ;;; Commentary:
 
 ;; This module lets you jump from a Diogenes dictionary entry (the
-;; buffer produced by `diogenes-lookup-mode', i.e. after you look up or
+;; buffer produced by `classicist-lookup-mode', i.e. after you look up or
 ;; parse a Latin word) straight to the page of the *Oxford Latin
 ;; Dictionary* (OLD) that contains that entry, displayed inside Emacs
 ;; with `pdf-tools' (or, as a fallback, `doc-view').
@@ -58,7 +58,7 @@
 (declare-function classicist-focus-dictionary "classicist-windows" ())
 (declare-function reader-open-doc "reader" (file))
 
-(declare-function diogenes--lookup-assert-lang "diogenes-perseus" (expected dict-name))
+(declare-function classicist--lookup-assert-lang "classicist-lookup" (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 (declare-function reader-fit-to-width "reader" ())
 (declare-function pdf-info-number-of-pages "pdf-info" (&optional file-or-buffer))
@@ -150,7 +150,7 @@ are what there are."
            (catch 'found
              (dolist (w (window-list nil 'no-minibuffer))
                (when (with-current-buffer (window-buffer w)
-                       (derived-mode-p 'diogenes-lookup-mode
+                       (derived-mode-p 'classicist-lookup-mode
                                        'diogenes-analysis-mode))
                  (throw 'found w))))))
       (when window
@@ -1121,7 +1121,7 @@ core."
     ;; rely on -- and the cheatsheet, which lists as `Everywhere' what is bound
     ;; in every section, could not lift it while the browser lacked it.
     (with-eval-after-load 'diogenes-perseus
-      (dolist (map '(diogenes-lookup-mode-map diogenes-analysis-mode-map
+      (dolist (map '(classicist-lookup-mode-map diogenes-analysis-mode-map
                      diogenes-select-forms-mode-map))
         (when (boundp map)
           (keymap-set (symbol-value map) diogenes-old-visit-dictionary-key
@@ -1335,19 +1335,19 @@ it.  See `diogenes-old-reader-reuse-document-frame'."
 
 (defvar diogenes--lookup-headword)     ; defined/made-local in diogenes-perseus.el
 
-(declare-function diogenes--lookup-headword-at-point "diogenes-perseus" (&optional pos))
+(declare-function classicist--lookup-headword-at-point "classicist-lookup" (&optional pos))
 
 (defun diogenes-old--current-headword ()
   "Return the headword to look up for the entry point is in.
 Resolved from point on every call via
-`diogenes--lookup-headword-at-point', so the opener always acts on
+`classicist--lookup-headword-at-point', so the opener always acts on
 the entry the cursor is currently in -- including entries loaded
-later by `diogenes-lookup-next' / `diogenes-lookup-previous' --
+later by `classicist-lookup-next' / `classicist-lookup-previous' --
 rather than the entry the buffer was first opened on.  Falls back to
 the buffer-local `diogenes--lookup-headword', then the `orth' at
 point, then the word at point."
-  (or (and (fboundp 'diogenes--lookup-headword-at-point)
-           (diogenes--lookup-headword-at-point))
+  (or (and (fboundp 'classicist--lookup-headword-at-point)
+           (classicist--lookup-headword-at-point))
       (get-text-property (point) 'orth)
       (and (boundp 'diogenes--lookup-headword) diogenes--lookup-headword)
       (thing-at-point 'word t)
@@ -1357,7 +1357,7 @@ point, then the word at point."
 (defun diogenes-lookup-open-old (&optional word)
   "Open the Oxford Latin Dictionary PDF at the entry for WORD.
 Interactively, WORD defaults to the headword of the entry at point
-in a `diogenes-lookup-mode' buffer.  With a prefix argument, prompt
+in a `classicist-lookup-mode' buffer.  With a prefix argument, prompt
 for the word to look up.
 
 Requires `diogenes-old-pdf-file' to point at an OLD PDF that has a
@@ -1365,7 +1365,7 @@ running-head outline, and `pdf-tools' (recommended) or `doc-view'
 for display."
   (interactive
    (progn
-     (diogenes--lookup-assert-lang "latin" "The Oxford Latin Dictionary")
+     (classicist--lookup-assert-lang "latin" "The Oxford Latin Dictionary")
      (list (if current-prefix-arg
                (read-string "Open OLD at word: ")
              (diogenes-old--current-headword)))))
@@ -1390,7 +1390,7 @@ running."
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(declare-function diogenes-lookup-register-dictionary "diogenes-perseus" t)
+(declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 
 ;;;###autoload
 (defun diogenes-old-available-p ()
@@ -1409,7 +1409,7 @@ say.  See `diogenes--loading-bundle'.")
 
 (defun diogenes-old--register ()
   "Announce the OLD to the lookup banner.  Idempotent."
-  (diogenes-lookup-register-dictionary
+  (classicist-lookup-register-dictionary
    'old :lang "latin" :name "OLD" :key "o" :order 10
    :command #'diogenes-lookup-open-old
    :available-p #'diogenes-old-available-p

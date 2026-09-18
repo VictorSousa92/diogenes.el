@@ -230,6 +230,56 @@
 (define-obsolete-variable-alias 'diogenes-perseus-action-map
                                 'classicist-perseus-action-map "0.1")
 
+
+;;; The lookup layer, moved
+;; `classicist-lookup.el' holds them now.  The registry among them,
+;; which fifteen dictionary modules call.
+
+(define-obsolete-function-alias 'diogenes-declared-dictionaries
+                                'classicist-declared-dictionaries "0.1")
+(define-obsolete-function-alias 'diogenes-list-dictionaries
+                                'classicist-list-dictionaries "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-always-ask-dictionary
+                                'classicist-lookup-always-ask-dictionary "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-backward-line
+                                'classicist-lookup-backward-line "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-beginning-of-buffer
+                                'classicist-lookup-beginning-of-buffer "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-dictionary-here
+                                'classicist-lookup-dictionary-here "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-dictionary-keys
+                                'classicist-lookup-dictionary-keys "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-end-of-buffer
+                                'classicist-lookup-end-of-buffer "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-forward-line
+                                'classicist-lookup-forward-line "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-in-dictionary
+                                'classicist-lookup-in-dictionary "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-install-dictionary-keys
+                                'classicist-lookup-install-dictionary-keys "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-keys
+                                'classicist-lookup-keys "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-lewis
+                                'classicist-lookup-lewis "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-link-key
+                                'classicist-lookup-link-key "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-mode
+                                'classicist-lookup-mode "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-mode-map
+                                'classicist-lookup-mode-map "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-next
+                                'classicist-lookup-next "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-previous
+                                'classicist-lookup-previous "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-register-dictionary
+                                'classicist-lookup-register-dictionary "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-sense-here
+                                'classicist-lookup-sense-here "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-show-all-entries
+                                'classicist-lookup-show-all-entries "0.1")
+(define-obsolete-function-alias 'diogenes-lookup-show-analysis
+                                'classicist-lookup-show-analysis "0.1")
+
 (provide 'classicist-obsolete)
 
 ;;; classicist-obsolete.el ends here
