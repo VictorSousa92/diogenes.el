@@ -1,4 +1,4 @@
-;;; diogenes-archive.el --- FIXME: one-line summary -*- lexical-binding: t; -*-
+;;; diogenes-archive.el --- older search and lookup helpers -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Victor Gonçalves de Sousa
 ;;
@@ -16,6 +16,17 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; KEPT FOR REFERENCE.  Earlier versions of the search and lookup helpers,
+;; loaded by nothing.  It has never run: without cl-lib its `cl-loop' forms
+;; would fail at the first call, and nothing has ever made that call.
+
+;;; Code:
+(require 'cl-lib)
+(require 'seq)
+
 (defun diogenes--linear-search (dict-file comp-fn key-fn word &optional start stop)
   "A linear search for finding entries in the lexicographical files.
 Returns a list of all entries where comp-fn returned nil."
