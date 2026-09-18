@@ -43,7 +43,6 @@
 (require 'diogenes-corpora)
 
 
-
 ;;----------------------------------------------------------------------
 ;;;; HELPER FUNCTIONS
 
@@ -78,6 +77,34 @@
 ;;----------------------------------------------------------------------
 ;;; Diogenes Search Mode
 
+;;; What a search buffer keeps
+
+;; THREE VARIABLES, AND NONE OF THEM WAS DEFINED.  The mode called
+;; `make-local-variable' on all three, which makes a binding buffer-local
+;; without telling the compiler the symbol is special -- so `setq' made
+;; globals on first use, which works, and which the compiler reported as an
+;; assignment to a free variable eleven times.  `defvar-local' does both
+;; jobs at once and the `make-local-variable' calls are gone.
+
+(defvar-local diogenes--search-active-block nil
+  "Which part of the result now arriving is being filled.
+One of `body\=', `match\=', `header\=' or nil, as the process filter walks the
+output Diogenes sends: a header, then a match, then the body around it.
+
+THE COMMENT THAT USED TO BE HERE named it `diogenes-search-status\=', which
+exists nowhere in the package -- stale documentation of a rename, and its
+four values are these.")
+
+(defvar-local diogenes--search-language nil
+  "The language the search was over, as Diogenes names it.
+Read when a hit is shown, to know how to convert the beta code it arrives
+in.")
+
+(defvar-local diogenes--search-corpus nil
+  "The corpus the search was over.
+Read when a hit is opened, to tell the browser which database the citation
+belongs to.")
+
 (defvar diogenes-search-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
     (keymap-set map "RET" #'diogenes-search-browse-passage)
@@ -97,13 +124,9 @@
     map)
   "Basic mode map for the Diogenes Search.")
 
-;; Buffer Local Var: diogenes-search-status: body, match, header, nil
 
 (define-derived-mode diogenes-search-mode text-mode "Diogenes Search"
   "Major mode to search Diogenes' databases."
-  (make-local-variable 'diogenes--search-active-block)
-  (make-local-variable 'diogenes--search-language)
-  (make-local-variable 'diogenes--search-corpus)
   (setq buffer-read-only t)
   (visual-line-mode))
 
@@ -267,7 +290,6 @@ This function makes sure that the full citation remains accessible."
 			 (diogenes--search-get-citation pos)))
 
 
-
 
 ;; --------------------------------------------------------------------
 ;;; SIMPLE SEARCH
@@ -415,7 +437,7 @@ This function is the generic dispacher for all corpora."
 		(funcall callback (list :authors authors)))
 	       ((y-or-n-p "Search the whole TLG? ")
 		(funcall callback nil))
-	       (t (diogenes--tr--create-user-corpus
+	       (t (diogenes--create-user-corpus
 		   (list :type "tlg"
 			 :callback callback))))))
       (t (error "Invalid type %s" pattern-or-forms)))))
@@ -524,7 +546,7 @@ which homograph they meant."
 		(funcall callback (list :authors authors)))
 	       ((y-or-n-p (format "Search the whole %s? " type))
 		(funcall callback nil))
-	       (t (diogenes--tr--create-user-corpus
+	       (t (diogenes--create-user-corpus
 		   (list :type type
 			 :callback callback))))))
       (t (error "Invalid type %s" lemma-or-forms)))))
@@ -606,7 +628,7 @@ which homograph they meant."
 	 (list :author-nums
 	       (diogenes--select-author-nums (list :type type)))))))
 
-(defun diogenes--read-search-term (prompt &optional initial-input history)
+(defun diogenes--read-search-term (prompt &optional _initial-input _history)
   "Read search term for use in transient interface"
   (cl-labels ((reader (prompt)
 		(let ((inp (read-from-minibuffer prompt)))
@@ -689,7 +711,7 @@ the the corpus (TYPE) that is to be searched"
   :choices '("Unicode" "BETA code" "raw")
   :init-value (lambda (o) (oset o value "Unicode")))
 
-(defun diogenes--search--ad-pattern (pattern)
+(defun diogenes--search--ad-pattern (_pattern)
   (interactive "sWith pattern: ")
   (transient-insert-suffix 'diogenes--advanced-search
     '(0 0)
@@ -751,7 +773,7 @@ the the corpus (TYPE) that is to be searched"
 	       (transient-setup 'diogenes--advanced-search nil nil :scope (transient-scope)))
 	      ((y-or-n-p (format "Search the whole %s? " type))
 	       (funcall callback nil))
-	      (t (diogenes--tr--create-user-corpus (list :type type
+	      (t (diogenes--create-user-corpus (list :type type
 							 :callback callback)))))))]
   (interactive (list (or (ignore-errors (transient-scope))
 			 (list :type (diogenes--select-database)))

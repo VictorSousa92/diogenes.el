@@ -874,6 +874,13 @@ corpus or, when supplied, call CALLBACK on it. If NO-ASK is not nil, it should b
       (transient-setup 'diogenes--tr--create-user-corpus nil nil
 		       :scope (transient-scope)))))
 
+(defun diogenes--create-user-corpus (scope)
+  "Open the user-corpus transient with SCOPE.
+A transient prefix is a command, and calling a command from code is what the
+byte-compiler objects to.  This is the same transient-setup the prefix
+itself does, and what the line above already does by hand."
+  (transient-setup 'diogenes--tr--create-user-corpus nil nil :scope scope))
+
 (transient-define-prefix diogenes--tr--create-user-corpus (scope)
   "Construct a new corpus of TYPE."
   ["How would you like to define the corpus?"

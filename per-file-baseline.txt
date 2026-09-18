@@ -1,4 +1,3 @@
-17 diogenes-search.el
 15 diogenes-corpora.el
 14 classicist-browser.el
 13 diogenes-tgl.el
@@ -18,6 +17,7 @@
 1 diogenes-old.el
 1 diogenes-lisp-utils.el
 0 diogenes-tll.el
+0 diogenes-search.el
 0 diogenes-pkg.el
 0 diogenes-pape.el
 0 diogenes-montanari.el
