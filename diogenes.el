@@ -76,14 +76,6 @@
     (error "diogenes-path is not set! 
 Please set it to the root directory of your Diogenes installation!")))
 
-(defun diogenes--include-server ()
-  (concat "-I" (file-name-concat (diogenes--path)
-				 "server")))
-
-(defun diogenes--include-cpan ()
-  (concat "-I" (file-name-concat (diogenes--path)
-				 "dependencies"
-				 "CPAN")))
 
 (defun diogenes--dict-file (lang)
   (pcase lang
