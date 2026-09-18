@@ -52,7 +52,7 @@
 (require 'diogenes-utils)
 (require 'diogenes-perl-interface)
 (require 'diogenes-user-interface)
-(require 'diogenes-browser)
+(require 'classicist-browser)
 ;; The abbreviations LSJ and Lewis & Short use, generated from the dictionaries
 ;; themselves.  Optional: a reader without the file gets citations by number,
 ;; `tlg 0086/025 1053a15' instead of `Arist. Metaph. 1053a15', and nothing
@@ -261,49 +261,49 @@ Uses the Diogenes Perl module."
   "Dump a work from the Greek TLG database in its entirety.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--dump-from-database "tlg" author work))
+  (classicist--dump-from-database "tlg" author work))
 
 ;;;###autoload
 (defun diogenes-dump-phi (&optional author work)
   "Dump a work from the Latin PHI database in its entirety.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--dump-from-database "phi" author work))
+  (classicist--dump-from-database "phi" author work))
 
 ;;;###autoload
 (defun diogenes-dump-ddp (&optional author work)
   "Dump a work from the Duke Documentary Database in its entirety.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--dump-from-database "ddp" author work))
+  (classicist--dump-from-database "ddp" author work))
 
 ;;;###autoload
 (defun diogenes-dump-ins (&optional author work)
   "Dump a work from the Classical Inscriptions Database in its entirety.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--dump-from-database "ins" author work))
+  (classicist--dump-from-database "ins" author work))
 
 ;;;###autoload
 (defun diogenes-dump-chr (&optional author work)
   "Dump a work from the Christian Inscriptions Database in its entirety.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--dump-from-database "chr" author work))
+  (classicist--dump-from-database "chr" author work))
 
 ;;;###autoload
 (defun diogenes-dump-misc (&optional author work)
   "Dump a work from the Miscellaneous PHI Texts Database in its entirety.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--dump-from-database "misc" author work))
+  (classicist--dump-from-database "misc" author work))
 
 ;;;###autoload
 (defun diogenes-dump-cop (&optional author work)
   "Dump a work from the PHI Coptic Texts Database in its entirety.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--dump-from-database "cop" author work))
+  (classicist--dump-from-database "cop" author work))
 
 
 ;;; BROWSE
@@ -312,49 +312,49 @@ Uses the Diogenes Perl module."
   "Browse a specific passage in a work from the Greek TLG database.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--browse-database "tlg" author work))
+  (classicist--browse-database "tlg" author work))
 
 ;;;###autoload
 (defun diogenes-browse-phi (&optional author work)
   "Browse a work from the Latin PHI database.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--browse-database "phi" author work))
+  (classicist--browse-database "phi" author work))
 
 ;;;###autoload
 (defun diogenes-browse-ddp (&optional author work)
   "Browse a work from the Duke Documentary Database.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--browse-database "ddp" author work))
+  (classicist--browse-database "ddp" author work))
 
 ;;;###autoload
 (defun diogenes-browse-ins (&optional author work)
   "Browse a work from the Classical Inscriptions Database.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--browse-database "ins" author work))
+  (classicist--browse-database "ins" author work))
 
 ;;;###autoload
 (defun diogenes-browse-chr (&optional author work)
   "Browse a work from the Christian Inscriptions Database.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--browse-database "chr" author work))
+  (classicist--browse-database "chr" author work))
 
 ;;;###autoload
 (defun diogenes-browse-misc (&optional author work)
   "Browse a work from the Miscellaneous PHI Texts  Database.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--browse-database "misc" author work))
+  (classicist--browse-database "misc" author work))
 
 ;;;###autoload
 (defun diogenes-browse-cop (&optional author work)
   "Browse a work from the  PHI Coptic Texts Database.
 Uses the Diogenes Perl module."
   (interactive)
-  (diogenes--browse-database "cop" author work))
+  (classicist--browse-database "cop" author work))
 
 
 ;;; DICTIONARY LOOKUP
@@ -605,11 +605,11 @@ user interface."
 
 
 ;; And the mouse gestures a reader has asked for, which is nothing by default.
-(with-eval-after-load 'diogenes-browser
-  (when (fboundp 'diogenes-browser-install-mouse-keys)
-    (diogenes-browser-install-mouse-keys))
-  (when (fboundp 'diogenes-browser-install-turn-keys)
-    (diogenes-browser-install-turn-keys)))
+(with-eval-after-load 'classicist-browser
+  (when (fboundp 'classicist-browser-install-mouse-keys)
+    (classicist-browser-install-mouse-keys))
+  (when (fboundp 'classicist-browser-install-turn-keys)
+    (classicist-browser-install-turn-keys)))
 
 (provide 'diogenes)
 

@@ -27,7 +27,7 @@
 ;;
 ;; The corpora do not know books.  Aristotle's works declare two levels apiece
 ;; -- `Bekker page' and `line' -- and there is no third for the book, so
-;; `diogenes-browser-goto-passage' cannot be asked for one.  What the corpora
+;; `classicist-browser-goto-passage' cannot be asked for one.  What the corpora
 ;; DO carry is the book's title, in the text, in braces:
 ;;
 ;;     {ΑΡΙΣΤΟΤΕΛΟΥΣ
@@ -51,8 +51,8 @@
 (require 'cl-lib)
 (require 'seq)
 
-(declare-function diogenes--dump-work "diogenes-browser" (options passage))
-(declare-function diogenes-open-passage "diogenes-browser"
+(declare-function classicist--dump-work "classicist-browser" (options passage))
+(declare-function classicist-open-passage "classicist-browser"
                   (corpus author work &optional passage))
 (declare-function classicist-browser-reference "classicist-citation" ())
 (declare-function diogenes--get-author-list "diogenes-perl-interface" (options &optional author-regex))
@@ -313,7 +313,7 @@ THEN is called when it has finished."
              (mapconcat #'identity diogenes-books-read-the-text ", ")
            "nobody")))
       (message "Reading %s %s/%s to find its books..." corpus author work)
-      (let* ((started (diogenes--dump-work (list :type corpus)
+      (let* ((started (classicist--dump-work (list :type corpus)
                                            (list author work)))
              ;; A PROCESS OR A BUFFER.  `diogenes--start-perl' ends in
              ;; `make-process', which answers with the PROCESS -- so asking
@@ -448,7 +448,7 @@ The books are found by reading the whole work, the corpora having no level for
 them -- Aristotle is cited by Bekker page and line and by nothing else -- and
 are remembered afterwards in `diogenes-books-cache-file\\='."
   (interactive)
-  (let* ((reference (and (derived-mode-p 'diogenes-browser-mode)
+  (let* ((reference (and (derived-mode-p 'classicist-browser-mode)
                          (classicist-browser-reference)))
          (corpus (or (plist-get reference :corpus) "tlg"))
          (author (plist-get reference :author))
@@ -504,7 +504,7 @@ are remembered afterwards in `diogenes-books-cache-file\\='."
          (unless book
            (user-error "No book of this work answers to `%s'" choice))
          (message "%s, at %s" (car book) (cadr book))
-         (diogenes-open-passage corpus author work
+         (classicist-open-passage corpus author work
                                 (split-string (cadr book) "[.]" t)))))))
 
 (provide 'diogenes-books)

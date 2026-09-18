@@ -1126,7 +1126,7 @@ core."
         (when (boundp map)
           (keymap-set (symbol-value map) diogenes-old-visit-dictionary-key
                       #'diogenes-old-visit-dictionary))))
-    (dolist (feature-and-map '((diogenes-browser . diogenes-browser-mode-map)
+    (dolist (feature-and-map '((diogenes-browser . classicist-browser-mode-map)
                                (diogenes-search . diogenes-search-mode-map)
                                (diogenes-corpora . diogenes-corpus-mode-map)))
       (let ((feature (car feature-and-map))

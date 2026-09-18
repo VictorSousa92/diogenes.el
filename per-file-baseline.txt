@@ -1,7 +1,7 @@
 43 diogenes-perseus.el
-25 diogenes-browser.el
 17 diogenes-search.el
 15 diogenes-corpora.el
+14 classicist-browser.el
 13 diogenes-tgl.el
 12 diogenes-archive.el
 9 diogenes-org.el

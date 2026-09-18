@@ -53,7 +53,7 @@
 (defvar diogenes-lookup-mode-map)
 (defvar diogenes-analysis-mode-map)
 (defvar diogenes--lookup-dictionaries)
-(defvar diogenes-browser-mode-map)
+(defvar classicist-browser-mode-map)
 (defvar diogenes-purpose-dict-mode-map)
 
 (defgroup diogenes-cheatsheet nil
@@ -61,7 +61,7 @@
   :group 'diogenes)
 
 (defcustom diogenes-cheatsheet-command-prefixes
-  '("diogenes-lookup-open-" "diogenes-lookup-" "diogenes-browser-"
+  '("diogenes-lookup-open-" "diogenes-lookup-" "classicist-browser-"
     "classicist-focus-" "diogenes-old-" "diogenes-tgl-" "diogenes-pdf-"
     "diogenes-purpose-focus-" "diogenes-purpose-" "diogenes--" "diogenes-")
   "Prefixes stripped from a command name to label it, longest first.
@@ -113,8 +113,8 @@ governs the shape of the panel more than how much of it you see."
     (classicist-focus-dictionary     . "the scanned page")
     (diogenes-pdf-search           . "look a word up")
     (diogenes-tgl-open-index-here  . "the index, around this word")
-    (diogenes-browser-remove-hyphenation  . "join divided words")
-    (diogenes-browser-reinsert-hyphenation . "divide them again")
+    (classicist-browser-remove-hyphenation  . "join divided words")
+    (classicist-browser-reinsert-hyphenation . "divide them again")
     (diogenes-evil-normal-state    . "normal state"))
   "Labels to use instead of the one made from a command's name.
 An alist of (COMMAND . LABEL).  Stripping the prefixes off
@@ -194,7 +194,7 @@ would report the prefix and none of what it leads to."
 (defun diogenes-cheatsheet--bindings (keymap)
   "The (KEY-DESCRIPTION . COMMAND) pairs KEYMAP itself provides.
 The parent is dropped first.  `map-keymap' walks inherited bindings as
-well, so for `diogenes-browser-mode-map', whose parent is `text-mode-map',
+well, so for `classicist-browser-mode-map', whose parent is `text-mode-map',
 the listing would otherwise be mostly Emacs and hardly Diogenes at all."
   (let ((own (copy-keymap keymap)))
     (set-keymap-parent own nil)
@@ -205,7 +205,7 @@ the listing would otherwise be mostly Emacs and hardly Diogenes at all."
   '(diogenes-lookup-next diogenes-lookup-previous
     diogenes-lookup-forward-entry diogenes-lookup-backward-entry
     diogenes-lookup-headword diogenes-lookup-first-headword
-    diogenes-browser-forward diogenes-browser-backward
+    classicist-browser-forward classicist-browser-backward
     scroll-up-command scroll-down-command
     beginning-of-buffer end-of-buffer)
   "Commands counted as navigation rather than as anything else.
@@ -391,7 +391,7 @@ Only maps that exist are included, and the map of the current buffer comes
 first, so the panel answers \"what can I press HERE\" before anything else."
   (let* ((here (cond ((derived-mode-p 'diogenes-lookup-mode) 'lookup)
 		     ((derived-mode-p 'diogenes-analysis-mode) 'analysis)
-		     ((derived-mode-p 'diogenes-browser-mode) 'browser)
+		     ((derived-mode-p 'classicist-browser-mode) 'browser)
 		     ((bound-and-true-p diogenes-purpose-dict-mode) 'dict)))
 	 (all
 	  (delq
@@ -399,8 +399,8 @@ first, so the panel answers \"what can I press HERE\" before anything else."
 	   (list
 	    (when (boundp 'diogenes-lookup-mode-map)
 	      (list 'lookup "Lookup" diogenes-lookup-mode-map))
-	    (when (boundp 'diogenes-browser-mode-map)
-	      (list 'browser "Browser" diogenes-browser-mode-map))
+	    (when (boundp 'classicist-browser-mode-map)
+	      (list 'browser "Browser" classicist-browser-mode-map))
 	    (when (boundp 'diogenes-analysis-mode-map)
 	      (list 'analysis "Analysis" diogenes-analysis-mode-map))
 	    (when (boundp 'diogenes-purpose-dict-mode-map)
@@ -437,8 +437,8 @@ of the TGL, an index reference such as `t.3 c.746\'")
     ;; belongs to the dictionary keys, and is explained there.
     (diogenes-lookup-bailly "C-u <letter>"
                             "look a word up in that dictionary")
-    (diogenes-browser-forward "C-u 5 C-c C-n" "five pages on")
-    (diogenes-browser-backward "C-u 5 C-c C-p" "five pages back"))
+    (classicist-browser-forward "C-u 5 C-c C-n" "five pages on")
+    (classicist-browser-backward "C-u 5 C-c C-p" "five pages back"))
   "Commands whose behaviour changes with a prefix argument.
 A list of (COMMAND KEY DESCRIPTION), shown under \"With a prefix\".
 

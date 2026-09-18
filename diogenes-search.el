@@ -37,7 +37,7 @@
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
-(declare-function diogenes--browse-work "diogenes-browser" (options passage))
+(declare-function classicist--browse-work "classicist-browser" (options passage))
 
 (require 'diogenes-forms)
 (require 'diogenes-corpora)
@@ -89,11 +89,11 @@
     (keymap-set map "u" #'diogenes-undo)
     (keymap-set map "q" #'diogenes--ask-and-quit)
     ;; (keymap-set map "<mouse-2>" #'diogenes-search-browse-passage)
-    ;; (keymap-set map "C-c C-q" #'diogenes-browser-quit)
+    ;; (keymap-set map "C-c C-q" #'classicist-browser-quit)
     ;; ;; Utilities
-    ;; (keymap-set map "C-c C--" #'diogenes-browser-remove-hyphenation)
-    ;; (keymap-set map "C-c C-+" #'diogenes-browser-reinsert-hyphenation)
-    ;; (keymap-set map "C-c C-t" #'diogenes-browser-toggle-citations)
+    ;; (keymap-set map "C-c C--" #'classicist-browser-remove-hyphenation)
+    ;; (keymap-set map "C-c C-+" #'classicist-browser-reinsert-hyphenation)
+    ;; (keymap-set map "C-c C-t" #'classicist-browser-toggle-citations)
     map)
   "Basic mode map for the Diogenes Search.")
 
@@ -263,7 +263,7 @@ This function makes sure that the full citation remains accessible."
 (defun diogenes-search-browse-passage (pos)
   "Open the passage at point in the browser"
   (interactive "d")
-  (diogenes--browse-work (list :type diogenes--search-corpus)
+  (classicist--browse-work (list :type diogenes--search-corpus)
 			 (diogenes--search-get-citation pos)))
 
 

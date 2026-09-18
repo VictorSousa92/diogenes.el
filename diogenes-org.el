@@ -47,9 +47,9 @@
 ;; not depend on any convention.
 ;;
 ;; REQUIRES the fork at https://github.com/VictorSousa92/diogenes.el, branch
-;; `org-integration'.  `classicist-browser-reference', `diogenes-open-passage' and
+;; `org-integration'.  `classicist-browser-reference', `classicist-open-passage' and
 ;; the abbreviation table are not in the upstream package; this is built on
-;; them, and on nothing private -- `diogenes--browse-work' has two hyphens and
+;; them, and on nothing private -- `classicist--browse-work' has two hyphens and
 ;; is none of our business.
 
 ;;; Code:
@@ -73,7 +73,7 @@
 ;; at the point a reader asks for something Diogenes has to answer.
 (declare-function classicist-browser-reference "classicist-citation" ())
 (declare-function classicist-reference-to-string "classicist-citation" (reference))
-(declare-function diogenes-open-passage "diogenes-browser"
+(declare-function classicist-open-passage "classicist-browser"
                   (corpus author work &optional passage))
 (declare-function classicist-citation-interval-from-key "classicist-citation" (key))
 (declare-function diogenes-lookup-greek "diogenes" (word &optional dictionary))
@@ -226,7 +226,7 @@ a path is what `diogenes-old--show-page' takes."
   "Store a link to whatever this Diogenes buffer is showing.
 A passage in the browser, an entry in a lookup, a page in a scan.  Nil in any
 other buffer, so `org-store-link' goes on to ask whoever else is interested."
-  (cond ((derived-mode-p 'diogenes-browser-mode) (diogenes-org--store-passage))
+  (cond ((derived-mode-p 'classicist-browser-mode) (diogenes-org--store-passage))
         ((derived-mode-p 'diogenes-lookup-mode) (diogenes-org--store-entry))
         ((derived-mode-p 'pdf-view-mode 'doc-view-mode)
          (diogenes-org--store-page))))
@@ -350,7 +350,8 @@ the citation appearing in the buffer."
 
 (defun diogenes-org--highlight (buffer from to)
   "Mark the lines FROM to TO in BUFFER, once they are there.
-Nothing is there when a link is followed: `diogenes--browse-work\=' starts a Perl
+Nothing is there when a link is followed: `classicist--browse-work\='
+starts a Perl
 process and the text arrives afterwards, a filter inserting it as it comes.  So
 this waits on the PROCESS and marks when it has finished.
 
@@ -429,7 +430,7 @@ package outside Diogenes reading them would break on a rename as surely as one
 calling a private function, and the boundary is worth keeping on both sides."
   (seq-find (lambda (buffer)
               (with-current-buffer buffer
-                (and (derived-mode-p 'diogenes-browser-mode)
+                (and (derived-mode-p 'classicist-browser-mode)
                      (let ((reference (classicist-browser-reference)))
                        (and reference
                             (equal (plist-get reference :corpus) corpus)
@@ -463,7 +464,7 @@ calling a private function, and the boundary is worth keeping on both sides."
                              "Set diogenes-org-reuse-browser to nil to open "
                              "the passage afresh")
                      corpus author work (or key "the passage named"))))
-      (let ((buffer (diogenes-open-passage corpus author work (car interval))))
+      (let ((buffer (classicist-open-passage corpus author work (car interval))))
         ;; And mark what the link named, when the text has arrived.
         (when (bufferp buffer)
           (diogenes-org--highlight buffer (car interval) (cdr interval)))
@@ -728,7 +729,7 @@ FORWARD for the first, backward for the last.
 has none of its own, a citation belonging to the lines that follow it; asked
 at the very first line it had nothing behind it and answered nil, which is
 every browser buffer there is."
-  (when (derived-mode-p 'diogenes-browser-mode)
+  (when (derived-mode-p 'classicist-browser-mode)
     (let* ((it (classicist-browser-reference))
            (first (save-excursion
                     (goto-char (point-min))
@@ -1051,19 +1052,19 @@ costs nothing but a message."
   "Put the note keys in the browser.  Idempotent.
 A key already taken is left alone and said so, another module's binding being
 its own business."
-  (when (boundp 'diogenes-browser-mode-map)
+  (when (boundp 'classicist-browser-mode-map)
     (dolist (pair (list (cons diogenes-org-notes-key #'diogenes-org-notes)
                         (cons diogenes-org-note-key #'diogenes-org-note)))
       (let* ((key (car pair))
              (command (cdr pair))
-             (taken (and key (keymap-lookup diogenes-browser-mode-map key))))
+             (taken (and key (keymap-lookup classicist-browser-mode-map key))))
         (cond
          ((null key))
          ((eq taken command))
          ((and taken (not (numberp taken)))
           (message "Diogenes: %s is already %s, so %s is unbound"
                    key taken command))
-         (t (keymap-set diogenes-browser-mode-map key command))))))
+         (t (keymap-set classicist-browser-mode-map key command))))))
   ;; AND IN ORG, for the way back.  `C-c C-d' is `org-deadline' out of the
   ;; box, so a binding already there is left alone and said so.
   (when (and diogenes-org-goto-key (boundp 'org-mode-map))
@@ -1077,7 +1078,7 @@ its own business."
                       #'diogenes-org-goto-passage))))))
 
 ;;;###autoload
-(with-eval-after-load 'diogenes-browser
+(with-eval-after-load 'classicist-browser
   (diogenes-org-install-keys))
 
 ;;;###autoload

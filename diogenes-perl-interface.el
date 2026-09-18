@@ -214,7 +214,7 @@ It is associated with a buffer with the same name, in asterisks."
     ;; buffer it means.  They used to rely on `pop-to-buffer' having left it
     ;; current, which is true of `pop-to-buffer' and was not true of what
     ;; replaced it: the browser came up in `fundamental-mode', with none of
-    ;; its keys, because `diogenes-browser-mode' had been called on whatever
+    ;; its keys, because `classicist-browser-mode' had been called on whatever
     ;; buffer the reader happened to be in.
     buffer))
 

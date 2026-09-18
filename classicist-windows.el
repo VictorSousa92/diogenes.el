@@ -69,7 +69,7 @@
     ;; happened depended on whether the mode was set before it was displayed.
     (diogenes-analysis-mode . morphology)
     (diogenes-select-forms-mode . morphology)
-    (diogenes-browser-mode . browser)
+    (classicist-browser-mode . browser)
     (diogenes-search-mode . search)
     (pdf-view-mode . dictionary)
     (doc-view-mode . dictionary)
@@ -1003,7 +1003,7 @@ miss and was missed here."
         (select-frame-set-input-focus (window-frame window)))
       (select-window window)
       ;; And the buffer made CURRENT.  `pop-to-buffer' did that too, and
-      ;; enough of this package depends on it -- `diogenes--browse-work'
+      ;; enough of this package depends on it -- `classicist--browse-work'
       ;; sets the major mode in whatever buffer is current after displaying,
       ;; and `diogenes--show-dict-entry' recenters -- that leaving it to
       ;; follow from `select-window' is not good enough.
@@ -1155,7 +1155,7 @@ menu offers them under `w\='."
 (defvar classicist--focus-maps
   '(diogenes-lookup-mode-map
     diogenes-analysis-mode-map
-    diogenes-browser-mode-map
+    classicist-browser-mode-map
     diogenes-search-mode-map
     diogenes-select-forms-mode-map
     diogenes-corpus-mode-map

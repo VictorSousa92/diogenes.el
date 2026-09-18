@@ -84,7 +84,7 @@
 (defcustom diogenes-purpose-mode-purposes
   '((diogenes-lookup-mode   . diogenes-lookup)
     (diogenes-analysis-mode . diogenes-morphology)
-    (diogenes-browser-mode  . diogenes-browser))
+    (classicist-browser-mode  . diogenes-browser))
   "Alist mapping Diogenes major modes to window-purposes.
 Three families, each keeping its own window: entries, morphological analyses,
 and the corpus browser.  Each entry is (MAJOR-MODE . PURPOSE).
@@ -210,7 +210,7 @@ this module needs to know about."
 ;; pressed in the buffer it names does nothing but stay put.  Three keys and
 ;; three places are easier to hold than six pairings.
 ;;
-;; Prefixed rather than bare letters because `diogenes-browser-mode' derives
+;; Prefixed rather than bare letters because `classicist-browser-mode' derives
 ;; from `text-mode' and the browser is writable -- a bare `D' there would
 ;; insert a D -- and because the prefixed form matches the keys the browser
 ;; already has: `C-c C-c' to look a word up, `C-c C-q' to quit, `C-c C-n'
@@ -303,7 +303,7 @@ raises the frame and asks the window manager to focus it."
 (defun diogenes-purpose--browser-window ()
   "A window showing the Diogenes browser, or nil."
   (diogenes-purpose--window-with
-   (lambda () (derived-mode-p 'diogenes-browser-mode))))
+   (lambda () (derived-mode-p 'classicist-browser-mode))))
 
 (defun diogenes-purpose--dict-window ()
   "A window showing a Diogenes print dictionary, or nil."
@@ -372,7 +372,7 @@ and is writable."
               #'diogenes-purpose--after-display-page)
   (dolist (spec '((diogenes-perseus . diogenes-lookup-mode-map)
                   (diogenes-perseus . diogenes-analysis-mode-map)
-                  (diogenes-browser . diogenes-browser-mode-map)))
+                  (diogenes-browser . classicist-browser-mode-map)))
     (let ((feature (car spec))
           (map (cdr spec)))
       ;; The KEYS are no longer bound here.  `classicist-focus-keys' binds
@@ -389,7 +389,7 @@ and is writable."
                  #'diogenes-purpose--after-display-page)
   (dolist (map '(diogenes-lookup-mode-map
                  diogenes-analysis-mode-map
-                 diogenes-browser-mode-map))
+                 classicist-browser-mode-map))
     (when (boundp map)
       (dolist (key '("C-c C-e" "C-c C-l" "C-c C-b"))
         (keymap-unset (symbol-value map) key t)))))

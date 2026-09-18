@@ -1,4 +1,4 @@
-;;; diogenes-browser.el --- Corpus browser for diogenes.el -*- lexical-binding: t -*-
+;;; classicist-browser.el --- Corpus browser for diogenes.el -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2024 Michael Neidhart
 ;; Copyright (C) 2026 Victor Gonçalves de Sousa
@@ -33,7 +33,7 @@
 (require 'classicist-citation)
 
 ;; IN `diogenes.el', WHICH REQUIRES THIS FILE, so declared rather than
-;; required.  `diogenes-browser-lookup' calls whichever of the two the
+;; required.  `classicist-browser-lookup' calls whichever of the two the
 ;; passage's language names; both were assembled with `intern' until now, and
 ;; a declaration cannot cover a name that does not exist until it is called.
 (declare-function diogenes-parse-and-lookup-greek "diogenes"
@@ -55,15 +55,15 @@
 ;;;; --------------------------------------------------------------------
 
 ;;; Simple commands
-(defun diogenes--send-cmd-to-browser (cmd)
+(defun classicist--browser-send-cmd (cmd)
   (let ((diogenes-process (or (get-buffer-process (current-buffer))
 			      (error (format "No process in buffer %s!"
 					     (current-buffer))))))
     (process-send-string diogenes-process (concat cmd "\n"))))
 
-(defun diogenes--browser-set-height (height)
+(defun classicist--browser-set-height (height)
   (interactive "NLines to display: ")
-  (diogenes--send-cmd-to-browser (number-to-string height)))
+  (classicist--browser-send-cmd (number-to-string height)))
 
 ;; HERE, AND NOT IN `diogenes.el'.  A buffer-local option of the browser's,
 ;; defined in the entry point and read and set only in this file -- so this
@@ -73,13 +73,82 @@
 ;; The same shape as `diogenes--perseus-path', the two Perl variables and the
 ;; two `-I' builders, and the last of them: afterwards this file's only
 ;; references into `diogenes.el' are a customize group and a docstring.
-(defcustom diogenes-browser-show-citations t
+;;; The buffer's own state
+
+;; ABOVE THE CODE THAT READS IT.  `--browser-page-lines' was
+;; defined four hundred lines below its first reader, which the
+;; compiler reports as a free variable -- the same forward
+;; reference the options reorder fixed in `classicist-windows.el'.
+
+(defvar-local classicist--browser-backwards nil
+  "Whether the passage now arriving was fetched by paging BACKWARDS.
+Read where point is placed and where a duplicate header is looked for: going
+back, the text arrives above what is already there and the frontier is at the
+foot rather than the head.
+
+DEFINED HERE, AND THE MODE NO LONGER SAYS `make-local-variable\='.  It did,
+and nothing defined the variable at all -- so `setq\=' made it a global on
+first use, which works, and which the compiler reported as an assignment to a
+free variable.  `defvar-local\=' does both jobs at once.")
+
+(defvar-local classicist--browser-language nil
+  "The language of the passage in this buffer, as Diogenes names it.
+\"greek\" or \"latin\", set from the corpus when the passage is opened and read
+by `classicist-browser-lookup\=' to choose which dictionary to parse against.
+
+READ FROM `diogenes-perseus.el\=' TOO, behind a `boundp\=' -- and that guard
+stays, because it is protecting against this whole file not being loaded,
+which is a different thing from a variable not being defined.")
+
+(defvar-local classicist--browser-first-insertion nil
+  "Whether nothing has yet been put in this buffer.
+The first text to arrive is not an addition to anything, so there is no
+frontier to mark; every later one is.
+
+A SINGLE DASH BEFORE, and it was internal all along: nothing outside this
+file has ever touched it.")
+
+(defvar-local classicist--browser-page-lines nil
+  "How many lines the first page of this browser held.
+The number to ask for when a page is turned: Diogenes chose the size of the
+first page, it fitted the window, and what it held can be counted -- where the
+window\='s own height cannot account for the three lines of header printed with
+every fetch, nor for the lines that wrap because a citation precedes them.
+
+Set once, when the first page arrives, and not again: a page that REPLACES
+another must not grow, and counting what is shown each time made it grow -- `C-c
+C-n\=' adds to the buffer, so thirty-four lines became fifty-nine and every press
+asked for more than the last.")
+
+(defvar-local classicist--browser-turned nil
+  "Whether the text now arriving replaced the buffer rather than adding to it.
+Read once, where point is placed: a page that was TURNED has no frontier -- the
+whole of it is new -- so there is nothing to mark and the top is where to be.")
+
+(defvar-local classicist--browser-replace nil
+  "Whether the next text to arrive should replace what is in the buffer.
+Set by the paging buttons, which turn the page where `C-c C-n\=' and `C-c C-p\='
+add to it, and read by the filter.
+
+A FLAG and not an `erase-buffer\=' in the command, because at the end of a work
+Diogenes answers with nothing: a buffer emptied when the button was pressed
+would leave a reader with neither the next page nor the one they were reading.
+The filter erases when it has something to put there.")
+
+(defvar-local classicist--browser-addition nil
+  "The overlay marking what was last added, or nil.")
+
+(defvar-local classicist--browser-output-buffer ""
+  "Buffers the output of the diogenes browser output, if it is an
+incomplete lisp expression.")
+
+(defcustom classicist-browser-show-citations t
   "Whether to show embedded citations in the browser by default."
   :type 'boolean
   :group 'diogenes
   :local t)
 
-(defcustom diogenes-browser-page-lines nil
+(defcustom classicist-browser-page-lines nil
   "How many lines a page shows, and so when a page is turned.
 Nil for as many as the first page Diogenes sent, which it sized to the window --
 that being the honest measure, since the window\='s own height cannot account for
@@ -92,7 +161,7 @@ page whatever window the browser happens to be in."
                  (integer :tag "This many lines"))
   :group 'diogenes)
 
-(defcustom diogenes-browser-add-lines 0.5
+(defcustom classicist-browser-add-lines 0.5
   "How much `C-c C-n\=' and `C-c C-p\=' add, as a fraction of a page or a count.
 
     0.5   half a page, which leaves the other half in view
@@ -102,7 +171,7 @@ page whatever window the browser happens to be in."
 A FLOAT is a fraction and an INTEGER a count: `1.0\=' is a whole page and `1\=' is
 one line.  Write the point where you mean a share of a page.
 
-Of the page `diogenes-browser-page-lines\=' gives, or of the first page Diogenes
+Of the page `classicist-browser-page-lines\=' gives, or of the first page Diogenes
 sent where that is nil.  TRUNCATED, so a page of 33 halved adds 16 and the halves
 meet -- rounding sent .5 up and added one line more than half.
 
@@ -112,9 +181,9 @@ your place on the screen, which is what they are for."
                  (integer :tag "This many lines (1 or more)"))
   :group 'diogenes)
 
-(defcustom diogenes-browser-turn-keys
-  '(("C-c C-<right>" . diogenes-browser-page-forward)
-    ("C-c C-<left>" . diogenes-browser-page-backward))
+(defcustom classicist-browser-turn-keys
+  '(("C-c C-<right>" . classicist-browser-page-forward)
+    ("C-c C-<left>" . classicist-browser-page-backward))
   "Keys that TURN a page, as (KEY . COMMAND).
 Turning replaces what is shown; `C-c C-n\=' and `C-c C-p\=' add to it.  Until these
 existed a page could only be turned by clicking the header, which is no use to a
@@ -130,35 +199,35 @@ the text, `C-c C-<right>\=' and `C-c C-<left>\=' turn across it.
 
 Set to nil to bind nothing.
 
-`diogenes-browser-install-turn-keys\=' after changing it, or restart."
+`classicist-browser-install-turn-keys\=' after changing it, or restart."
   :type '(alist :key-type (string :tag "Key")
                 :value-type (function :tag "Command"))
   :group 'diogenes)
 
 ;;;###autoload
-(defun diogenes-browser-install-turn-keys ()
-  "Bind `diogenes-browser-turn-keys\=' in the browser."
+(defun classicist-browser-install-turn-keys ()
+  "Bind `classicist-browser-turn-keys\=' in the browser."
   (interactive)
-  (when (boundp 'diogenes-browser-mode-map)
-    (dolist (cell diogenes-browser-turn-keys)
+  (when (boundp 'classicist-browser-mode-map)
+    (dolist (cell classicist-browser-turn-keys)
       (when (and (car cell) (cdr cell))
         (condition-case error
-            (keymap-set diogenes-browser-mode-map (car cell) (cdr cell))
+            (keymap-set classicist-browser-mode-map (car cell) (cdr cell))
           (error (message "Diogenes: cannot bind %s: %s"
                           (car cell) (error-message-string error))))))))
 
-(defcustom diogenes-browser-page-margin 1
+(defcustom classicist-browser-page-margin 1
   "Lines held back when paging, beyond what wrapping accounts for.
 The browser asks Diogenes for a number of TEXT lines, and what a reader sees is
 SCREEN lines: a verse with its citation before it wraps in a narrow window, so
 forty lines of text can want sixty lines of window.  How much wrapping the
 current text does is measured rather than guessed -- see
-`diogenes-browser--lines-to-request\=' -- and this is the margin on top of it,
+`classicist-browser--lines-to-request\=' -- and this is the margin on top of it,
 for the line the measurement cannot foresee."
   :type 'integer
   :group 'diogenes)
 
-(defun diogenes-browser--lines-to-request ()
+(defun classicist-browser--lines-to-request ()
   "How many lines to advance, so that nothing goes past unseen.
 
 The number Diogenes is sent is an ADVANCE, and the page it answers with is its
@@ -182,35 +251,35 @@ asked for the plain height."
     (if (> shown 1)
         ;; A page is what a page turned out to be.
         (max 1 (- shown next-screen-context-lines
-                  diogenes-browser-page-margin))
+                  classicist-browser-page-margin))
       ;; The first page: the window, less what wrapping will cost.
       (let* ((height (max 1 (- (floor (window-screen-lines))
                                next-screen-context-lines
-                               diogenes-browser-page-margin)))
+                               classicist-browser-page-margin)))
              (screen-lines (count-screen-lines (point-min) (point-max)))
              (factor (if (and (> shown 0) (> screen-lines shown))
                          (/ (float screen-lines) shown)
                        1.0)))
         (max 1 (floor (/ height factor)))))))
 
-(defvar diogenes-browser-key-page-fraction nil
-  "Obsolete.  Use `diogenes-browser-add-lines\=', which takes a fraction too.
+(defvar classicist-browser-key-page-fraction nil
+  "Obsolete.  Use `classicist-browser-add-lines\=', which takes a fraction too.
 Read where it is set, so a configuration written against it goes on working.")
 
-(make-obsolete-variable 'diogenes-browser-key-page-fraction
-                        'diogenes-browser-add-lines "diogenes.el 2026-08")
+(make-obsolete-variable 'classicist-browser-key-page-fraction
+                        'classicist-browser-add-lines "diogenes.el 2026-08")
 
-(defun diogenes-browser--lines-to-add ()
+(defun classicist-browser--lines-to-add ()
   "How many lines `C-c C-n\=' and `C-c C-p\=' should ask for.
-`diogenes-browser-key-page-fraction\=' of the first page, and never less than
+`classicist-browser-key-page-fraction\=' of the first page, and never less than
 one."
-  (let* ((page (or diogenes-browser-page-lines
-                   diogenes--browser-page-lines
+  (let* ((page (or classicist-browser-page-lines
+                   classicist--browser-page-lines
                    (max 1 (- (floor (window-screen-lines))
                              next-screen-context-lines))))
          ;; The obsolete option still answers where somebody set it.
-         (how (or diogenes-browser-key-page-fraction
-                  diogenes-browser-add-lines
+         (how (or classicist-browser-key-page-fraction
+                  classicist-browser-add-lines
                   0.5)))
     (max 1 (if (floatp how)
                ;; A FLOAT is a share of a page, an INTEGER a number of lines.
@@ -222,64 +291,64 @@ one."
                (truncate (* how page))
              (truncate how)))))
 
-(defun diogenes-browser-forward ()
+(defun classicist-browser-forward ()
   "Add the next half-page to what is shown.
 Takes no prefix argument: how much to add is
-`diogenes-browser-key-page-fraction\=' of the first page, half of it by
+`classicist-browser-key-page-fraction\=' of the first page, half of it by
 default.  The text already there is kept -- this is for reading on without
 losing your place, where the header\='s `forward\=' button turns the page
 instead."
   (interactive)
-  (setq diogenes--browser-backwards nil)
+  (setq classicist--browser-backwards nil)
   (goto-char (point-max))
-  (diogenes--send-cmd-to-browser
-   (concat (number-to-string (diogenes-browser--lines-to-add))
+  (classicist--browser-send-cmd
+   (concat (number-to-string (classicist-browser--lines-to-add))
 	   "n")))
 
-(defun diogenes-browser-backward ()
+(defun classicist-browser-backward ()
   "Load the previous page from the Diogenes browser.
-Takes no prefix argument, as `diogenes-browser-forward\=' takes none."
+Takes no prefix argument, as `classicist-browser-forward\=' takes none."
   (interactive)
-  (setq diogenes--browser-backwards t)
+  (setq classicist--browser-backwards t)
   (goto-char (point-min))
-  (diogenes--send-cmd-to-browser
-   (concat (number-to-string (diogenes-browser--lines-to-add))
+  (classicist--browser-send-cmd
+   (concat (number-to-string (classicist-browser--lines-to-add))
 	   "p")))
 
-(defun diogenes-browser-quit ()
+(defun classicist-browser-quit ()
   (interactive)
-  (diogenes--send-cmd-to-browser "q"))
+  (classicist--browser-send-cmd "q"))
 
-(defun diogenes-browser-forward-line (&optional N)
+(defun classicist-browser-forward-line (&optional N)
   (interactive "p")
   (forward-line N)
-  (when (eobp) (diogenes-browser-forward)))
+  (when (eobp) (classicist-browser-forward)))
 
-(defun diogenes-browser-backward-line (&optional N)
+(defun classicist-browser-backward-line (&optional N)
   (interactive "p")
   (forward-line (- N))
-  (when (bobp) (diogenes-browser-backward)))
+  (when (bobp) (classicist-browser-backward)))
 
-(defun diogenes-browser-beginning-of-buffer (&optional N)
+(defun classicist-browser-beginning-of-buffer (&optional N)
   (interactive "^P")
   (when (and (not N) (bobp))
-    (diogenes-browser-backward))
+    (classicist-browser-backward))
   (beginning-of-buffer N))
 
-(defun diogenes-browser-end-of-buffer (&optional N)
+(defun classicist-browser-end-of-buffer (&optional N)
   (interactive "^P")
   (when (and (not N) (eobp))
-    (diogenes-browser-forward))
+    (classicist-browser-forward))
   (end-of-buffer N))
 
 
 ;;; Utility commands
-(defun diogenes-browser-toggle-citations ()
+(defun classicist-browser-toggle-citations ()
   "Toggle display of the embedded citations in the Diogenes Browser."
   (interactive)
   (save-excursion
-    (cond (diogenes-browser-show-citations
-	   (setq diogenes-browser-show-citations nil)
+    (cond (classicist-browser-show-citations
+	   (setq classicist-browser-show-citations nil)
 	   (goto-char (point-min))
 	   (let (cit-match)
 	     (while (setq cit-match
@@ -287,7 +356,7 @@ Takes no prefix argument, as `diogenes-browser-forward\=' takes none."
 	       (delete-region (prop-match-beginning cit-match)
 			      (prop-match-end cit-match)))))
 	  (t
-	   (setq diogenes-browser-show-citations t)
+	   (setq classicist-browser-show-citations t)
 	   (goto-char (point-min))
 	   (let (prop-change)
 	     (while (and (setq prop-change
@@ -297,7 +366,7 @@ Takes no prefix argument, as `diogenes-browser-forward\=' takes none."
 	       (when-let* ((citation (get-text-property (point) 'cit)))
 		 (insert (classicist--browser-format-citation citation)))))))))
 
-(defcustom diogenes-browser-join-broken-words t
+(defcustom classicist-browser-join-broken-words t
   "Whether a word broken across two lines is joined before it is looked up.
 A text may divide a word at the end of a line, and `C-c C-c\=' on either half
 looked up that half -- `praeci\=' and `pitur\=' rather than `praecipitur\=', neither
@@ -323,12 +392,12 @@ ending in the middle of a phrase is not evidence, and guessing there would join
 two ordinary words as often as it mended a broken one.
 
 The halves are joined for the lookup only; the buffer is not touched.
-`C-c C--\=' (`diogenes-browser-remove-hyphenation\=') is still there for joining
+`C-c C--\=' (`classicist-browser-remove-hyphenation\=') is still there for joining
 them in the text itself."
   :type 'boolean
   :group 'diogenes)
 
-(defun diogenes-browser--word-at-point-joined ()
+(defun classicist-browser--word-at-point-joined ()
   "The word at point, joined with its other half where the text divided it.
 Returns nil where there is nothing to join, so a caller falls back on the
 ordinary word at point.
@@ -337,7 +406,7 @@ TWO KINDS OF EVIDENCE, and nothing else counts.
 
 A HYPHEN at the end of the line, which is the text saying so outright.
 
-Or the record `diogenes-browser-remove-hyphenation\=' leaves when it removes one:
+Or the record `classicist-browser-remove-hyphenation\=' leaves when it removes one:
 it puts `hyphen-start\=' on the line that held the first half and `hyphen-end\=' on
 the line that held the second, with the halves as their values.  So a buffer
 whose hyphens have been removed still knows where they were, and a word already
@@ -367,9 +436,9 @@ and the reader gets the half -- which is what they got before, and honest."
           (cond
            ;; A hyphen at the end of the line.
            ((looking-at-p "-[ \t]*$")
-            (diogenes-browser--second-half word))
+            (classicist-browser--second-half word))
            ;; Or a line whose hyphen was REMOVED, with point on the first half:
-           ;; `diogenes-browser-remove-hyphenation' recorded that half as the
+           ;; `classicist-browser-remove-hyphenation' recorded that half as the
            ;; value of `hyphen-start', so the two agreeing is the evidence.
            ;;
            ;; Agreeing MATTERS.  That property is put on the whole line, so it
@@ -383,10 +452,10 @@ and the reader gets the half -- which is what they got before, and honest."
                                            'hyphen-start)
                         word)
                  (looking-at-p "[ \t]*$"))
-            (diogenes-browser--second-half word))
+            (classicist-browser--second-half word))
            (t nil)))))))
 
-(defun diogenes-browser--second-half (first-half)
+(defun classicist-browser--second-half (first-half)
   "FIRST-HALF joined to the first word of the next line, or nil.
 The citation is skipped: it is a text property, `cit\=', so whatever the reader
 has chosen to show or hide, the line numbers are never taken for part of the
@@ -422,7 +491,7 @@ word."
     ;; reference at the head of the line unmarked -- `pes-' followed by
     ;; `8.1.2.2 simum est' -- and there the loop stopped at the first digit and
     ;; `8' was taken for the second half.  Stripped of its non-letters by
-    ;; `diogenes-browser-lookup' that is `pes', which parses, which is why it
+    ;; `classicist-browser-lookup' that is `pes', which parses, which is why it
     ;; looked like no bug at all: the reader gets `pēs, masc nom/voc sg' for a
     ;; word that is `pessimum'.
     ;;
@@ -454,10 +523,10 @@ word."
       (unless (string-match-p "\\`[0-9.]+\\'" second)
         (concat first-half second)))))
 
-(defun diogenes-browser-remove-hyphenation (&optional mark-with-vertical-bar)
+(defun classicist-browser-remove-hyphenation (&optional mark-with-vertical-bar)
   "Join all hyphenated words in the current Diogenes Browser Buffer."
   (interactive "P")
-  (unless (eq major-mode 'diogenes-browser-mode)
+  (unless (eq major-mode 'classicist-browser-mode)
     (error "Not in a Diogenes Browser buffer!"))
   (with-undo-amalgamate
    (save-excursion
@@ -490,9 +559,9 @@ word."
 	   (insert-and-inherit word-b))
 	 (goto-char (cdr pos-a)))))))
 
-(defun diogenes-browser-reinsert-hyphenation ()
+(defun classicist-browser-reinsert-hyphenation ()
   (interactive)
-  (unless (eq major-mode 'diogenes-browser-mode)
+  (unless (eq major-mode 'classicist-browser-mode)
     (error "Not in a Diogenes Browser buffer!"))
   (with-undo-amalgamate
     (save-excursion
@@ -522,7 +591,7 @@ word."
 	      (insert (apply #'propertize "-"
 			     prop-a)))))))))
 
-(defun diogenes-browser-lookup ()
+(defun classicist-browser-lookup ()
   "Lookup word at point, joined with its other half where the text divided it.
 `C-c C-c\=' in the browser is this command and not the ordinary lookup, so the
 joining had to be asked for here as well: hooking it into
@@ -535,12 +604,12 @@ presses on a passage -- calling `thing-at-point\=' as before, and looking up
   ;; paragraphs -- and `replace-regexp-in-string' wants a string, so the
   ;; reader got `Wrong type argument: arrayp, nil' and a backtrace where a
   ;; word would have done.
-  (let ((word (or (and diogenes-browser-join-broken-words
-		       (diogenes-browser--word-at-point-joined))
+  (let ((word (or (and classicist-browser-join-broken-words
+		       (classicist-browser--word-at-point-joined))
 		  (thing-at-point 'word))))
     (unless word (user-error "No word at point"))
     ;; NAMED AND NOT ASSEMBLED.  It read `(intern (concat
-    ;; "diogenes-parse-and-lookup-" diogenes--browser-language))', which is a
+    ;; "diogenes-parse-and-lookup-" classicist--browser-language))', which is a
     ;; reference no grep finds and no `declare-function' can cover -- the name
     ;; does not exist until the call is made.  Two consequences, and the second
     ;; is the one that would have shown:
@@ -550,9 +619,9 @@ presses on a passage -- calling `thing-at-point\=' as before, and looking up
     ;;
     ;; AND A LANGUAGE THAT IS NEITHER gave `void-function
     ;; diogenes-parse-and-lookup-coptic' and a backtrace, where a message
-    ;; would have done.  `diogenes--browser-language' is set from the corpus,
+    ;; would have done.  `classicist--browser-language' is set from the corpus,
     ;; and nothing promises it is one of two.
-    (funcall (pcase diogenes--browser-language
+    (funcall (pcase classicist--browser-language
                ("greek" #'diogenes-parse-and-lookup-greek)
                ("latin" #'diogenes-parse-and-lookup-latin)
                (lang (user-error "No lookup for language %s"
@@ -560,7 +629,7 @@ presses on a passage -- calling `thing-at-point\=' as before, and looking up
              (replace-regexp-in-string "[^[:alpha:]]" "" word))))
 
 ;;; Browser Mode
-(defcustom diogenes-browser-mouse-keys nil
+(defcustom classicist-browser-mouse-keys nil
   "Mouse gestures that look a word up, as (GESTURE . COMMAND).
 Nil by default and off: clicking a word and getting a dictionary entry is not
 what a reader expects of an Emacs buffer, and this is a package other people
@@ -571,13 +640,13 @@ a drag is drag-mouse-1, so marking a passage still works, which matters because
 a marked region is how a stretch of lines is named.
 
 Any gesture will do and any command.  Point is moved to the click first,
-whatever the command.  Call diogenes-browser-install-mouse-keys after changing
+whatever the command.  Call classicist-browser-install-mouse-keys after changing
 this, or restart."
   :type '(alist :key-type (string :tag "Gesture")
                 :value-type (function :tag "Command"))
   :group 'diogenes)
 
-(defun diogenes-browser--at-click (command)
+(defun classicist-browser--at-click (command)
   "COMMAND wrapped so that it acts on the word clicked.
 Point does not follow a click of its own accord: mouse-1 ordinarily runs
 mouse-drag-region, and that is what moves point.  Binding the gesture to
@@ -593,17 +662,17 @@ reader names works unchanged."
     (call-interactively command)))
 
 ;;;###autoload
-(defun diogenes-browser-install-mouse-keys ()
-  "Bind the gestures in diogenes-browser-mouse-keys in the browser.
+(defun classicist-browser-install-mouse-keys ()
+  "Bind the gestures in classicist-browser-mouse-keys in the browser.
 Called at load and again after changing the option."
   (interactive)
-  (when (boundp 'diogenes-browser-mode-map)
-    (dolist (cell diogenes-browser-mouse-keys)
+  (when (boundp 'classicist-browser-mode-map)
+    (dolist (cell classicist-browser-mouse-keys)
       (when (and (car cell) (cdr cell))
-        (keymap-set diogenes-browser-mode-map (car cell)
-                    (diogenes-browser--at-click (cdr cell)))))))
+        (keymap-set classicist-browser-mode-map (car cell)
+                    (classicist-browser--at-click (cdr cell)))))))
 
-(defcustom diogenes-browser-header-line t
+(defcustom classicist-browser-header-line t
   "Whether the browser carries a header line of its own.
 
     <-- back    forward -->    go to...    Plato, Cratylus
@@ -614,16 +683,16 @@ the buffer would be swept away with it.  Which is why this is a header and not a
 row of widgets at the foot, as the application has.
 
 Nil for no header, and the keys do the same work: `C-c C-n\=' and `C-c C-p\=' page,
-and `diogenes-browser-goto-passage\=' asks where to go."
+and `classicist-browser-goto-passage\=' asks where to go."
   :type 'boolean
   :group 'diogenes)
 
-(defface diogenes-browser-header-button
+(defface classicist-browser-header-button
   '((t :inherit link))
   "Face for the clickable parts of the browser\='s header line."
   :group 'diogenes)
 
-(defun diogenes-browser--knows-its-work-p ()
+(defun classicist-browser--knows-its-work-p ()
   "Whether this browser records which work it is showing.
 `classicist--browser-corpus\=' and its fellows come with the passage reference; a
 version without that has no such variables, so they are asked for with `boundp\='
@@ -636,34 +705,8 @@ before they are read.  Everything that needs to name the work -- the header, and
        classicist--browser-author
        classicist--browser-work))
 
-(defvar-local diogenes--browser-page-lines nil
-  "How many lines the first page of this browser held.
-The number to ask for when a page is turned: Diogenes chose the size of the
-first page, it fitted the window, and what it held can be counted -- where the
-window\='s own height cannot account for the three lines of header printed with
-every fetch, nor for the lines that wrap because a citation precedes them.
 
-Set once, when the first page arrives, and not again: a page that REPLACES
-another must not grow, and counting what is shown each time made it grow -- `C-c
-C-n\=' adds to the buffer, so thirty-four lines became fifty-nine and every press
-asked for more than the last.")
-
-(defvar-local diogenes--browser-turned nil
-  "Whether the text now arriving replaced the buffer rather than adding to it.
-Read once, where point is placed: a page that was TURNED has no frontier -- the
-whole of it is new -- so there is nothing to mark and the top is where to be.")
-
-(defvar-local diogenes--browser-replace nil
-  "Whether the next text to arrive should replace what is in the buffer.
-Set by the paging buttons, which turn the page where `C-c C-n\=' and `C-c C-p\='
-add to it, and read by the filter.
-
-A FLAG and not an `erase-buffer\=' in the command, because at the end of a work
-Diogenes answers with nothing: a buffer emptied when the button was pressed
-would leave a reader with neither the next page nor the one they were reading.
-The filter erases when it has something to put there.")
-
-(defface diogenes-browser-addition-face
+(defface classicist-browser-addition-face
   '((t :inherit secondary-selection :extend t))
   "Face for the lines `C-c C-n\=' or `C-c C-p\=' has just added.
 `secondary-selection\=' because that is what it is for -- a region marked for a
@@ -672,19 +715,17 @@ marking reaches the window\='s edge rather than the end of each line, several
 lines otherwise making a ragged block."
   :group 'diogenes)
 
-(defvar-local diogenes--browser-addition nil
-  "The overlay marking what was last added, or nil.")
 
-(defun diogenes-browser--unmark-addition ()
+(defun classicist-browser--unmark-addition ()
   "Take the marking off what was added.
 On `pre-command-hook\=', so the first thing a reader does -- a movement, a
 lookup, anything -- clears it."
-  (remove-hook 'pre-command-hook #'diogenes-browser--unmark-addition t)
-  (when (overlayp diogenes--browser-addition)
-    (delete-overlay diogenes--browser-addition))
-  (setq diogenes--browser-addition nil))
+  (remove-hook 'pre-command-hook #'classicist-browser--unmark-addition t)
+  (when (overlayp classicist--browser-addition)
+    (delete-overlay classicist--browser-addition))
+  (setq classicist--browser-addition nil))
 
-(defun diogenes-browser--mark-addition (from to backwards)
+(defun classicist-browser--mark-addition (from to backwards)
   "Put point at the frontier of the text between FROM and TO, and mark it.
 BACKWARDS says which side the new text came from, and so which side the frontier
 is on: reading forward, the join is at FROM and the new lines are below it;
@@ -693,22 +734,22 @@ reading back, the join is at TO and the new lines are above.
 The marking goes at the next command.  A reader who has just asked for more text
 is about to move, so `pre-command-hook\=' is the moment -- and it costs nothing
 where a reader sits still and looks."
-  (diogenes-browser--unmark-addition)
+  (classicist-browser--unmark-addition)
   (goto-char (if backwards to from))
   ;; The new text on the side it came from: forward shows it below the frontier,
   ;; backward above.
   (condition-case nil
       (recenter (if backwards -2 1))
     (error nil))
-  (setq diogenes--browser-addition (make-overlay from to))
-  (overlay-put diogenes--browser-addition 'face
-               'diogenes-browser-addition-face)
-  (overlay-put diogenes--browser-addition 'evaporate t)
-  (add-hook 'pre-command-hook #'diogenes-browser--unmark-addition nil t))
+  (setq classicist--browser-addition (make-overlay from to))
+  (overlay-put classicist--browser-addition 'face
+               'classicist-browser-addition-face)
+  (overlay-put classicist--browser-addition 'evaporate t)
+  (add-hook 'pre-command-hook #'classicist-browser--unmark-addition nil t))
 
-(defun diogenes-browser--page-size ()
+(defun classicist-browser--page-size ()
   "How many lines a page is, for turning one.
-The WINDOW\='s height, less `diogenes-browser-page-margin\=', and no overlap: a page
+The WINDOW\='s height, less `classicist-browser-page-margin\=', and no overlap: a page
 that is REPLACED wants the lines after the ones you read, not two of them again.
 
 Not what is shown, which was the first answer and made the request GROW: `C-c
@@ -720,41 +761,41 @@ time.  A window does not drift."
   ;; three lines of header printed with every fetch and the lines that wrap
   ;; behind a citation, and the count of what is shown grows, `C-c C-n' adding
   ;; to the buffer until every press asked for more than the last.
-  (max 1 (or diogenes-browser-page-lines
-             diogenes--browser-page-lines
+  (max 1 (or classicist-browser-page-lines
+             classicist--browser-page-lines
              (- (floor (window-screen-lines))
-                diogenes-browser-page-margin))))
+                classicist-browser-page-margin))))
 
-(defun diogenes-browser-page-forward ()
+(defun classicist-browser-page-forward ()
   "Show the page after this one, in place of it.
-Where `diogenes-browser-forward\=' adds the next lines below what is there, this
+Where `classicist-browser-forward\=' adds the next lines below what is there, this
 replaces: the same number of lines, taken from after what is shown.  Nothing is
 lost where there is no more text -- the buffer is emptied only when there is
 something to put in it."
   (interactive)
-  (setq diogenes--browser-backwards nil
-        diogenes--browser-replace t
-        diogenes-browser-first-insertion t)
+  (setq classicist--browser-backwards nil
+        classicist--browser-replace t
+        classicist--browser-first-insertion t)
   (goto-char (point-max))
-  (diogenes--send-cmd-to-browser
+  (classicist--browser-send-cmd
    ;; `F' and not `n': see `diogenes--browse-interactively-script'.  Turning a
    ;; page moves the beginning as well as the end, the first line of the work no
    ;; longer being on the screen.
-   (concat (number-to-string (diogenes-browser--page-size)) "F")))
+   (concat (number-to-string (classicist-browser--page-size)) "F")))
 
-(defun diogenes-browser-page-backward ()
+(defun classicist-browser-page-backward ()
   "Show the page before this one, in place of it.
-The counterpart of `diogenes-browser-page-forward\='."
+The counterpart of `classicist-browser-page-forward\='."
   (interactive)
-  (setq diogenes--browser-backwards t
-        diogenes--browser-replace t
-        diogenes-browser-first-insertion t)
+  (setq classicist--browser-backwards t
+        classicist--browser-replace t
+        classicist--browser-first-insertion t)
   (goto-char (point-min))
-  (diogenes--send-cmd-to-browser
-   (concat (number-to-string (diogenes-browser--page-size)) "B")))
+  (classicist--browser-send-cmd
+   (concat (number-to-string (classicist-browser--page-size)) "B")))
 
-(defcustom diogenes-browser-goto-by-level t
-  "Whether `diogenes-browser-goto-passage\=' asks for a citation level by level.
+(defcustom classicist-browser-goto-by-level t
+  "Whether `classicist-browser-goto-passage\=' asks for a citation level by level.
 
 Non-nil asks one question for each level the corpus names -- `Stephanus page\=',
 then `section\=', then `line\=' -- so that a reader need not remember which
@@ -772,7 +813,7 @@ are being asked for one at a time."
   :type 'boolean
   :group 'diogenes)
 
-(defun diogenes-browser--read-levels (labels)
+(defun classicist-browser--read-levels (labels)
   "A citation read one level at a time, as LABELS name them.
 
 ASKED LEVEL BY LEVEL, and not all at once.  A citation is not one string but
@@ -817,19 +858,19 @@ separator in the first answer can mean nothing else."
             (push answer levels)))))
     (nreverse levels)))
 
-(defun diogenes-browser-goto-passage (&optional passage)
+(defun classicist-browser-goto-passage (&optional passage)
   "Open this work at PASSAGE, asking for it when not given.
 A citation as the work numbers itself -- `384a\=', `1.5.2\=', `1053a15\=' -- and not
 a line of the buffer: the browser shows a stretch of a text, and where a reader
 wants to be is a place in the WORK.  The levels this work uses are named in the
 prompt where the corpus told us them.
 
-The same Perl request `diogenes-open-passage\=' makes, so the reader arrives with
+The same Perl request `classicist-open-passage\=' makes, so the reader arrives with
 the passage at the top rather than paged to."
   (interactive)
-  (unless (derived-mode-p 'diogenes-browser-mode)
+  (unless (derived-mode-p 'classicist-browser-mode)
     (user-error "Not in a Diogenes browser"))
-  (unless (diogenes-browser--knows-its-work-p)
+  (unless (classicist-browser--knows-its-work-p)
     (user-error
      (concat "This browser does not record which work it is showing"
              " -- the passage reference is not in this version")))
@@ -838,8 +879,8 @@ the passage at the top rather than paged to."
          (levels
           (cond
            (passage (split-string (string-trim passage) "[.: ]+" t))
-           (diogenes-browser-goto-by-level
-            (diogenes-browser--read-levels labels))
+           (classicist-browser-goto-by-level
+            (classicist-browser--read-levels labels))
            ;; ALL AT ONCE, the older way: the levels named in the prompt
            ;; where the corpus told us them, and full stops between.
            (t (split-string
@@ -853,12 +894,12 @@ the passage at the top rather than paged to."
     (unless levels
       (user-error "No passage given"))
     ;; Outermost level first, as Diogenes takes them.
-    (diogenes-open-passage classicist--browser-corpus
+    (classicist-open-passage classicist--browser-corpus
                            classicist--browser-author
                            classicist--browser-work
                            levels)))
 
-(defun diogenes-browser--header-button-runner (command)
+(defun classicist-browser--header-button-runner (command)
   "COMMAND wrapped to run in the window whose header line was clicked.
 A header-line click does not select the window, so a command run from one acts
 on whatever buffer happened to be current: the paging buttons set their
@@ -874,56 +915,56 @@ The event says which window it came from, and that is the one to work in."
             (call-interactively command))
         (call-interactively command)))))
 
-(defun diogenes-browser--header-button (label help command)
+(defun classicist-browser--header-button (label help command)
   "LABEL as a clickable piece of a header line, running COMMAND."
   (let ((map (make-sparse-keymap))
-        (command (diogenes-browser--header-button-runner command)))
+        (command (classicist-browser--header-button-runner command)))
     ;; `header-line-format\=' takes its clicks through `mouse-1\=' on the string
     ;; itself; `follow-link\=' lets a reader who has `mouse-1-click-follows-link\='
     ;; use a plain click, as they would on any other button.
     (keymap-set map "<header-line> <mouse-1>" command)
     (keymap-set map "<header-line> <mouse-2>" command)
     (propertize label
-                'face 'diogenes-browser-header-button
+                'face 'classicist-browser-header-button
                 'mouse-face 'highlight
                 'help-echo help
                 'follow-link t
                 'keymap map)))
 
-(defun diogenes-browser-header-line ()
+(defun classicist-browser-header-line ()
   "The browser\='s header line: where to go, and what is being read.
 Built afresh each time Emacs draws it, so it follows the buffer without anything
 having to remember to update it -- which matters, the contents being replaced by
 a Perl process on every page."
-  (when diogenes-browser-header-line
+  (when classicist-browser-header-line
     (concat
      " "
-     (diogenes-browser--header-button
+     (classicist-browser--header-button
       "<-- back" "Turn back a page, replacing this one"
-      #'diogenes-browser-page-backward)
+      #'classicist-browser-page-backward)
      "   "
-     (diogenes-browser--header-button
+     (classicist-browser--header-button
       "forward -->" "Turn forward a page, replacing this one"
-      #'diogenes-browser-page-forward)
+      #'classicist-browser-page-forward)
      ;; Only where the browser records what it is showing.  Elsewhere there is
      ;; nothing to open, and a button that answers a click with an explanation
      ;; is worse than no button.
-     (if (diogenes-browser--knows-its-work-p)
+     (if (classicist-browser--knows-its-work-p)
          (concat "   "
-                 (diogenes-browser--header-button
+                 (classicist-browser--header-button
                   "go to..." "Open this work at a citation"
-                  #'diogenes-browser-goto-passage))
+                  #'classicist-browser-goto-passage))
        "")
      ;; And what is being read, where the browser knows: a reader who has
      ;; several open should not have to look at the text to tell which is which.
-     (if (diogenes-browser--knows-its-work-p)
+     (if (classicist-browser--knows-its-work-p)
          (format "   %s %s/%s"
                  classicist--browser-corpus
                  classicist--browser-author
                  classicist--browser-work)
        ""))))
 
-(defvar diogenes-browser-mode-map
+(defvar classicist-browser-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
     ;; Overrides of movement keys.  A remap catches the command NAMED and
     ;; nothing else: under evil in normal state the arrows are
@@ -940,44 +981,42 @@ a Perl process on every page."
     ;; which is a name no rename can reach: rename the commands and this goes
     ;; on assembling the old ones, and the arrows stop working with no error
     ;; and nothing in the compile to say why.
-    (dolist (pair '((previous-line             . diogenes-browser-backward-line)
-                    (next-line                 . diogenes-browser-forward-line)
-                    (evil-previous-line        . diogenes-browser-backward-line)
-                    (evil-next-line            . diogenes-browser-forward-line)
-                    (evil-previous-visual-line . diogenes-browser-backward-line)
-                    (evil-next-visual-line     . diogenes-browser-forward-line)
-                    (beginning-of-buffer       . diogenes-browser-beginning-of-buffer)
-                    (end-of-buffer             . diogenes-browser-end-of-buffer)
-                    (evil-goto-first-line      . diogenes-browser-beginning-of-buffer)
-                    (evil-goto-line            . diogenes-browser-end-of-buffer)))
+    (dolist (pair '((previous-line             . classicist-browser-backward-line)
+                    (next-line                 . classicist-browser-forward-line)
+                    (evil-previous-line        . classicist-browser-backward-line)
+                    (evil-next-line            . classicist-browser-forward-line)
+                    (evil-previous-visual-line . classicist-browser-backward-line)
+                    (evil-next-visual-line     . classicist-browser-forward-line)
+                    (beginning-of-buffer       . classicist-browser-beginning-of-buffer)
+                    (end-of-buffer             . classicist-browser-end-of-buffer)
+                    (evil-goto-first-line      . classicist-browser-beginning-of-buffer)
+                    (evil-goto-line            . classicist-browser-end-of-buffer)))
       (keymap-set map (format "<remap> <%s>" (car pair)) (cdr pair)))
     (keymap-set map "q" #'quit-window)
-    (keymap-set map "C-c C-n"  #'diogenes-browser-forward)
-    (keymap-set map "C-c C-p"  #'diogenes-browser-backward)
+    (keymap-set map "C-c C-n"  #'classicist-browser-forward)
+    (keymap-set map "C-c C-p"  #'classicist-browser-backward)
     ;; Actions
-    (keymap-set map "C-c C-c" #'diogenes-browser-lookup)
+    (keymap-set map "C-c C-c" #'classicist-browser-lookup)
     (keymap-set map "C-c C-o" #'diogenes-lookup-in-dictionary)
-    (keymap-set map "C-c C-q" #'diogenes-browser-quit)
+    (keymap-set map "C-c C-q" #'classicist-browser-quit)
     ;; Utilities
-    (keymap-set map "C-c C--" #'diogenes-browser-remove-hyphenation)
-    (keymap-set map "C-c C-+" #'diogenes-browser-reinsert-hyphenation)
-    (keymap-set map "C-c C-t" #'diogenes-browser-toggle-citations)
+    (keymap-set map "C-c C--" #'classicist-browser-remove-hyphenation)
+    (keymap-set map "C-c C-+" #'classicist-browser-reinsert-hyphenation)
+    (keymap-set map "C-c C-t" #'classicist-browser-toggle-citations)
     map)
   "Basic mode map for the Diogenes Browser.")
 
-(define-derived-mode diogenes-browser-mode text-mode "Diogenes Browser"
+(define-derived-mode classicist-browser-mode text-mode "Diogenes Browser"
   "Major mode to browse Diogenes' databases."
   ;; A line of its own, above the text: see
-  ;; `diogenes-browser-header-line'.
-  (setq header-line-format '(:eval (diogenes-browser-header-line)))
-  (make-local-variable 'diogenes--browser-backwards)
-  (make-local-variable 'diogenes--browser-language)
+  ;; `classicist-browser-header-line'.
+  (setq header-line-format '(:eval (classicist-browser-header-line)))
   (make-local-variable 'diogenes--browser-first-insertion))
 
 
 ;;; Browser process filter
 
-(defun diogenes--browser-remove-duplicate-header (header)
+(defun classicist--browser-remove-duplicate-header (header)
   "Take out any header already in the buffer whose text is HEADER's.
 Called before inserting one, so that paging leaves a passage with a single
 header at its top rather than one at every place a fetch began.
@@ -1006,7 +1045,7 @@ mistake."
               ;; The search\='s idea of where it is went with the text.
               (goto-char (min start (point-max))))))))))
 
-(defun diogenes--browser-format-header (header-lines)
+(defun classicist--browser-format-header (header-lines)
   (propertize (concat (string-join header-lines
 				   "\n")
 		      "\n\n")
@@ -1017,23 +1056,20 @@ mistake."
 	      'front-sticky t
 	      'rear-nonsticky t))
 
-(defvar-local diogenes--browser-output-buffer ""
-  "Buffers the output of the diogenes browser output, if it is an
-incomplete lisp expression.")
-(defun diogenes--read-browser-output (str)
+(defun classicist--browser-read-output (str)
   "Try to read a lisp expression from browser output.
 If it is incomplete, buffer it and prepend it when called again."
-  (let ((form (ignore-errors (read (concat diogenes--browser-output-buffer
+  (let ((form (ignore-errors (read (concat classicist--browser-output-buffer
 					   str)))))
     (cond ((and form (listp form))
-	   (setq diogenes--browser-output-buffer "") form)
-	  (t (setq diogenes--browser-output-buffer
-		   (concat diogenes--browser-output-buffer str))
+	   (setq classicist--browser-output-buffer "") form)
+	  (t (setq classicist--browser-output-buffer
+		   (concat classicist--browser-output-buffer str))
 	     nil))))
 
-(defun diogenes--browser-filter (proc string)
+(defun classicist--browser-filter (proc string)
   (when (buffer-live-p (process-buffer proc))
-    (when-let* ((data (diogenes--read-browser-output string)))
+    (when-let* ((data (classicist--browser-read-output string)))
      (with-current-buffer (process-buffer proc)
        (seq-let (cit header &rest lines) data
 	 ;; NOTHING THERE is a boundary and not an error.  Diogenes answers a
@@ -1042,14 +1078,14 @@ If it is incomplete, buffer it and prepend it when called again."
 	 ;; `error in process filter' -- for the ordinary case of having asked to
 	 ;; go back further than the work goes.
 	 (unless lines
-	   (setq diogenes--browser-replace nil)
+	   (setq classicist--browser-replace nil)
 	   (message "Nothing %s this passage"
-		    (if (and (boundp 'diogenes--browser-backwards)
-			     diogenes--browser-backwards)
+		    (if (and (boundp 'classicist--browser-backwards)
+			     classicist--browser-backwards)
 			"before" "after")))
 	 (when lines
-	 (cond ((and (boundp 'diogenes--browser-backwards)
-		     diogenes--browser-backwards)
+	 (cond ((and (boundp 'classicist--browser-backwards)
+		     classicist--browser-backwards)
 		(cond (header (goto-char (point-min))
 			      (newline)
 			      (goto-char (point-min)))
@@ -1058,10 +1094,10 @@ If it is incomplete, buffer it and prepend it when called again."
 	       (t (goto-char (point-max))))
 	 ;; A page turned rather than added to: the buffer is emptied HERE,
 	 ;; where there is text to put in it, and not when the button was
-	 ;; pressed.  See `diogenes--browser-replace'.
-	 (when diogenes--browser-replace
-	   (setq diogenes--browser-replace nil
-		 diogenes--browser-turned t)
+	 ;; pressed.  See `classicist--browser-replace'.
+	 (when classicist--browser-replace
+	   (setq classicist--browser-replace nil
+		 classicist--browser-turned t)
 	   (let ((inhibit-read-only t))
 	     (erase-buffer))
 	   (goto-char (point-min)))
@@ -1076,44 +1112,44 @@ If it is incomplete, buffer it and prepend it when called again."
 	   ;; one work and into another wants both headers -- that is the header
 	   ;; doing its job -- and comparing the text is how to tell the two
 	   ;; cases apart.
-	   (diogenes--browser-remove-duplicate-header
-	    (diogenes--browser-format-header header))
-	   (insert (diogenes--browser-format-header header)))
+	   (classicist--browser-remove-duplicate-header
+	    (classicist--browser-format-header header))
+	   (insert (classicist--browser-format-header header)))
 	 ;; The size of the first page, for turning one later.  Set once: see
-	 ;; `diogenes--browser-page-lines'.
-	 (unless diogenes--browser-page-lines
-	   (setq diogenes--browser-page-lines (length lines)))
+	 ;; `classicist--browser-page-lines'.
+	 (unless classicist--browser-page-lines
+	   (setq classicist--browser-page-lines (length lines)))
 	 (let ((pos (point)))
 	   (dolist (alist lines)
-	     (when diogenes-browser-show-citations
+	     (when classicist-browser-show-citations
 	       (insert (classicist--browser-format-citation (car alist))))
 	     (insert (propertize (format "%s\n" (cdr alist))
 				 'cit (car alist))))
 	  (set-marker (process-mark proc) (point-max))
 	  (cond (;; A page TURNED, which is tested FIRST: the paging buttons set
-		 ;; `diogenes-browser-first-insertion' as well, so a turned page
+		 ;; `classicist--browser-first-insertion' as well, so a turned page
 		 ;; would take that branch and leave this flag standing -- to
 		 ;; misfire on the next ADDITION, sending point to the top and
 		 ;; marking nothing.
 		 ;;
 		 ;; The whole buffer is new, so there is no frontier and nothing to
 		 ;; mark; the top is where to be.
-		 diogenes--browser-turned
-		 (setq diogenes--browser-turned nil
-		       diogenes-browser-first-insertion nil)
+		 classicist--browser-turned
+		 (setq classicist--browser-turned nil
+		       classicist--browser-first-insertion nil)
 		 (goto-char (point-min)))
-		(diogenes-browser-first-insertion
-		 (setq diogenes-browser-first-insertion nil)
+		(classicist--browser-first-insertion
+		 (setq classicist--browser-first-insertion nil)
 		 (goto-char pos))
 		;; A page ADDED: point to the join, and the new lines marked until
 		;; the next keypress.
-		(t (diogenes-browser--mark-addition
+		(t (classicist-browser--mark-addition
 		    pos (point)
-		    (and (boundp 'diogenes--browser-backwards)
-			 diogenes--browser-backwards)))))))))))
+		    (and (boundp 'classicist--browser-backwards)
+			 classicist--browser-backwards)))))))))))
 
 
-(defun diogenes-open-passage (corpus author work &optional passage)
+(defun classicist-open-passage (corpus author work &optional passage)
   "Open WORK of AUTHOR in CORPUS, at PASSAGE, asking nothing.
 CORPUS is `tlg\=', `phi\=' and the rest; AUTHOR and WORK are the numbers as
 strings; PASSAGE is a list of strings, as `classicist-citation-from-key\=' returns,
@@ -1125,11 +1161,11 @@ right for a reader choosing where to go, and no use to anything holding a
 reference already.  A link that asked four questions before opening would not be
 a link.
 
-It is also the boundary a separate package should call.  `diogenes--browse-work\='
+It is also the boundary a separate package should call.  `classicist--browse-work\='
 is private: the two hyphens say that its name and its arguments are nobody
 else\='s business, and a package outside this one calling it would break silently
 on a rename."
-  (diogenes--browse-work (list :type corpus)
+  (classicist--browse-work (list :type corpus)
                          (nconc (list author work)
                                 (copy-sequence passage))))
 
@@ -1138,7 +1174,7 @@ on a rename."
 ;; the reference it goes into.  A separate call rather than a fourth key, so
 ;; that a caller wanting only the numbers pays nothing for the abbreviations.
 
-(defun diogenes--browse-work (options passage)
+(defun classicist--browse-work (options passage)
   "Function that browses a work from the Diogenes Databases.
 
 Passage has to be a list of strings containing the four digit
@@ -1146,15 +1182,15 @@ number of the author and the number of the work."
   (with-current-buffer (diogenes--start-perl
 			"browser"
 			(diogenes--browse-interactively-script options passage)
-			#'diogenes--browser-filter)
-    (diogenes-browser-mode)
-    (setq diogenes-browser-first-insertion t)
-    (setq diogenes--browser-language
+			#'classicist--browser-filter)
+    (classicist-browser-mode)
+    (setq classicist--browser-first-insertion t)
+    (setq classicist--browser-language
 	  (pcase (plist-get options :type)
 	    ("tlg" "greek")
 	    ("phi" "latin")))
     ;; What this buffer is reading.  PASSAGE begins with the author and the
-    ;; work, whatever else follows: `diogenes--browse-database' builds it as
+    ;; work, whatever else follows: `classicist--browse-database' builds it as
     ;; `(nconc (list author work) passage)'.
     (setq classicist--browser-corpus (plist-get options :type))
     (setq classicist--browser-author (car passage))
@@ -1170,7 +1206,7 @@ number of the author and the number of the work."
                                        (list (car passage) (cadr passage)))))
     (current-buffer)))
 
-(defun diogenes--browse-database (type &optional author work)
+(defun classicist--browse-database (type &optional author work)
   "Select a specific passage in a work from a diogenes database for browsing.
 Uses the Diogenes Perl module."
   (let* ((author (or author
@@ -1182,7 +1218,7 @@ Uses the Diogenes Perl module."
 		    (diogenes--select-passage (list :type type)
 					      author
 					      work))))
-    (diogenes--browse-work (list :type type) (nconc (list author work)
+    (classicist--browse-work (list :type type) (nconc (list author work)
 						    passage))))
 
 
@@ -1190,7 +1226,7 @@ Uses the Diogenes Perl module."
 ;;;; DUMPER
 ;;;; --------------------------------------------------------------------
 
-(defun diogenes--dump-from-database-sentinel (process event)
+(defun classicist--dump-from-database-sentinel (process event)
  "Sentinel for the Diogenes Dumper. Its main function is to
 initialize post-processing after termination."
  (with-current-buffer (process-buffer process)
@@ -1201,7 +1237,7 @@ initialize post-processing after termination."
       (re-search-backward "^[[:alpha:]]+")
       (beginning-of-line)))))
 
-(defun diogenes--dump-work (options passage)
+(defun classicist--dump-work (options passage)
   "Function that dumps a work from the Diogenes Databases.
 
 Passage has to be a list of strings containing the four digit
@@ -1211,10 +1247,10 @@ number of the author and the number of the work."
 			 (append options '(:browse-lines 100000000))
 			 passage)
 			nil
-			#'diogenes--dump-from-database-sentinel))
+			#'classicist--dump-from-database-sentinel))
 ;; $query->{browser_multiple} = 100000000
 
-(defun diogenes--dump-from-database (type &optional author work)
+(defun classicist--dump-from-database (type &optional author work)
   "Dump a work from a Diogenes database in its entirety.
 Uses the Diogenes Perl module."
   (let* ((author (or author
@@ -1222,7 +1258,7 @@ Uses the Diogenes Perl module."
 	 (work (or work
 		   (diogenes--select-work-num `(:type ,type)
 					      author))))
-    (diogenes--dump-work `(:type ,type) (list author work))))
+    (classicist--dump-work `(:type ,type) (list author work))))
 
 ;; The names that moved are answered in `diogenes-browser-compat.el' and in
 ;; `classicist-obsolete.el', and not here: a rename of this
@@ -1238,7 +1274,18 @@ Uses the Diogenes Perl module."
 (require 'diogenes-browser-compat)
 (require 'classicist-obsolete)
 
+(provide 'classicist-browser)
+
+;; AND THE OLD NAME, FOR NOW.  Four `with-eval-after-load \='diogenes-browser\='
+;; forms install keys -- two in this package, two in the tei-browser
+;; repository -- and a feature that is never provided makes every one of them
+;; silently never run: the mouse gestures, the turn keys, the org keys and the
+;; keys a TEI text borrows, all simply unbound, with no error and nothing in a
+;; compile.
+;;
+;; It goes when all four name `classicist-browser\='.  Until then this costs a
+;; line and makes the two repositories independent of each other\='s order.
 (provide 'diogenes-browser)
 
-;;; diogenes-browser.el ends here
+;;; classicist-browser.el ends here
 

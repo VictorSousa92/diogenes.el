@@ -35,9 +35,9 @@
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
-(declare-function diogenes-browser--word-at-point-joined "diogenes-browser" ())
-(defvar diogenes-browser-join-broken-words)
-(declare-function diogenes--browse-work "diogenes-browser" (options passage))
+(declare-function classicist-browser--word-at-point-joined "classicist-browser" ())
+(defvar classicist-browser-join-broken-words)
+(declare-function classicist--browse-work "classicist-browser" (options passage))
 (declare-function diogenes--perseus-path "diogenes" ())
 (declare-function diogenes--dict-file "diogenes" (lang))
 (declare-function diogenes--get-all-analyses "diogenes-perseus" (lang))
@@ -1593,10 +1593,10 @@ and in those buffers there is nothing to guess from."
      ;; either half finds nothing: no dictionary has `praeci' or `pitur'.  The
      ;; browser can tell, the citation being a text property it knows to skip,
      ;; so it is asked first.
-     (and (derived-mode-p 'diogenes-browser-mode)
-          (bound-and-true-p diogenes-browser-join-broken-words)
-          (fboundp 'diogenes-browser--word-at-point-joined)
-          (diogenes-browser--word-at-point-joined))
+     (and (derived-mode-p 'classicist-browser-mode)
+          (bound-and-true-p classicist-browser-join-broken-words)
+          (fboundp 'classicist-browser--word-at-point-joined)
+          (classicist-browser--word-at-point-joined))
      (thing-at-point 'word t))))
 
 (defun diogenes--lookup-current-headword ()
@@ -1641,8 +1641,8 @@ about this, so it is taken first."
 	 (prop-lang (get-text-property pos 'lang))
 	 (buf-lang (or (and (boundp 'diogenes--lookup-lang)
 			    diogenes--lookup-lang)
-		       (and (boundp 'diogenes--browser-language)
-			    diogenes--browser-language)))
+		       (and (boundp 'classicist--browser-language)
+			    classicist--browser-language)))
 	 (word (diogenes--word-at-point-for-lookup)))
     (cond
      ;; Greek letters mean Greek, tagged or not.
@@ -2016,7 +2016,7 @@ With a numerical prefix, move back N entries.  The counterpart of
 ;;; LOOKUP MODE
 (defun diogenes--lookup-parse-bibl-string (str)
   "Parse a DICT bibliography reference string.
-Returns a list that diogenes--browse-work can be applied to."
+Returns a list that classicist--browse-work can be applied to."
   (seq-let (corpus author work-and-passage)
       (split-string (replace-regexp-in-string "^Perseus:abo:" "" str)
 		    ",")
@@ -4130,7 +4130,7 @@ if nil, query interactively for their values"
         (funcall (plist-get dictionary :command)
                  (get-text-property char 'headword))
       (cl-case action
-      (bibl (apply #'diogenes--browse-work (diogenes--lookup-parse-bibl-string
+      (bibl (apply #'classicist--browse-work (diogenes--lookup-parse-bibl-string
 					    (get-text-property char 'bibl))))
       ;; The `lemma-nr' property is the byte offset of the entry in the
       ;; dictionary -- the first field of the analyses record, or the second

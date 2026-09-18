@@ -36,7 +36,7 @@
 ;; KEY is that flattened for a hash table or a filename.  A REFERENCE is the
 ;; whole of it -- corpus, author, work, citation -- and what a reader sees.
 ;;
-;; WHAT IS NOT HERE.  `diogenes-open-passage\=', which opens a passage in the
+;; WHAT IS NOT HERE.  `classicist-open-passage\=', which opens a passage in the
 ;; browser and so belongs to the browser.  Anything wanting it should ask
 ;; `fboundp\=' first: citations without a browser is a coherent state, and the
 ;; guard `tei-diorisis.el\=' already has stops being defensive.
@@ -67,7 +67,7 @@
 ;; browser work.  This file is required BY the browser, so it cannot require it
 ;; back; anything outside should ask `fboundp' first, citations without a
 ;; browser being a state one can now be in.
-(declare-function diogenes-open-passage "diogenes-browser"
+(declare-function classicist-open-passage "classicist-browser"
                   (corpus author work &optional passage))
 
 (defun classicist--browser-format-citation (citation)
@@ -272,7 +272,7 @@ preference to `:from\=', being the form that survives writing down."
          (from (or (car interval)
                    (mapcar (lambda (element) (format "%s" element))
                            (plist-get reference :from)))))
-    (diogenes-open-passage (plist-get reference :corpus)
+    (classicist-open-passage (plist-get reference :corpus)
                            (plist-get reference :author)
                            (plist-get reference :work)
                            from)))
@@ -385,7 +385,7 @@ The corpus, author and work are what `diogenes-browse-tlg\=' and its siblings
 take, so a reference is enough to open the work again; `:from\=' says where in
 it.
 Nil in a buffer that is not a browser, there being nothing to refer to."
-  (when (derived-mode-p 'diogenes-browser-mode)
+  (when (derived-mode-p 'classicist-browser-mode)
     (let* ((interval (classicist-browser-citation-interval))
            (from (car interval))
            (to (cdr interval))

@@ -65,7 +65,7 @@ those, and the buffer has nothing for evil to edit.
 
 Two modes are NOT here, on purpose, and either can be added:
 
-  `diogenes-browser-mode' -- its only single-letter key is `q', so normal
+  `classicist-browser-mode' -- its only single-letter key is `q', so normal
   state costs almost nothing and buys evil's motions in a text one is
   reading.  Almost: the browser loads the next page when you move past the
   last line, which it does by remapping `next-line', and evil's `j' is
