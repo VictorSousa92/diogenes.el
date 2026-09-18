@@ -36,6 +36,20 @@
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
+;; READ FROM `diogenes.el\=', AND NEITHER CAN COME DOWN.  `diogenes--corpora\='
+;; is the table of corpora; `diogenes--corpora-abbrevs\=' is `(mapcar #\='car
+;; diogenes--corpora)\=', computed when the entry point loads.
+;;
+;; Moving the abbreviations here would need the table here, and the table
+;; cannot come: this file requires `diogenes-user-interface.el\=', which reads
+;; it too, so corpora would have to require user-interface and user-interface
+;; require corpora.  A cycle in the value and not only in the graph.
+;;
+;; So both stay in the entry point, and this says which of them this file
+;; reads.
+(defvar diogenes--corpora)
+(defvar diogenes--corpora-abbrevs)
+
 (declare-function diogenes--get-filter-file "diogenes-perl-interface" (&optional type))
 (declare-function diogenes--get-author-list "diogenes-perl-interface" (options &optional regex))
 (declare-function diogenes--get-works-list "diogenes-perl-interface" (options author))

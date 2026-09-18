@@ -41,6 +41,23 @@
 (declare-function diogenes--get-wordlist-matches "diogenes-perl-interface"
                   (options pattern))
 
+(defvar-local diogenes--select-forms-lang nil
+  "The language the forms in this buffer belong to.
+Buffer-local because two commands open such a buffer -- one from a lemma and
+one from the TLG word list -- and each has its own answer.")
+
+(defvar-local diogenes--select-forms-function nil
+  "What to do with the forms a reader picks in this buffer.
+A callback, set when the buffer is made.  Buffer-local for the same reason as
+`diogenes--select-forms-lang\=': `diogenes--select-forms\=' and
+`diogenes--select-from-tlg-wordlist\=' each set their own, and
+`diogenes--submit-forms\=' reads whichever this buffer was given.
+
+DEFINED HERE, AND THE MODE NO LONGER SAYS `make-local-variable\='.  It did,
+and nothing defined the variable at all -- so `setq\=' made it a global on
+first use, which works, and which the compiler complained about five times.
+`defvar-local\=' does both jobs at once.")
+
 (defun diogenes--change-form-entry (pos properties &optional form-string-face mark)
   "Change the form entry at POS in `diogenes--select-forms'.
 MARK should contain the marker string, FORM-STRING-FACE the face
@@ -244,8 +261,6 @@ The forms are passed as a list to the function saved in
 
 (define-derived-mode diogenes-select-forms-mode text-mode "Select Forms"
   "Mode for the forms selection buffer."
-  (make-local-variable 'diogenes--select-forms-lang)
-  (make-local-variable 'diogenes--select-forms-function)
   (setq buffer-read-only t))
 
 (defun diogenes--select-forms (query lang callback &optional header)
