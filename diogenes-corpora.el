@@ -157,10 +157,20 @@ If no type is given, check wheter there is any defined corpus."
     map)
   "Mode map for the Diogenes Edit Corpus.")
 
+(defvar-local diogenes--corpus-edit-callback nil
+  "What to do with the corpus this buffer is editing, once it is done.
+A continuation: the command that opened the buffer leaves it here, and
+`diogenes--corpus-edit-execute\=' calls it with the corpus the reader ended up
+with.
+
+DEFINED HERE, AND THE MODE NO LONGER SAYS `make-local-variable\='.  It did,
+and nothing defined the variable at all -- so `setq\=' made a global on first
+use, which works, and which the compiler reported as an assignment to a free
+variable.  `defvar-local\=' does both jobs at once.")
+
 (define-derived-mode diogenes-corpus-edit-mode text-mode
   "Diogenes edit corpus"
   "Mode for editing one freshly created Diogenes corpora."
-  (make-local-variable 'diogenes--corpus-edit-callback)
   (setq buffer-read-only t))
 
 (defun diogenes--other-corpora-visited-p ()
@@ -377,7 +387,7 @@ inside the region."
   (interactive)
   (let* ((corpus-region (diogenes--get-text-prop-boundaries
 			 (point) 'corpus-id))
-	 (corpus-id (or (get-text-property (point) 'corpus-id)
+	 (_corpus-id (or (get-text-property (point) 'corpus-id)
 			(error "No corpus under point!")))
 	 (corpus-name (get-text-property (point) 'corpus-name))
 	 (new-name (read-from-minibuffer (format "Rename %s to: "
@@ -497,8 +507,7 @@ inside the region."
 		  (cl-loop
 		   for new-name = (read-from-minibuffer
 				   (format "Rename %s to: "
-					   (or name)
-					   "anonymous corpus"))
+					   (or name "anonymous corpus")))
 		   unless (member new-name
 				  (diogenes--get-defined-corpus-names))
 		   return (progn (setq corpus
@@ -530,7 +539,11 @@ error."
   (interactive)
   (unless (eq (current-buffer) (get-buffer "*diogenes-edit-corpus*"))
     (error "Not in Diogenes Edit Corpus"))
-  (unless (boundp 'diogenes--corpus-edit-callback)
+  ;; THE VALUE AND NOT `boundp'.  This asked `boundp' when the variable was
+  ;; defined nowhere and `setq' made it a global on first use; now that it is
+  ;; a `defvar-local' above, `boundp' is always true and the check could never
+  ;; fire.  What the message describes is whether the callback is SET.
+  (unless diogenes--corpus-edit-callback
     (error "I do not know what to do, since the continuation function is not properly defined!"))
   (let ((function diogenes--corpus-edit-callback)
 	(corpus (diogenes--read-user-corpus (point-min))))
@@ -736,7 +749,7 @@ corpus or, when supplied, call CALLBACK on it. If NO-ASK is not nil, it should b
 		(when (diogenes--user-corpora-exist-p type)
 		  (cons "saved"  #'diogenes--select-user-corpus))
 		(when (string= type "tlg")
-		  (cons "complex" (lambda (junk)
+		  (cons "complex" (lambda (_junk)
 				    (diogenes--define-complex-tlg-corpus))))))
 	 (answers
 	  (list '("manual" ?m "select authors manually")
@@ -763,7 +776,7 @@ corpus or, when supplied, call CALLBACK on it. If NO-ASK is not nil, it should b
      :always-read t
      :reader
      (let ((previous-selection nil))
-       (lambda (prompt initial-input history)
+       (lambda (prompt _initial-input _history)
 	 (prin1-to-string
 	  (setq previous-selection
 		(diogenes--filter-in-minibuffer
@@ -786,10 +799,10 @@ corpus or, when supplied, call CALLBACK on it. If NO-ASK is not nil, it should b
   :class 'transient-option
   :argument "date:         "
   :format " %k %d %v"
-  :prompt "Select a genre: "
+  :prompt "Select a date range: "
   :always-read t
   :reader
-  (lambda (prompt initial-input history)
+  (lambda (_prompt initial-input history)
     (prin1-to-string
      (let* ((dates (plist-get (diogenes--get-tlg-categories) :date))
 	    (start (completing-read "Select a start date: "
