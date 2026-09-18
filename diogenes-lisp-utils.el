@@ -146,7 +146,7 @@ of a kind never notices there was a choice.
 Where point is already in a window of that role, the NEXT one is chosen; where
 it is not, the first.  A reader pressing the key means `take me there\=', and
 answering `you are there\=' would be true and useless."
-  (let ((windows (diogenes--windows-of-role role)))
+  (let ((windows (classicist--windows-of-role role)))
     (cond
      ((null windows) (message "No %s window open" what))
      (t

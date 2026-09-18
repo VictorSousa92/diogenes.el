@@ -45,7 +45,7 @@ It can then be edited, saved to file and called directly for better testing."
 				   (diogenes--include-server)
 				   (diogenes--include-cpan))
 		    :coding  'utf-8)
-      (diogenes--display-buffer out-buffer))))
+      (classicist-display-buffer out-buffer))))
 
 
 
@@ -154,7 +154,7 @@ It is associated with a buffer with the same name, in asterisks."
     ;; `browser', which keeps them out of the lookup frame.  The startup-page
     ;; guard that used to be spelled out here is now the helper's, along with
     ;; every other rule about where a Diogenes buffer goes.
-    (diogenes--display-buffer buffer :kind 'browser)
+    (classicist-display-buffer buffer :kind 'browser)
     ;; BUFFER, returned, so that a caller which has something to do to it --
     ;; put it in its major mode, set its buffer-locals -- can say which
     ;; buffer it means.  They used to rely on `pop-to-buffer' having left it
@@ -190,7 +190,7 @@ Mode should be a maior mode derived from comint-mode."
 			   "-e" script
 			   (diogenes--include-server)
 			   (diogenes--include-cpan))
-    (diogenes--display-buffer buffer :kind 'browser)
+    (classicist-display-buffer buffer :kind 'browser)
     (funcall mode)))
 
 

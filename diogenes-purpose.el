@@ -52,7 +52,7 @@
 (defvar purpose-user-mode-purposes)
 (defvar purpose-user-name-purposes)
 
-;; `diogenes--home-buffer-p' and the list behind it: shared with the core,
+;; `classicist--home-buffer-p' and the list behind it: shared with the core,
 ;; so that Doom's dashboard and Emacs's splash are recognised here too.
 (require 'diogenes-lisp-utils)
 
@@ -144,7 +144,7 @@ dashboard and Emacs's own splash as well as Spacemacs's -- and
 `diogenes-purpose-home-buffer-names' adds to it, for a home buffer only
 this module needs to know about."
   (and name
-       (or (diogenes--home-buffer-p name)
+       (or (classicist--home-buffer-p name)
            (member name diogenes-purpose-home-buffer-names))))
 
 (define-obsolete-function-alias 'diogenes-purpose--overriding-action
@@ -164,8 +164,8 @@ this module needs to know about."
 ;; not `display-buffer-alist', not the thresholds, not the purposes.  None of
 ;; them was reached.
 ;;
-;; The carve-out it existed for is `diogenes--sole-home-window-p' now, applied
-;; by `diogenes--display-buffer' to every Diogenes buffer whether purpose is
+;; The carve-out it existed for is `classicist--sole-home-window-p' now, applied
+;; by `classicist-display-buffer' to every Diogenes buffer whether purpose is
 ;; loaded or not.  So the wrapper had nothing left to do but the harm.
 ;;
 ;; What remains of this module is telling purpose what our buffers ARE.  That

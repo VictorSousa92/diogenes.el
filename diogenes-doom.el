@@ -52,7 +52,7 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'diogenes-lisp-utils)          ; diogenes--sole-home-window-p
+(require 'diogenes-lisp-utils)          ; classicist--sole-home-window-p
 
 (defgroup diogenes-doom nil
   "Showing Diogenes buffers in frames of their own."
@@ -82,9 +82,9 @@ Kept so that `diogenes-doom-uninstall' can remove exactly those.")
 
 ;;; Finding the frame a kind of buffer already lives in
 
-;; This was the module's own, and is now the core's: `diogenes--buffer-role',
-;; `diogenes--window-of-role' and `diogenes-display-in-role-frame' live in
-;; `diogenes-lisp-utils.el', and `diogenes--display-buffer' applies them
+;; This was the module's own, and is now the core's: `classicist--buffer-role',
+;; `classicist--window-of-role' and `diogenes-display-in-role-frame' live in
+;; `diogenes-lisp-utils.el', and `classicist-display-buffer' applies them
 ;; whenever `pop-up-frames' is set -- under Doom, under Spacemacs, under
 ;; plain Emacs alike.  Which is the point: the gathering was never
 ;; Doom-specific, and having it here meant Spacemacs did something else with
@@ -107,15 +107,15 @@ Kept so that `diogenes-doom-uninstall' can remove exactly those.")
   'diogenes-display-in-role-frame "modular-customizable")
 
 (define-obsolete-function-alias 'diogenes-doom-gathering-p
-  'diogenes--gathering-p "modular-customizable")
+  'classicist--gathering-p "modular-customizable")
 
 (defun diogenes-doom--role (buffer)
-  "Which frame BUFFER belongs in.  See `diogenes--buffer-role'."
-  (diogenes--buffer-role buffer))
+  "Which frame BUFFER belongs in.  See `classicist--buffer-role'."
+  (classicist--buffer-role buffer))
 
 (defun diogenes-doom--window-of-role (role)
-  "A window showing a buffer of role ROLE.  See `diogenes--window-of-role'."
-  (diogenes--window-of-role role))
+  "A window showing a buffer of role ROLE.  See `classicist--window-of-role'."
+  (classicist--window-of-role role))
 
 ;;; Workspaces
 
@@ -123,7 +123,7 @@ Kept so that `diogenes-doom-uninstall' can remove exactly those.")
 ;; Doom's -- it is a package, and perspective.el poses the same problem with
 ;; the same function name -- so a buffer being invisible to `previous-buffer'
 ;; was never a Doom fault, only a Doom-shaped one.  `diogenes--claim-buffer'
-;; does it for anyone, from `diogenes--display-buffer', which is one place
+;; does it for anyone, from `classicist-display-buffer', which is one place
 ;; where this module used six mode hooks and so missed any buffer whose mode
 ;; was not among them.
 
