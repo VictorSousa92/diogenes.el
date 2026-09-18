@@ -28,18 +28,38 @@ check: compile declare
 ## the required file AS SOURCE -- so one file silences another's warnings.  It
 ## happened three times during the extractions, once hiding the very bug two
 ## upstream patches then fixed.
+## AN ERROR IS NOT ZERO WARNINGS, and this counted it as such.  The recipe
+## used to pipe the compile straight into `grep -c Warning': a file that
+## fails to compile prints an error and no warnings, so the count came out
+## zero, which is less than whatever the baseline said -- and the ratchet
+## announced
+##
+##     better diogenes-perseus.el: 40 -> 0   (make baseline)
+##
+## for a file that would not compile.  Three at once, and it read as the best
+## result of the evening.  Worse than blind: inverted, and inviting `make
+## baseline' to write the zero down as the standard.
+##
+## So the output is taken ONCE, checked for `error' before anything is
+## counted, and only then compared.  Taking it once also halves the work: the
+## old recipe compiled every worse file a second time to print its warnings.
 compile:
 	@rm -f *.elc
 	@fail=0; \
 	for f in $(ELS); do \
-	  n=$$($(EMACS) -Q --batch -L . -f batch-byte-compile $$f 2>&1 \
-	       | grep -c Warning); \
+	  out=$$($(EMACS) -Q --batch -L . -f batch-byte-compile $$f 2>&1); \
+	  if echo "$$out" | grep -qi "error"; then \
+	    echo "ERROR  $$f -- does not compile"; \
+	    echo "$$out" | sed 's/^/         /'; \
+	    fail=1; \
+	    continue; \
+	  fi; \
+	  n=$$(echo "$$out" | grep -c Warning); \
 	  was=$$(awk -v f="$$f" '$$2 == f { print $$1 }' $(BASELINE)); \
 	  if [ -z "$$was" ]; then was=0; fi; \
 	  if [ "$$n" -gt "$$was" ]; then \
 	    echo "WORSE  $$f: $$was -> $$n"; \
-	    $(EMACS) -Q --batch -L . -f batch-byte-compile $$f 2>&1 \
-	      | grep Warning | sed 's/^/         /'; \
+	    echo "$$out" | grep Warning | sed 's/^/         /'; \
 	    fail=1; \
 	  elif [ "$$n" -lt "$$was" ]; then \
 	    echo "better $$f: $$was -> $$n   (make baseline)"; \
