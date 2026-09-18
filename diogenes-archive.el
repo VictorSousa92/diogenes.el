@@ -25,6 +25,14 @@
 
 ;;; Code:
 
+;; REQUIRED HERE, and not before, because this file had no `lexical-binding'
+;; cookie until now.  Without lexical binding the compiler let `cl-loop' pass
+;; unexamined; with it, and without cl-lib, `cl-loop' reads as a function call
+;; and every one of its keywords -- `for', `while', `finally' -- as a free
+;; variable.
+(require 'cl-lib)
+(require 'seq)
+
 (defun diogenes--linear-search (dict-file comp-fn key-fn word &optional start stop)
   "A linear search for finding entries in the lexicographical files.
 Returns a list of all entries where comp-fn returned nil."

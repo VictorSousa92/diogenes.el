@@ -41,6 +41,10 @@
 (require 'diogenes-lisp-utils)
 (require 'diogenes-utils)
 
+;; `diogenes--path' is in `diogenes.el', which requires this file: the call
+;; happens at run time, so the cycle is only the compiler's problem.
+(declare-function diogenes--path "diogenes" ())
+
 (defun diogenes--perseus-path ()
   (directory-file-name (file-name-concat (diogenes--path)
 					 "dependencies"
