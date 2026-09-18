@@ -1071,7 +1071,7 @@ declines through `classicist--lookup-assert-lang'."
    :bind t
    :help "Show the DGE's entry for \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-dge--install-xml-handlers)
   (diogenes-dge--register))
 

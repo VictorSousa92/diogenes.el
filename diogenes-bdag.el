@@ -297,7 +297,7 @@ say.  See `diogenes--loading-bundle'.")
    :bind t
    :help "Open BDAG (Bauer) at \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-bdag--register))
 
 (provide 'diogenes-bdag)

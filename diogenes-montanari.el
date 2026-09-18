@@ -529,7 +529,7 @@ say.  See `diogenes--loading-bundle'.")
    :bind t
    :help "Open Montanari at \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-montanari--register))
 
 (provide 'diogenes-montanari)

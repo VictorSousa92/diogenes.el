@@ -561,7 +561,7 @@ have."
    :bind t
    :help "Show Georges' entry for \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-georges--install-xml-handlers)
   (diogenes-georges--register))
 

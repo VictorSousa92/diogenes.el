@@ -1120,7 +1120,7 @@ core."
     ;; bound in some of our buffers and not others is a key a reader cannot
     ;; rely on -- and the cheatsheet, which lists as `Everywhere' what is bound
     ;; in every section, could not lift it while the browser lacked it.
-    (with-eval-after-load 'diogenes-perseus
+    (with-eval-after-load 'classicist-lookup
       (dolist (map '(classicist-lookup-mode-map diogenes-analysis-mode-map
                      diogenes-select-forms-mode-map))
         (when (boundp map)
@@ -1418,7 +1418,7 @@ say.  See `diogenes--loading-bundle'.")
    :bind t
    :help "Open the OLD at \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-old--register))
 
 (provide 'diogenes-old)

@@ -795,7 +795,7 @@ it needs no language dispatcher of the kind `P' and `l' have."
    :bind t
    :help "Show Bailly's entry for \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-bailly--install-xml-handlers)
   (diogenes-bailly--register))
 

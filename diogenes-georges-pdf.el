@@ -376,7 +376,7 @@ dispatching, so nothing is bound here."
    :paths '(diogenes-georges-directory)
    :help "Open the printed Georges at \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-georges-pdf--register))
 
 (provide 'diogenes-georges-pdf)

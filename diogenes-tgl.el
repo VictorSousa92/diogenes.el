@@ -4279,7 +4279,7 @@ say.  See `diogenes--loading-bundle'.")
    :paths '(diogenes-tgl-directory)
    :help "Open Estienne's Thesaurus Graecae Linguae at \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-tgl--register))
 
 (provide 'diogenes-tgl)

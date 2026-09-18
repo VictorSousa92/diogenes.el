@@ -678,7 +678,7 @@ the LSJ and Lewis & Short to choose between, and `P\=' straight to Pape."
    :buffer-p #'classicist--lookup-own-dictionary-p
    :help "Show the LSJ entry for \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-pape--install-xml-handlers)
   (diogenes-pape--install-keys)
   (diogenes-pape--register))

@@ -320,7 +320,7 @@ say.  See `diogenes--loading-bundle'.")
    :bind t
    :help "Open the Cambridge Greek Lexicon at \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-cambridge--register))
 
 (provide 'diogenes-cambridge)

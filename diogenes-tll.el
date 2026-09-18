@@ -350,7 +350,7 @@ say.  See `diogenes--loading-bundle'.")
    :paths '(diogenes-tll-pdf-directory)
    :help "Open the TLL at \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-tll--register))
 
 (provide 'diogenes-tll)

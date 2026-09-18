@@ -365,7 +365,7 @@ worth naming."
    :paths '(diogenes-gaffiot-pdf-file)
    :help "Open the printed Gaffiot at \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-gaffiot-pdf--register))
 
 (provide 'diogenes-gaffiot-pdf)

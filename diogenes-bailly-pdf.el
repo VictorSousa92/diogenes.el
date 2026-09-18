@@ -1068,7 +1068,7 @@ bind the key itself."
    :paths '(diogenes-bailly-pdf-file)
    :help "Open the printed Bailly at \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-bailly-pdf--register))
 
 (provide 'diogenes-bailly-pdf)

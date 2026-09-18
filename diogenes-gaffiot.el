@@ -622,7 +622,7 @@ the dictionary Diogenes searches by default."
    :bind t
    :help "Show Gaffiot's entry for \"%s\""))
 
-(with-eval-after-load 'diogenes-perseus
+(with-eval-after-load 'classicist-lookup
   (diogenes-gaffiot--install-xml-handlers)
   (diogenes-gaffiot--register))
 
