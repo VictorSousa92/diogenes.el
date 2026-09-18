@@ -466,7 +466,7 @@ inside the region."
 				 (push (cons id corpus) corpora))
 		   unless (or (y-or-n-p
 			       "Name already in use! Choose another name?")
-			      (not (y-or-n-q
+			      (not (y-or-n-p
 				    "Are you sure you want to discard it?")))
 		   return nil))
 		 ("discard")
