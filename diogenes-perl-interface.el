@@ -58,6 +58,12 @@
 ;; up rather than three, and a declaration says so out loud.
 (declare-function diogenes--path "diogenes" ())
 
+;; DEFINED IN THIS FILE, and the compiler still does not know it: it sits
+;; inside a top-level `let' that closes over its cache, and a `defun' nested in
+;; a `let' is not a definition the compiler counts.
+(declare-function diogenes--get-info "diogenes-perl-interface"
+                  (script &optional options1 options2))
+
 (defun diogenes--include-server ()
   (concat "-I" (file-name-concat (diogenes--path)
 				 "server")))
