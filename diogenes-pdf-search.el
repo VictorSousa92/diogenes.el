@@ -73,7 +73,7 @@
 
 ;;; Code:
 (require 'cl-lib)
-(require 'diogenes-lisp-utils)          ; diogenes--display-buffer
+(require 'diogenes-lisp-utils)          ; classicist-display-buffer
 (require 'seq)
 (declare-function evil-make-overriding-map "evil-core" (keymap &optional state copy))
 (declare-function evil-normalize-keymaps "evil-core" (&optional state))

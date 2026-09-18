@@ -630,7 +630,7 @@ it may carry an `entry-key' (the canonical lemma of the entry)."
 All overlays added by rng-validate-mode are converted to text
 properties."
   (with-temp-buffer
-    (diogenes--display-buffer (current-buffer))
+    (classicist-display-buffer (current-buffer))
     (insert str)
     (nxml-mode)
     (rng-validate-mode)
@@ -665,7 +665,7 @@ properties."
 	 (xml-buffer (diogenes--get-fresh-buffer "xml"))
 	 (map (make-sparse-keymap)))
     (keymap-set map "C-c C-c" #'diogenes--xml-submit)
-    (diogenes--display-buffer xml-buffer)
+    (classicist-display-buffer xml-buffer)
     (nxml-mode)
     (insert (propertize xml
 			'lookup-buffer lookup-buffer
@@ -695,7 +695,7 @@ properties."
 	(inhibit-read-only t))
     (cond (parsed (kill-buffer xml-buffer)
 		  ;; Back to the entry being edited, which is where we were.
-		  (diogenes--display-buffer lookup-buffer
+		  (classicist-display-buffer lookup-buffer
 					    :kind 'lookup :same-window t)
 		  (delete-region prop-start prop-end)
 		  (diogenes--lookup-insert-and-format parsed))
@@ -824,10 +824,10 @@ Returns the lookup buffer."
       ;; this carve-out for the Spacemacs home buffer alone; it belongs here,
       ;; where it holds for Doom's dashboard and Emacs's own splash too, and
       ;; whether or not either display module is loaded.  See
-      ;; `diogenes--sole-home-window-p'.
+      ;; `classicist--sole-home-window-p'.
       (let ((diogenes--lookup-same-window
              (or diogenes--lookup-same-window
-                 (diogenes--sole-home-window-p))))
+                 (classicist--sole-home-window-p))))
         ;; `purpose-mode', not `(featurep 'diogenes-purpose)': our own module
         ;; is required from `diogenes.el' and so always present, where the
         ;; question is whether window-purpose is running and will classify
@@ -837,12 +837,12 @@ Returns the lookup buffer."
             (progn
               (with-current-buffer lookup-buffer
                 (diogenes-lookup-mode))
-              (diogenes--display-buffer lookup-buffer
+              (classicist-display-buffer lookup-buffer
                                         :kind 'lookup
                                         :same-window
                                         diogenes--lookup-same-window))
           ;; --- otherwise: the original order, unchanged ---
-          (diogenes--display-buffer lookup-buffer
+          (classicist-display-buffer lookup-buffer
                                     :kind 'lookup
                                     :same-window diogenes--lookup-same-window)
           (diogenes-lookup-mode)))
@@ -1585,7 +1585,7 @@ of a PDF and answers `%PDF\='.
 `Welcome\=' or `%PDF\=' as its default -- and a reader who pressed RET at the
 prompt got a lookup of that.  A default is a guess at what the reader means,
 and in those buffers there is nothing to guess from."
-  (unless (or (diogenes--home-buffer-p (buffer-name))
+  (unless (or (classicist--home-buffer-p (buffer-name))
               (derived-mode-p 'pdf-view-mode 'doc-view-mode)
               (and (fboundp 'reader-mode) (derived-mode-p 'reader-mode)))
     (or
@@ -3896,7 +3896,7 @@ headword, exactly as the application does."
   ;; `morphology' and not `lookup': an analysis is not an entry, and displaying
   ;; it as one made it replace whatever entry the reader was consulting -- which
   ;; is the entry they wanted the analysis alongside.
-  (diogenes--display-buffer (get-buffer-create "*Diogenes Analysis*")
+  (classicist-display-buffer (get-buffer-create "*Diogenes Analysis*")
 			    :kind 'morphology)
   (goto-char (point-max))
   (unless (eq major-mode #'diogenes-analysis-mode)
@@ -4070,7 +4070,7 @@ if nil, query interactively for their values"
   "Show all attested forms of LEMMA in LANG."
   (let ((results (diogenes--get-all-forms lemma lang)))
     (unless results (error "No result for %s in %s" lemma lang))
-    (diogenes--display-buffer (get-buffer-create "*Diogenes Forms*")
+    (classicist-display-buffer (get-buffer-create "*Diogenes Forms*")
 			      :kind 'morphology)
     (diogenes-analysis-mode)
     (goto-char (point-max))
@@ -4091,7 +4091,7 @@ if nil, query interactively for their values"
       (diogenes--parse-and-show-choose-filter filter ignore-case no-diacritics)
    (let ((results (diogenes--query-all-lemmata query lang filter ignore-case no-diacritics)))
      (unless results (error "No results for lemma %s!" query))
-     (diogenes--display-buffer (get-buffer-create "*Diogenes Forms*")
+     (classicist-display-buffer (get-buffer-create "*Diogenes Forms*")
 			      :kind 'morphology)
      (diogenes-analysis-mode)
      (goto-char (point-max))

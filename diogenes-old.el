@@ -1075,7 +1075,7 @@ always, for a reader who wants the plain behaviour."
      ;; point is already in a window of that role.  Tried FIRST, or the
      ;; provenance below would answer instead and pressing the key twice in a
      ;; scan would go nowhere.
-     ((and (eq (diogenes--buffer-role (current-buffer)) 'dictionary)
+     ((and (eq (classicist--buffer-role (current-buffer)) 'dictionary)
            (fboundp 'diogenes-focus-dictionary))
       (diogenes-focus-dictionary))
      ;; A page opened FROM this entry, which is the best answer where there is
@@ -1227,8 +1227,8 @@ the Reader, since that binding is about where a frame may go, not about what
 the reader asked for."
   (or diogenes-old-display-in-other-window
       pop-up-frames
-      (and (eq (diogenes--behaviour-for 'dictionary) 'frames)
-           (diogenes--gathering-p))))
+      (and (eq (classicist--behaviour-for 'dictionary) 'frames)
+           (classicist--gathering-p))))
 
 (defun diogenes-old--display-page-buffer (buffer action other-window)
   "Display BUFFER and return it.
@@ -1238,7 +1238,7 @@ place of the entry the lookup was made from.
 
 A frame showing only a startup page is the exception either way: there is a
 window there and nothing in it worth keeping, so the page takes it rather
-than opening a frame beside it.  See `diogenes--sole-home-window-p'."
+than opening a frame beside it.  See `classicist--sole-home-window-p'."
   (if other-window
       ;; Through the one helper, so that a page is placed by the same rules
       ;; as everything else: `diogenes-window-behaviour', the frame
@@ -1248,7 +1248,7 @@ than opening a frame beside it.  See `diogenes--sole-home-window-p'."
       ;; none, and it must not outrank `frames' or an action they have set.
       ;; Passed as ACTION it did outrank them, so every dictionary opened a
       ;; frame of its own however the gathering was configured.
-      (diogenes--display-buffer buffer :kind 'dictionary :fallback action)
+      (classicist-display-buffer buffer :kind 'dictionary :fallback action)
     ;; The page replaces the entry it was consulted from, which wants the
     ;; bespoke function: it undedicates the window, remembers what it
     ;; displaced, and puts `q' on going back to it.
