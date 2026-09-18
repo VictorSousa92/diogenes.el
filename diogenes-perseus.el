@@ -14,6 +14,7 @@
 (require 'seq)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-utils)
+(require 'diogenes-lemmata)
 (require 'diogenes-perl-interface)
 
 (declare-function diogenes-perseus-action nil)
@@ -21,13 +22,6 @@
 ;;;; --------------------------------------------------------------------
 ;;;; UTILITIES
 ;;;; --------------------------------------------------------------------
-(defsubst diogenes--perseus-ensure-utf8 (str lang)
-  (if (string= lang "greek")
-      (diogenes--perseus-beta-to-utf8 str)
-    (diogenes--replace-regexes-in-string str
-      ("_" "\N{COMBINING MACRON}")
-      ("\\^" "\N{COMBINING BREVE}"))))
-
 (defconst diogenes-perseus-action-map
   (let ((map (make-sparse-keymap)))
     (keymap-set map "RET" #'diogenes-perseus-action)
@@ -186,33 +180,6 @@ the nearest entry and its offsets are returned."
 		 do (setf begin newline)))
     (message "Parsed.")))
 
-(defun diogenes--lemmata-file-to-hashtable (file)
-  "Loads a whole lemmata file into memory."
-  (message "Parsing %s, this may take a while..." file)
-  (with-temp-buffer
-    (insert-file-contents-literally file)
-    (prog1
-	(cl-loop with lemmata = (make-hash-table :test 'equal :size 950000)
-		 ;; with numbers = (make-hash-table :test 'equal :size 950000)
-		 with begin = 1
-		 for tab-1 = (re-search-forward "\t" nil t)
-		 for tab-2 = (re-search-forward "\t" nil t)
-		 ;; unless tab-2 return (cons lemmata numbers)
-		 unless tab-2 return lemmata
-		 for full-lemma = (buffer-substring begin (1- tab-1))
-		 for lemma = (if (string-match "[0-9]$" full-lemma)
-				 (substring full-lemma 0 (match-beginning 0))
-			       full-lemma)
-		 for nr  = (string-to-number (buffer-substring tab-1 (1- tab-2)))
-		 for newline = (or (re-search-forward "\n" nil t)
-				   (point-max))
-		 for entries = (split-string (buffer-substring tab-2 (1- newline))
-					     "\t")
-		 for record = (nconc (list full-lemma nr) entries)
-		 do (push record (gethash lemma lemmata))
-		 ;; do (setf (gethash nr numbers)  record)
-		 do (setf begin newline))
-      (message "Parsed."))))
 
 ;;; Get file indices
 (defun diogenes--read-analyses-index-script (file)
@@ -624,17 +591,8 @@ file only at the first call."
 the file only at the first call."
     (or (gethash (cons lang 'index) cache)
 	(setf (gethash (cons lang 'index) cache)
-	      (diogenes--read-analyses-index lang))))
-  
-  (defun diogenes--get-all-lemmata (lang)
-    "Returns the entirety of a lemmata file as a hash table.
- This function is cached, so that it actually reads and parses
-the file only at the first call."
-    (or (gethash (cons lang 'lemmata) cache)
-	(setf (gethash (cons lang 'lemmata) cache)
-	      (diogenes--lemmata-file-to-hashtable
-	       (file-name-concat (diogenes--perseus-path)
-				 (concat lang "-lemmata.txt")))))))
+	      (diogenes--read-analyses-index lang)))))
+
 
 
 
@@ -682,30 +640,6 @@ lemma, the lemma-number, translation and analysis."
 			 translation
 			 analysis)))
 
-(defun diogenes--process-lemma (lemma lang)
-  "Process a lemma entry as returned from `diogenes--get-all-lemmata'.
-Returns a list with the form (lemma raw-lemma lemma-nr &rest analyses)"
-  (when lemma
-    (nconc (list (diogenes--perseus-ensure-utf8 (car lemma)
-						lang)
-		 (car lemma)
-		 (cadr lemma))
-	   (mapcar (lambda (e)
-		     (seq-let (form analysis)
-			 (diogenes--split-once "\\s-" e)
-		       (cons (diogenes--perseus-ensure-utf8 form lang)
-			     (with-temp-buffer
-			       (insert analysis)
-			       (goto-char (point-min))
-			       (cl-loop with substrings
-					for pos = (scan-sexps (point) 1)
-					if pos
-					collect (buffer-substring (1+ (point))
-								  (1- pos))
-					into substrings
-					else return substrings
-					do (goto-char (1+ pos)))))))
-		   (cddr lemma)))))
 
 ;;; Parsing functions
 (defun diogenes--parse-word (word lang)
@@ -782,14 +716,6 @@ Unless specified, filter defaults to string-equal."
        (mapcar (lambda (x) (cons (car x)
 			    (diogenes--process-parse-result (cdr x) lang)))
 	       entries))))
-
-(defun diogenes--get-all-forms (lemma lang)
-  "Get all attested forms of LEMMA in LANG.
-As there vould be several entries for the same lemma, this
-function returns a list of lists."
-  (mapcar (lambda (l) (diogenes--process-lemma l lang))
-	  (gethash lemma (or (diogenes--get-all-lemmata lang)
-			     (error "No lemmata retrieved for %s" lang)))))
 
 (defun diogenes--query-all-lemmata (query lang &optional filter ignore-case no-diacritics)
   "Search all lemmata in the lemmata file.

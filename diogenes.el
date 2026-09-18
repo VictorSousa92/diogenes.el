@@ -40,6 +40,7 @@
 
 (require 'diogenes-lisp-utils)
 (require 'diogenes-utils)
+(require 'diogenes-lemmata)
 (require 'diogenes-perl-interface)
 (require 'diogenes-user-interface)
 (require 'diogenes-browser)
@@ -89,11 +90,6 @@ Please set it to the root directory of your Diogenes installation!")))
   (concat "-I" (file-name-concat (diogenes--path)
 				 "dependencies"
 				 "CPAN")))
-
-(defun diogenes--perseus-path ()
-  (directory-file-name (file-name-concat (diogenes--path)
-					 "dependencies"
-					 "data")))
 
 (defun diogenes--dict-file (lang)
   (pcase lang

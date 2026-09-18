@@ -16,7 +16,7 @@
 (require 'transient)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-user-interface)
-(require 'diogenes-perseus)
+(require 'diogenes-lemmata)
 
 (require 'diogenes-forms)
 (require 'diogenes-corpora)

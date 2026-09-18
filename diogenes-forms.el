@@ -15,7 +15,7 @@
 (require 'replace)
 (require 'transient)
 (require 'diogenes-lisp-utils)
-(require 'diogenes-perseus)
+(require 'diogenes-lemmata)
 
 (defun diogenes--change-form-entry (pos properties &optional form-string-face mark)
   "Change the form entry at POS in `diogenes--select-forms'.
