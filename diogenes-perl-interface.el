@@ -432,6 +432,23 @@ lists of the citations and whose values are the lines.")
    "    ($beg, undef) = $b->browse_backward( $beg, $end, $author, $work );"
    "    parse_capture;"
    "  }"
+   ;; `F' and `B' TURN the page where `n' and `p' add to it, and so keep both
+   ;; bounds where those keep one.
+   ;;
+   ;; Adding, `$beg' must stay: the first line of the work is still on the
+   ;; screen, and moving `$beg' to the start of the block just added makes `p'
+   ;; fetch that block again.  Turning, `$beg' must follow: the first line is
+   ;; gone from the buffer, and leaving `$beg' behind makes Perl go on
+   ;; believing the reader is at the beginning -- so `p' after turning forward
+   ;; from line 1 answers that there is nothing before.
+   "  elsif (/^F$/) {"
+   "    ($beg, $end) = $b->browse_forward( $beg, $end, $author, $work );"
+   "    parse_capture;"
+   "  }"
+   "  elsif (/^B$/)  {"
+   "    ($beg, $end) = $b->browse_backward( $beg, $end, $author, $work );"
+   "    parse_capture;"
+   "  }"
    "}"))
 
 
