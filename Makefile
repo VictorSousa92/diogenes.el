@@ -3,7 +3,7 @@ PYTHON  ?= python3
 ELS      = $(wildcard *.el)
 BASELINE = per-file-baseline.txt
 
-.PHONY: all check compile declare baseline balance forms clean help
+.PHONY: all check compile declare baseline balance duplicates forms clean help
 
 all: check
 
@@ -14,8 +14,21 @@ help:
 	@echo "make balance    parens, per file"
 	@echo "make baseline   rewrite $(BASELINE) -- read the diff before"
 	@echo "                committing it, since it is the ratchet"
-
-check: compile declare
+## ANYTHING DEFINED IN MORE THAN ONE FILE, which nothing else here sees.  The
+## forms checker reads one file at a time, the compiler takes whichever
+## loaded last, and check-declare reads declarations, not definitions.
+##
+## classicist--lookup-headword was defvar-local in one file and a plain
+## defvar in another, both docstrings claiming buffer-local and only one
+## making it so -- which won depended on the load order.  Nine other files
+## declared it by hand believing there was one definition.
+##
+## A duplicate is visible while both copies sit in one file, where the forms
+## checker calls it "defined twice", and invisible the moment a cut separates
+## them.  So this runs after every cut, not once.
+duplicates:
+	@$(PYTHON) tools/check-elisp-duplicates.py
+check: compile declare duplicates
 
 ## THE RATCHET, AND NOT A ZERO.  tei-browser fails on a single warning
 ## because that file is at zero and can stay there.  This package is at 154
