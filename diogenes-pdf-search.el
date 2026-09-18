@@ -88,11 +88,17 @@
 (declare-function diogenes-bdag--page-for-word       "diogenes-bdag"      (word &optional file))
 (declare-function diogenes-bailly-pdf--page-for-word     "diogenes-bailly-pdf"    (word &optional file))
 (declare-function diogenes-gaffiot-pdf--page-for-word "diogenes-gaffiot-pdf" (word &optional file))
-(declare-function diogenes-georges--locate            "diogenes-georges"   (word))
+(declare-function diogenes-georges-pdf--locate            "diogenes-georges-pdf"   (word))
 (declare-function diogenes-tll--file-for-word        "diogenes-tll"       (word))
 (declare-function diogenes-tll--page-for-word        "diogenes-tll"       (word file))
 (declare-function diogenes-passow--locate            "diogenes-passow"    (word))
 (declare-function diogenes-passow--pdf-page          "diogenes-passow"    (pg))
+;; A VARIABLE, so a defvar and not a declare-function.  It is a defcustom in
+;; `diogenes-tgl.el', read when a TGL page is turned into a PDF page, and this
+;; file does not require that one -- the modules are loaded as a reader
+;; installs them.
+(defvar diogenes-tgl-page-offset)
+
 (declare-function diogenes-tgl--locate               "diogenes-tgl"       (word))
 (declare-function diogenes-tgl--volume-pdf           "diogenes-tgl"       (tomus))
 (declare-function diogenes-tgl--show                 "diogenes-tgl"       (tomus page &optional word))
@@ -277,7 +283,7 @@ logic, so results agree with that dictionary's link/opener command."
     ('georges
      ;; Two volumes, and the word chooses which; open the sibling when it is
      ;; not the one on screen.
-     (let ((hit (diogenes-georges--locate word)))
+     (let ((hit (diogenes-georges-pdf--locate word)))
        (unless hit
          (user-error "Could not locate \"%s\" in Georges" word))
        (let ((other (nth 0 hit))
