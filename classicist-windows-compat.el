@@ -160,7 +160,12 @@ probed."
                        (diogenes--browse-interactively-script
                         '(:type "tlg") '("0086" "010")))))
          (and (stringp script)
-              (string-match-p "/\\^F\\$/" script)))))
+              ;; `and ... t' because `string-match-p' answers with the
+              ;; position of the match and a predicate should answer `t'.
+              ;; Truthy either way, so this was right and read wrong: the
+              ;; probe reported `page turn: 1820'.
+              (string-match-p "/\\^F\\$/" script)
+              t))))
 
 (provide 'classicist-windows-compat)
 

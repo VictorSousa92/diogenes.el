@@ -49,6 +49,60 @@
 (require 'seq)
 (require 'subr-x)
 
+;; `classicist--role-modes' was a defconst, and is a defcustom under its
+;; public name.  Aliased because it was reachable, and a table of modes is
+;; exactly the thing somebody will have added to by hand.
+(define-obsolete-variable-alias 'classicist--role-modes
+                                'classicist-role-modes "0.1")
+
+(defcustom classicist-role-modes
+  '((diogenes-lookup-mode . lookup)
+    ;; `morphology', not `lookup'.  The name regexps got this right and this
+    ;; table did not, so a buffer classified by NAME went to the analysis frame
+    ;; and the same buffer classified by MODE went to the entry's -- and which
+    ;; happened depended on whether the mode was set before it was displayed.
+    (diogenes-analysis-mode . morphology)
+    (diogenes-select-forms-mode . morphology)
+    (diogenes-browser-mode . browser)
+    (diogenes-search-mode . search)
+    (pdf-view-mode . dictionary)
+    (doc-view-mode . dictionary)
+    (reader-mode . dictionary))
+  "Major modes and the role each belongs to.
+Consulted after `classicist-role-regexps\=', for a buffer already in its mode
+-- which a document buffer is, `find-file\=' having set it before display.
+
+A DEFCUSTOM, and it was a defconst: the roles are not Diogenes\=' alone.  A
+module adds its own modes the way it already adds its own names to
+`classicist-role-regexps\=', and gives the role somewhere to be placed with
+`classicist-display-actions\=' or `classicist-window-behaviour\=':
+
+    (add-to-list \='classicist-role-modes
+                 \='(diorisis-results-mode . diorisis-results))
+    (add-to-list \='classicist-window-behaviour
+                 \='(diorisis-results . split))
+
+A role this does not mention, and no regexp matches, is nil -- and a buffer
+of no role is placed by whatever is installed, as before."
+  :type '(alist :key-type symbol :value-type symbol)
+  :group 'diogenes)
+
+(defcustom classicist-display-actions nil
+  "Roles and the `display-buffer\=' action each takes.
+An alist, and the place a role added by a module says where it goes:
+
+    (add-to-list \='classicist-display-actions
+                 \='(diorisis-results . ((display-buffer-below-selected)
+                                       (window-height . 12))))
+
+Consulted BEFORE `classicist-lookup-display-action\=' and its three fellows,
+which stay and still win where they are set -- they were four options for
+four roles, which is no way to hold a set a module may add to, and no reason
+to break a setting either."
+  :type '(alist :key-type symbol :value-type sexp)
+  :group 'diogenes)
+
+
 ;;; The options
 
 ;; BEFORE THE FUNCTIONS THAT READ THEM, which source order did not
@@ -403,28 +457,13 @@ using."
   :group 'diogenes)
 
 
-(defconst classicist--role-modes
-  '((diogenes-lookup-mode . lookup)
-    ;; `morphology', not `lookup'.  The name regexps got this right and this
-    ;; table did not, so a buffer classified by NAME went to the analysis frame
-    ;; and the same buffer classified by MODE went to the entry's -- and which
-    ;; happened depended on whether the mode was set before it was displayed.
-    (diogenes-analysis-mode . morphology)
-    (diogenes-select-forms-mode . morphology)
-    (diogenes-browser-mode . browser)
-    (diogenes-search-mode . search)
-    (pdf-view-mode . dictionary)
-    (doc-view-mode . dictionary)
-    (reader-mode . dictionary))
-  "Major modes and the kind of frame each belongs in.
-Consulted after `classicist-role-regexps\=', for a buffer already in its mode
--- which a document buffer is, `find-file\=' having set it before display.")
+
 
 
 (defun classicist--buffer-role (buffer)
   "Which frame BUFFER belongs in, or nil.
-One of `lookup\=', `morphology\=', `browser\=', `dictionary\=' or `search\='.
-By name first and by major mode second: see `classicist-role-regexps\='.
+By name first and by major mode second -- see `classicist-role-regexps\=' and
+`classicist-role-modes\=', either of which a module may add to.
 
 BUFFER may be a buffer or a name, but it has to EXIST: a name for a buffer that
 has not been created answers nil."
@@ -433,7 +472,7 @@ has not been created answers nil."
     (or (cdr (cl-find-if (lambda (rule) (string-match-p (car rule) name))
                          classicist-role-regexps))
         (cdr (assq (buffer-local-value 'major-mode buffer)
-                   classicist--role-modes)))))
+                   classicist-role-modes)))))
 
 
 (defun classicist--remember-role (window role)
@@ -444,7 +483,8 @@ holds a scanned page still answers to `lookup\='.
 Which is the point of it.  A scan REPLACES the entry by default, and the window
 then shows a PDF: the next entry looked for a window showing a lookup buffer,
 found none, and split -- so a reader who consulted the print and then looked up
-another word got a third window instead of the entry\='s own back.  The window had
+another word got a third window instead of the entry\='s own back.  The window
+had
 held an entry a moment before and nothing said so."
   (when (window-live-p window)
     (let ((held (window-parameter window 'diogenes-roles)))
@@ -459,7 +499,8 @@ first, not in the window where a scan happens to have displaced one.
 
 For PLACEMENT only.  The keys for going between windows use
 `classicist--windows-of-role\=', which asks what a window shows and not what it
-once showed -- `C-c C-l\=' should take a reader to an entry, and a window holding
+once showed -- `C-c C-l\=' should take a reader to an entry, and a window
+holding
 a page of the OLD is not an entry however lately it was."
   (or (classicist--window-of-role role)
       (catch 'found
@@ -651,8 +692,9 @@ entry needs somewhere new."
 
 (defun classicist--behaviour-for (kind)
   "What `classicist-window-behaviour\=' says about KIND.
-The kinds are `browser\=', `lookup\=', `dictionary\=' and `morphology\=' -- a
-passage, an entry, a scanned page, and an analysis or list of forms.
+Diogenes\=' own roles are `browser\=', `lookup\=', `dictionary\=' and
+`morphology\=' -- a passage, an entry, a scanned page, and an analysis or list
+of forms -- and a module may register others: see `classicist-role-modes\='.
 
 A word applies to every kind; an alist answers per kind, and a kind it does
 not mention gets `defer\='."
@@ -706,7 +748,7 @@ these behaviours exists to prevent."
 
 (defun classicist--display-action (kind)
   "The `display-buffer\=' action for a Diogenes buffer of KIND.
-KIND is `lookup\=', `browser\=', `dictionary\=', or anything else for none.
+KIND is a role -- see `classicist-role-modes\=' -- and nil for none.
 
 The action set for that kind if there is one, and otherwise whatever
 `classicist-window-behaviour\=' says -- in that order, so that naming an action
@@ -714,11 +756,15 @@ for lookups leaves the browser and the dictionaries on the shorthand.  A
 reader who wants one thing arranged specially should not have to spell out
 the other two."
   (or (pcase kind
+        ;; The four that had an option each, and they still win: a reader who
+        ;; set one should not find it overruled by a default.
         ('lookup classicist-lookup-display-action)
         ('browser classicist-browser-display-action)
         ('dictionary classicist-dictionary-display-action)
         ('morphology classicist-morphology-display-action)
         (_ nil))
+      ;; And any role at all, including one a module registered.
+      (cdr (assq kind classicist-display-actions))
       ;; `defer' yields nil, there being nothing for it to be: it means that
       ;; no action of ours is passed at all.
       (classicist--behaviour-action (classicist--behaviour-for kind) kind)))
@@ -822,7 +868,8 @@ overrides it, for a caller that has computed one.
 FALLBACK is an action for when nothing else has an opinion: after what the
 reader asked for, and after the gathering.  A module with a display
 arrangement of its own passes it there rather than as ACTION, so that
-`classicist-window-behaviour\=' and `classicist-gather-frames\=' can still answer --
+`classicist-window-behaviour\=' and `classicist-gather-frames\=' can still
+answer --
 an arrangement the package chose is not a decision the reader made, and
 should not outrank one.
 
