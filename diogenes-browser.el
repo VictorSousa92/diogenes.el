@@ -910,18 +910,22 @@ a Perl process on every page."
     ;; The visual-line pair with them, being what the arrows run where
     ;; `visual-line-mode' is on; and `gg' and `G', which should page as `M-<'
     ;; and `M->' do.
-    (dolist (pair '((previous-line             . backward-line)
-                    (next-line                 . forward-line)
-                    (evil-previous-line        . backward-line)
-                    (evil-next-line            . forward-line)
-                    (evil-previous-visual-line . backward-line)
-                    (evil-next-visual-line     . forward-line)
-                    (beginning-of-buffer       . beginning-of-buffer)
-                    (end-of-buffer             . end-of-buffer)
-                    (evil-goto-first-line      . beginning-of-buffer)
-                    (evil-goto-line            . end-of-buffer)))
-      (keymap-set map (format "<remap> <%s>" (car pair))
-                  (intern (format "diogenes-browser-%s" (cdr pair)))))
+    ;; WHOLE SYMBOLS IN THE TABLE, and not a suffix with the prefix put on
+    ;; at load.  It read `(intern (format "diogenes-browser-%s" (cdr pair)))',
+    ;; which is a name no rename can reach: rename the commands and this goes
+    ;; on assembling the old ones, and the arrows stop working with no error
+    ;; and nothing in the compile to say why.
+    (dolist (pair '((previous-line             . diogenes-browser-backward-line)
+                    (next-line                 . diogenes-browser-forward-line)
+                    (evil-previous-line        . diogenes-browser-backward-line)
+                    (evil-next-line            . diogenes-browser-forward-line)
+                    (evil-previous-visual-line . diogenes-browser-backward-line)
+                    (evil-next-visual-line     . diogenes-browser-forward-line)
+                    (beginning-of-buffer       . diogenes-browser-beginning-of-buffer)
+                    (end-of-buffer             . diogenes-browser-end-of-buffer)
+                    (evil-goto-first-line      . diogenes-browser-beginning-of-buffer)
+                    (evil-goto-line            . diogenes-browser-end-of-buffer)))
+      (keymap-set map (format "<remap> <%s>" (car pair)) (cdr pair)))
     (keymap-set map "q" #'quit-window)
     (keymap-set map "C-c C-n"  #'diogenes-browser-forward)
     (keymap-set map "C-c C-p"  #'diogenes-browser-backward)
