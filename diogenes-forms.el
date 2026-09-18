@@ -30,6 +30,16 @@
 (require 'transient)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-perseus)
+(require 'diogenes-utils)                 ; --beta-to-utf8, --utf8-to-beta
+
+;; THE BRIDGE, DECLARED AND NOT REQUIRED.  Two calls, both when a reader asks
+;; for a form list, by which time the bridge is loaded -- and this file need
+;; not drag it in to be defined.  It reached them through
+;; `diogenes-perseus', which requires the bridge, and so said nothing about
+;; what it uses.
+(declare-function diogenes--get-fresh-buffer "diogenes-perl-interface" (type))
+(declare-function diogenes--get-wordlist-matches "diogenes-perl-interface"
+                  (options pattern))
 
 (defun diogenes--change-form-entry (pos properties &optional form-string-face mark)
   "Change the form entry at POS in `diogenes--select-forms'.
