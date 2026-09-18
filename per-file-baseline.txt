@@ -9,11 +9,11 @@
 3 diogenes-perl-interface.el
 2 diogenes-utils.el
 2 diogenes-purpose.el
-2 diogenes-pdf-search.el
 2 diogenes-passow.el
 2 diogenes-complete.el
 2 diogenes-cheatsheet.el
 1 diogenes-presets.el
+1 diogenes-pdf-search.el
 1 diogenes-old.el
 1 diogenes-lisp-utils.el
 0 diogenes-tll.el
