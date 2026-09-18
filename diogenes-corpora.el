@@ -500,7 +500,7 @@ error."
 (defun diogenes-manage-user-corpora ()
   "Manage all user defined corpora."
   (interactive)
-  (if-let ((corpora-buffer (get-buffer "*diogenes-corpora*")))
+  (if-let* ((corpora-buffer (get-buffer "*diogenes-corpora*")))
       (pop-to-buffer corpora-buffer) 
     (diogenes--load-user-corpora)
     (pop-to-buffer (get-buffer-create "*diogenes-corpora*"))
@@ -578,19 +578,19 @@ corpus or, when supplied, call CALLBACK on it. If NO-ASK is not nil, it should b
 ;;; MAKE NEW CORPORA
 (defun diogenes--define-user-corpus (type &rest author-plist)
   "Define a subset of the databases to be used for searching."
-  (when-let (authors (diogenes--get-info #'diogenes--define-corpus-script
+  (when-let* ((authors (diogenes--get-info #'diogenes--define-corpus-script
 					 (list :type type)
-					 author-plist))
+					 author-plist)))
     (list :type type :authors authors)))
 
 (defun diogenes--define-simple-corpus (type)
   "Define a simple corpus for searching the Diogenes database TYPE."
-  (when-let ((authors (diogenes--select-author-nums (list :type type))))
+  (when-let* ((authors (diogenes--select-author-nums (list :type type))))
     (list :type type :authors authors)))
 
 (defun diogenes--define-regexp-corpus (type)
   "Define a corpus for searching using a perl regexp."
-  (when-let ((regexp (read-from-minibuffer
+  (when-let* ((regexp (read-from-minibuffer
 		      "Select authors matching perl regex: ")))
     (diogenes--define-user-corpus type :author-regex regexp)))
 

@@ -314,7 +314,7 @@ diogenes--dict-xml-handlers-extra variable."
     (nconc 
      (list 'lang lang)
      (cl-case tag
-       (head (when-let ((orth-orig (cdr (assoc 'orth_orig (cadr elt)))))
+       (head (when-let* ((orth-orig (cdr (assoc 'orth_orig (cadr elt)))))
 	       (setf (cddr elt) (list orth-orig)))
 	     '(font-lock-face shr-h1))
        (sense (push (concat "\n\n"
@@ -646,7 +646,7 @@ the file only at the first call."
 (defun diogenes-analysis-cycle (pos)
   "On a heading in analysis mode, show or hide its contents."
   (interactive "d")
-  (when-let ((level (get-char-property pos 'heading))
+  (when-let* ((level (get-char-property pos 'heading))
 	     (region-start (next-single-property-change pos level))
 	     (region-end (or (next-single-property-change region-start level)
 			     (point-max))))
@@ -757,7 +757,7 @@ Additionally, letter case and diacritics can be ignored."
 					      (gethash (funcall transformation k) hash))
 				     finally return hash)))))
 	  (results (if (eq filter #'string-equal)
-		       (when-let ((entry (gethash query hash)))
+		       (when-let* ((entry (gethash query hash)))
 			 (list (cons query entry)))
 		     (cl-loop for k being the hash-keys of hash
 			      using (hash-values v)

@@ -99,7 +99,7 @@
 			       (next-single-property-change (point) 'cit))
 			 (goto-char prop-change)
 			 (not (eobp)))
-	       (when-let ((citation (get-text-property (point) 'cit)))
+	       (when-let* ((citation (get-text-property (point) 'cit)))
 		 (insert (diogenes--browser-format-citation citation)))))))))
 
 (defun diogenes-browser-remove-hyphenation (&optional mark-with-vertical-bar)
@@ -245,7 +245,7 @@ If it is incomplete, buffer it and prepend it when called again."
 
 (defun diogenes--browser-filter (proc string)
   (when (buffer-live-p (process-buffer proc))
-    (when-let ((data (diogenes--read-browser-output string)))
+    (when-let* ((data (diogenes--read-browser-output string)))
      (with-current-buffer (process-buffer proc)
        (seq-let (cit header &rest lines) data
 	 (unless lines (error "No input received!"))
