@@ -1,11 +1,10 @@
 43 diogenes-perseus.el
 25 diogenes-browser.el
 17 diogenes-search.el
-17 diogenes-corpora.el
+15 diogenes-corpora.el
 13 diogenes-tgl.el
 12 diogenes-archive.el
 9 diogenes-org.el
-5 diogenes-forms.el
 4 diogenes-user-interface.el
 3 diogenes-perl-interface.el
 2 diogenes-utils.el
@@ -27,6 +26,7 @@
 0 diogenes-georges.el
 0 diogenes-gaffiot-pdf.el
 0 diogenes-gaffiot.el
+0 diogenes-forms.el
 0 diogenes-evil.el
 0 diogenes.el
 0 diogenes-doom.el
