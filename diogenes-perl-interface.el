@@ -376,15 +376,25 @@ PATTERN in a wordlist and the frequency of their occurrence in the corpus."
    "print perl_to_lisp( \\@results );"))
 
 (defun diogenes--browser-script (option-plist passage)
-  "Return a perl script that opens a work with the Diogenes Browser."
-  (diogenes--perl-script
-   "use Diogenes::Browser;"
-   (format "my $q = Diogenes::Browser->new(%s);"
-	   (diogenes--list->perl option-plist))
-   (format "$q->seek_passage(%s);"
-	   (diogenes--list->perl passage))
-   ;; "$q->browse_half_backward();"
-   "$q->browse_forward();"))
+  "Return a perl script that opens a work with the Diogenes Browser.
+
+EMPTY LEVELS ARE DROPPED HERE AS WELL as at the prompt that reads them.  The
+prompt is where a reader\='s blank answer is understood; this is the last place
+before Perl, and anything reaching it with an empty string in the passage --
+a caller in another package, a saved reference, a level a conversion left
+blank -- would kill the process rather than be told.  Two guards for one
+fault, the far side of which is an exit code and no message."
+  (let ((passage (seq-remove (lambda (level)
+			       (and (stringp level) (string-empty-p level)))
+			     passage)))
+    (diogenes--perl-script
+     "use Diogenes::Browser;"
+     (format "my $q = Diogenes::Browser->new(%s);"
+	     (diogenes--list->perl option-plist))
+     (format "$q->seek_passage(%s);"
+	     (diogenes--list->perl passage))
+     ;; "$q->browse_half_backward();"
+     "$q->browse_forward();")))
 
 (defconst diogenes--browse-interactively-parse-capture-sub
    "my $capture = '';

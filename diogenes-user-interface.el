@@ -59,10 +59,25 @@ REQUIRE-MATCH, for the reason given in `diogenes--select-author-num'."
 		 works-list))))
 
 (defun diogenes--select-passage (options author work)
-  "Select a specific passage from a given work in the Diogenes database."
+  "Select a specific passage from a given work in the Diogenes database.
+
+STOPS AT THE FIRST BLANK ANSWER, and this is the whole of the fix for a
+crash.  It used to collect EVERY level, empty ones included, so a reader who
+gave the book and not the line handed Perl `("2" "" "")\=' -- and an empty
+string where `seek_passage\=' wants a number kills the process, which exits
+255 and leaves a browser buffer that looks well and can do nothing.
+
+Levels are given from the outside in -- book, then chapter, then line -- so a
+blank means `no further\=', and asking for the levels under it is asking about
+something the reader has already declined.  A passage of one level is
+perfectly good: Diogenes opens that book at its beginning.
+
+Trimmed, too: a level typed with a space after it is the same level."
   (let ((work-labels (diogenes--get-work-labels options (list author work))))
     (cl-loop for label in work-labels
-	     collect (read-string (format "%s: " label)))))
+	     for answer = (string-trim (read-string (format "%s: " label)))
+	     until (string-empty-p answer)
+	     collect answer)))
 
 (defun diogenes--select-tlg-categories ()
   (let* ((categories (diogenes--get-tlg-categories))
