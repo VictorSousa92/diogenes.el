@@ -258,7 +258,7 @@ Takes no prefix argument, as `diogenes-browser-forward\=' takes none."
 			 (goto-char prop-change)
 			 (not (eobp)))
 	       (when-let* ((citation (get-text-property (point) 'cit)))
-		 (insert (diogenes--browser-format-citation citation)))))))))
+		 (insert (classicist--browser-format-citation citation)))))))))
 
 (defcustom diogenes-browser-join-broken-words t
   "Whether a word broken across two lines is joined before it is looked up.
@@ -572,16 +572,16 @@ and `diogenes-browser-goto-passage\=' asks where to go."
 
 (defun diogenes-browser--knows-its-work-p ()
   "Whether this browser records which work it is showing.
-`diogenes--browser-corpus\=' and its fellows come with the passage reference; a
+`classicist--browser-corpus\=' and its fellows come with the passage reference; a
 version without that has no such variables, so they are asked for with `boundp\='
 before they are read.  Everything that needs to name the work -- the header, and
 `go to\=' -- asks this first."
-  (and (boundp 'diogenes--browser-corpus)
-       (boundp 'diogenes--browser-author)
-       (boundp 'diogenes--browser-work)
-       diogenes--browser-corpus
-       diogenes--browser-author
-       diogenes--browser-work))
+  (and (boundp 'classicist--browser-corpus)
+       (boundp 'classicist--browser-author)
+       (boundp 'classicist--browser-work)
+       classicist--browser-corpus
+       classicist--browser-author
+       classicist--browser-work))
 
 (defvar-local diogenes--browser-page-lines nil
   "How many lines the first page of this browser held.
@@ -780,8 +780,8 @@ the passage at the top rather than paged to."
     (user-error
      (concat "This browser does not record which work it is showing"
              " -- the passage reference is not in this version")))
-  (let* ((labels (and (boundp 'diogenes--browser-labels)
-                      diogenes--browser-labels))
+  (let* ((labels (and (boundp 'classicist--browser-labels)
+                      classicist--browser-labels))
          (levels
           (cond
            (passage (split-string (string-trim passage) "[.: ]+" t))
@@ -800,9 +800,9 @@ the passage at the top rather than paged to."
     (unless levels
       (user-error "No passage given"))
     ;; Outermost level first, as Diogenes takes them.
-    (diogenes-open-passage diogenes--browser-corpus
-                           diogenes--browser-author
-                           diogenes--browser-work
+    (diogenes-open-passage classicist--browser-corpus
+                           classicist--browser-author
+                           classicist--browser-work
                            levels)))
 
 (defun diogenes-browser--header-button-runner (command)
@@ -865,9 +865,9 @@ a Perl process on every page."
      ;; several open should not have to look at the text to tell which is which.
      (if (diogenes-browser--knows-its-work-p)
          (format "   %s %s/%s"
-                 diogenes--browser-corpus
-                 diogenes--browser-author
-                 diogenes--browser-work)
+                 classicist--browser-corpus
+                 classicist--browser-author
+                 classicist--browser-work)
        ""))))
 
 (defvar diogenes-browser-mode-map
@@ -1029,7 +1029,7 @@ If it is incomplete, buffer it and prepend it when called again."
 	 (let ((pos (point)))
 	   (dolist (alist lines)
 	     (when diogenes-browser-show-citations
-	       (insert (diogenes--browser-format-citation (car alist))))
+	       (insert (classicist--browser-format-citation (car alist))))
 	     (insert (propertize (format "%s\n" (cdr alist))
 				 'cit (car alist))))
 	  (set-marker (process-mark proc) (point-max))
@@ -1059,7 +1059,7 @@ If it is incomplete, buffer it and prepend it when called again."
 (defun diogenes-open-passage (corpus author work &optional passage)
   "Open WORK of AUTHOR in CORPUS, at PASSAGE, asking nothing.
 CORPUS is `tlg\=', `phi\=' and the rest; AUTHOR and WORK are the numbers as
-strings; PASSAGE is a list of strings, as `diogenes-citation-from-key\=' returns,
+strings; PASSAGE is a list of strings, as `classicist-citation-from-key\=' returns,
 or nil for the beginning of the work.
 
 PUBLIC, and non-interactive, which is the point of it.  `diogenes-browse-tlg\='
@@ -1077,7 +1077,7 @@ on a rename."
                                 (copy-sequence passage))))
 
 
-;; `:citation' is added after the fact, `diogenes-reference-to-string' needing
+;; `:citation' is added after the fact, `classicist-reference-to-string' needing
 ;; the reference it goes into.  A separate call rather than a fourth key, so
 ;; that a caller wanting only the numbers pays nothing for the abbreviations.
 
@@ -1099,15 +1099,15 @@ number of the author and the number of the work."
     ;; What this buffer is reading.  PASSAGE begins with the author and the
     ;; work, whatever else follows: `diogenes--browse-database' builds it as
     ;; `(nconc (list author work) passage)'.
-    (setq diogenes--browser-corpus (plist-get options :type))
-    (setq diogenes--browser-author (car passage))
-    (setq diogenes--browser-work (cadr passage))
-    (setq diogenes--browser-passage (cddr passage))
+    (setq classicist--browser-corpus (plist-get options :type))
+    (setq classicist--browser-author (car passage))
+    (setq classicist--browser-work (cadr passage))
+    (setq classicist--browser-passage (cddr passage))
     ;; And what the levels are called, which is what lets a citation be
     ;; written the way a reader would write it.  Guarded: a work whose labels
     ;; Perl will not give is still browsable, and a reference from it renders
     ;; plainly rather than not at all.
-    (setq diogenes--browser-labels
+    (setq classicist--browser-labels
           (ignore-errors
             (diogenes--get-work-labels (list :type (plist-get options :type))
                                        (list (car passage) (cadr passage)))))

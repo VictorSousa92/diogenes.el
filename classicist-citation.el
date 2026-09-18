@@ -50,6 +50,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'text-property-search)   ; prop-match-value, and the searches
 
 ;; CALLED AT RUN TIME, from files that require this one or are required by it.
 ;; Declared rather than required: `diogenes-browser.el\=' requires this file,
@@ -62,6 +63,13 @@
                   (options author work))
 (declare-function diogenes-browse-tlg "diogenes" ())
 (defvar diogenes-abbreviations)
+
+;; STAYED IN THE BROWSER, because it opens a passage there, and opening one is
+;; browser work.  This file is required BY the browser, so it cannot require it
+;; back; anything outside should ask `fboundp' first, citations without a
+;; browser being a state one can now be in.
+(declare-function diogenes-open-passage "diogenes-browser"
+                  (corpus author work &optional passage))
 
 (defun classicist--browser-format-citation (citation)
   (propertize (format "%-14s"
@@ -92,15 +100,18 @@ passes through.")
 (defvar-local classicist--browser-labels nil
   "What the levels of this work's citations are called, outermost first.
 `(\"book\" \"verse\")\=', `(\"Bekker page\" \"line\")\=', `(\"Stephanus page\"
-\"section\" \"line\")\=' -- Diogenes's own data says, per work, and a citation is a
+\"section\" \"line\")\=' -- Diogenes's own data says, per work, and a citation
+is a
 list in exactly that order.
 
 Recorded once when the buffer is made rather than asked for each time it is
-wanted: `diogenes--get-work-labels\=' is a call into Perl, which is cheap once and
+wanted: `diogenes--get-work-labels\=' is a call into Perl, which is cheap once
+and
 not cheap per reference.
 
 This is what makes a citation renderable.  `(1053a 15)\=' is conventionally
-written `1053a15\=' and `(4 208)\=' is written `4.208\=', and the difference is not
+written `1053a15\=' and `(4 208)\=' is written `4.208\=', and the difference is
+not
 the author but the LEVEL: a page and a line run together, numbered levels take a
 stop between them.  Without the labels there is no way to tell which is which,
 and rendering would have to know a convention per author -- an open set, where
@@ -120,11 +131,13 @@ Aristotle is cited `1053a15\=' and Plato `246a4\=', the page and what follows
 written as one; a book and a verse are cited `4.208\=', with a stop.  The
 difference is the LEVEL and not the author, which is why this is a list of
 labels: Diogenes names the levels of every work -- `(\"book\" \"verse\")\=',
-`(\"Stephanus page\" \"section\" \"line\")\=' -- so one rule per label covers every
+`(\"Stephanus page\" \"section\" \"line\")\=' -- so one rule per label covers
+every
 author who uses it.
 
 `pg\=' is there because the corpora abbreviate: the scan finds `pg\=' 341 times
-beside `page\=' 1785, and `ln\=', `vol\=', `sect\=' and `chap\=' likewise beside their
+beside `page\=' 1785, and `ln\=', `vol\=', `sect\=' and `chap\=' likewise
+beside their
 full forms.  Only the paginated ones need listing, the rest taking stops anyway.
 
 Matched as SUBSTRINGS of a label, so `page\=' covers `Stephanus page\=',
@@ -134,9 +147,11 @@ labels could not do.
 
 This affects DISPLAY only.  What a link records is
 `classicist-citation-to-key\=', which puts a stop between every level whatever
-their labels, because that is reversible and a run-on citation is not: `1053a15\='
+their labels, because that is reversible and a run-on citation is not:
+`1053a15\='
 cannot be split back into a page and a line without already knowing which is
-which.  So a pattern missing from this list costs a reader `1053a.15\=' where they
+which.  So a pattern missing from this list costs a reader `1053a.15\=' where
+they
 would write `1053a15\=', and costs nothing that has to work."
   :type '(repeat string)
   :group 'diogenes)
@@ -148,11 +163,14 @@ from the data rather than guessed.
 
 Substrings, because every editor's page is its own level.  A pass over all 2194
 authors of the TLG and the PHI turns up `page\=' itself 1785 times and then
-`Stephanus page\=', `Bekker page\=', `Jebb page\=', `Harduin page\=', `Morel page\=',
-`Olearius page\=', `Aubert page\=', `Thevenot page\=', `Wescher page\=', `Spengel
+`Stephanus page\=', `Bekker page\=', `Jebb page\=', `Harduin page\=', `Morel
+page\=',
+`Olearius page\=', `Aubert page\=', `Thevenot page\=', `Wescher page\=',
+`Spengel
 page\=', `Dietz page\=', `Usener page\=', `Dindorf page\=', `Kallierges page\=',
 `Hermann page\=', `Klein page\=', `Walz page\=', `MPG page\=', `codex page\=',
-`Dindorf-Stephanus page\=', `page+column\=', `Bekker page+line\=' -- and there will
+`Dindorf-Stephanus page\=', `page+column\=', `Bekker page+line\=' -- and there
+will
 be editors neither of us has met.  A LIST of labels would have to name each; the
 pattern `page\=' catches them all.
 
@@ -168,7 +186,8 @@ because at least one work carries a label with a leading space."
 
 (defun classicist-citation-to-string (citation &optional labels)
   "CITATION written as a reader would write it.
-LABELS names its levels, outermost first, as `classicist--browser-labels\=' holds
+LABELS names its levels, outermost first, as `classicist--browser-labels\='
+holds
 them; without them every level takes a stop, which is right for most and wrong
 for the pages.
 
@@ -199,7 +218,8 @@ A stop between every level, whatever the levels are called:
     (25)           -> \"25\"
 
 REVERSIBLE, which is the whole point and the reason it ignores the conventions
-that `classicist-citation-to-string\=' honours.  `1053a15\=' is how a reader writes
+that `classicist-citation-to-string\=' honours.  `1053a15\=' is how a reader
+writes
 Aristotle and cannot be read back: nothing in the string says where the page
 ends and the line begins, and knowing would mean knowing the work\='s levels
 before parsing the citation that identifies the work.  `1053a.15\=' says.
@@ -211,7 +231,8 @@ argument to a command -- and the other for anything a person reads."
 (defun classicist-citation-from-key (key)
   "KEY, as `classicist-citation-to-key\=' wrote it, back to a citation.
 The elements come back as strings.  Diogenes gives some as numbers and some as
-symbols -- `1053a\=' is a symbol -- and it takes strings where it takes a passage
+symbols -- `1053a\=' is a symbol -- and it takes strings where it takes a
+passage
 at all, `diogenes--select-passage\=' collecting them with `read-string\='; so
 strings are what a caller wants and no attempt is made to guess which were
 numbers."
@@ -222,7 +243,8 @@ numbers."
 The inverse of what `classicist-browser-reference\=' puts in `:key\='.
 
 Split on the HYPHEN first and each half on stops after: splitting the whole of
-`2.2-2.5\=' on stops gave `(\"2\" \"2-2\" \"5\")\=', the hyphen swallowed into an
+`2.2-2.5\=' on stops gave `(\"2\" \"2-2\" \"5\")\=', the hyphen swallowed into
+an
 element and the passage unopenable.  `classicist-citation-from-key\=' reads one
 citation and was handed two, which is the sort of fault that shows only when
 something tries to read back what was written -- and a link that cannot be read
@@ -236,7 +258,8 @@ back is a dead link."
 
 (defun classicist-open-reference (reference)
   "Open the passage REFERENCE names.
-REFERENCE is what `classicist-browser-reference\=' returns, or the same plist read
+REFERENCE is what `classicist-browser-reference\=' returns, or the same plist
+read
 back from wherever it was stored -- a link, a note.  `:key\=' is used in
 preference to `:from\=', being the form that survives writing down."
   (let* ((key (plist-get reference :key))
@@ -285,14 +308,16 @@ position is readable from the text even though it is not remembered."
 (defcustom classicist-abbreviation-overrides nil
   "Abbreviations to use instead of the generated table\='s.
 An alist keyed as the table is -- `((\"tlg\" \"0086\") . \"Aristot.\")\=' for an
-author, `((\"tlg\" \"0086\" \"025\") . \"Met.\")\=' for a work -- and consulted first,
+author, `((\"tlg\" \"0086\" \"025\") . \"Met.\")\=' for a work -- and consulted
+first,
 so an entry here wins.
 
 Two uses.  A reader who prefers another convention to LSJ\='s: `Aristot.\=' for
 `Arist.\=', or an English title where the dictionaries give a Latin one.
 
 And the handful of rows the extraction gets wrong, which are wrong in ways no
-rule catches.  `phi 0012\=' is Homer, whose number that is in the TLG and not the
+rule catches.  `phi 0012\=' is Homer, whose number that is in the TLG and not
+the
 PHI, from a mistagged citation in Lewis & Short -- harmless, there being no such
 author to browse.  `phi 0474/065\=' reads `Horte\=', the Hortensius truncated in
 the source.  Four such rows in a thousand when this was written, and each is
@@ -304,7 +329,8 @@ one line to correct here rather than a reason to distrust the rest."
   "How the dictionaries cite this author, or this work of theirs.
 Returns (AUTHOR-ABBREV . WORK-ABBREV), either of which may be nil.
 
-`Arist.\=' and `Metaph.\=', `Hom.\=' and `Il.\=', `Verg.\=' and `A.\=' -- the forms LSJ
+`Arist.\=' and `Metaph.\=', `Hom.\=' and `Il.\=', `Verg.\=' and `A.\=' -- the
+forms LSJ
 and Lewis & Short use, taken from the dictionaries themselves rather than from
 their printed front matter, which names no numbers.  See
 `tools/extract-abbreviations.py\='.
@@ -346,11 +372,13 @@ is at least unambiguous."
 
 (defun classicist-browser-reference ()
   "Everything needed to name, and to reopen, the passage in this buffer.
-A plist: `:corpus\=', `:author\=', `:work\=', `:from\=' and `:to\=' -- the last two
+A plist: `:corpus\=', `:author\=', `:work\=', `:from\=' and `:to\=' -- the last
+two
 being citations, and `:to\=' nil unless a region is marked.
 
 The corpus, author and work are what `diogenes-browse-tlg\=' and its siblings
-take, so a reference is enough to open the work again; `:from\=' says where in it.
+take, so a reference is enough to open the work again; `:from\=' says where in
+it.
 Nil in a buffer that is not a browser, there being nothing to refer to."
   (when (derived-mode-p 'diogenes-browser-mode)
     (let* ((interval (classicist-browser-citation-interval))
