@@ -558,8 +558,7 @@ Called at load; called again after changing `diogenes-org-link-type\\='."
 (declare-function org-roam-node-open "org-roam-node" (node &optional cmd))
 (declare-function org-roam-node-from-id "org-roam-node" (id))
 (declare-function org-roam-node-create "org-roam-node" (&rest args))
-(declare-function org-roam-capture- "org-roam-capture"
-                  (&key goto keys node info props templates))
+(declare-function org-roam-capture- "org-roam-capture" t)
 (declare-function classicist-browser-citation-at "classicist-citation"
                   (&optional position))
 (declare-function classicist-citation-to-key "classicist-citation" (citation))

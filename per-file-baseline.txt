@@ -2,7 +2,7 @@
 12 diogenes-archive.el
 12 classicist-morphology.el
 9 diogenes-tgl.el
-9 diogenes-org.el
+8 diogenes-org.el
 5 classicist-lookup.el
 3 diogenes-user-interface.el
 3 diogenes-perl-interface.el
