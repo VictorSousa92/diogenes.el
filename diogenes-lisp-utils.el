@@ -123,7 +123,7 @@ When supplied, the keyword arguments add additional strings with a special meani
 - :all-string adds all values and toggles the other input mode (add <-> remove)
 - :regexp-string causes the next input to be read in as a regexp
 - :remove-string switches input mode to `remove'"
-  (setq list (copy-list list))
+  (setq list (cl-copy-list list))
   (setq remove-prompt (or remove-prompt prompt))
   (let ((max-mini-window-height 0.8))
     (cl-loop
@@ -165,11 +165,11 @@ When supplied, the keyword arguments add additional strings with a special meani
 	    (setq remove t))
 	   ((and remove (string= inp all-string))
 	    (setq remove nil
-		  current-list (copy-list list)
+		  current-list (cl-copy-list list)
 		  results nil))
 	   ((string= inp all-string)
 	    (setq current-list nil
-		  results (copy-list list)))
+		  results (cl-copy-list list)))
 	   (remove
 	    (let ((matches (cl-remove-if-not matcher results)))
 	      (setq remove nil

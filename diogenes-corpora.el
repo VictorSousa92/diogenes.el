@@ -276,7 +276,7 @@ BUFFER defaults to the current buffer."
 
 (defun diogenes--add-work-to-corpus (pos)
   (interactive "d")
-  (when-let* ((properties (copy-list (text-properties-at pos)))
+  (when-let* ((properties (cl-copy-list (text-properties-at pos)))
 	      (corpus-type (plist-get properties 'corpus-type))
 	      (author-region (diogenes--get-text-prop-boundaries
 			      pos 'author-num))
