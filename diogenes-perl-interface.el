@@ -29,12 +29,45 @@
 (require 'diogenes-lisp-utils)
 (require 'classicist-windows)
 
+;;; Perl itself
+
+;; HERE, AND NOT IN `diogenes.el'.  All four were defined in the entry point
+;; and read from this file, which the entry point requires -- so this file
+;; called UP into the one that loads it, and got away with it because the
+;; reads and calls happen at run time, by which point everything is loaded.
+;;
+;; It matters beyond tidiness: a client that wants the Perl bridge and not the
+;; whole of Diogenes can require this file alone, and until now that gave it a
+;; bridge with no `perl' to run and no `-I' flags to run it with.  Which is
+;; what `classicist.el' means to do.
+;;
+;; `diogenes--path' STAYS in the entry point and is declared instead.  It
+;; reads `diogenes-path', the one thing a reader has to set, and where the
+;; installation lives is properly the entry point's business.  One reference
+;; up rather than five, and a declaration that says so.
+(declare-function diogenes--path "diogenes" ())
+
+(defcustom diogenes-perl-executable "perl"
+  "Path to perl executable."
+  :type 'string
+  :group 'diogenes)
+
+(defconst diogenes-perl-min-version 5.10
+  "Minimal required verson of perl.")
+
+(defun diogenes--include-server ()
+  (concat "-I" (file-name-concat (diogenes--path)
+				 "server")))
+
+(defun diogenes--include-cpan ()
+  (concat "-I" (file-name-concat (diogenes--path)
+				 "dependencies"
+				 "CPAN")))
+
 ;; Called across files that cannot be required from here without a
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
-(declare-function diogenes--include-server "diogenes-lisp-utils" ())
-(declare-function diogenes--include-cpan "diogenes-lisp-utils" ())
 (declare-function diogenes--get-info "diogenes-perl-interface" (script &optional a b))
 
 (defvar diogenes--debug-perl nil

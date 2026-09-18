@@ -122,18 +122,11 @@
   "Interface to P. Heslin's Diogenes."
   :group 'tools)
 
-(defcustom diogenes-perl-executable "perl"
-  "Path to perl executable."
-  :type 'string
-  :group 'diogenes)
 
 (defcustom diogenes-path nil
   "Path to the Diogenes installation."
   :type 'directory
   :group 'diogenes)
-
-(defconst diogenes-perl-min-version 5.10
-  "Minimal required verson of perl.")
 
 
 (defcustom diogenes-preferred-lsj-file "grc.lsj.logeion.xml"
@@ -147,14 +140,6 @@
     (error "diogenes-path is not set!
 Please set it to the root directory of your Diogenes installation!")))
 
-(defun diogenes--include-server ()
-  (concat "-I" (file-name-concat (diogenes--path)
-				 "server")))
-
-(defun diogenes--include-cpan ()
-  (concat "-I" (file-name-concat (diogenes--path)
-				 "dependencies"
-				 "CPAN")))
 
 (defun diogenes--perseus-path ()
   (directory-file-name (file-name-concat (diogenes--path)
