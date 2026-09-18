@@ -21,6 +21,7 @@
 0 diogenes-pkg.el
 0 diogenes-pape.el
 0 diogenes-montanari.el
+0 diogenes-lisp-utils-compat.el
 0 diogenes-legacy.el
 0 diogenes-georges-pdf.el
 0 diogenes-georges.el
@@ -32,6 +33,7 @@
 0 diogenes-dict-faces.el
 0 diogenes-dge.el
 0 diogenes-cambridge.el
+0 diogenes-browser-compat.el
 0 diogenes-books.el
 0 diogenes-bdag.el
 0 diogenes-bailly-pdf.el
@@ -39,4 +41,6 @@
 0 diogenes-abbreviations.el
 0 classicist-windows.el
 0 classicist-windows-compat.el
+0 classicist-obsolete.el
+0 classicist-groups.el
 0 classicist-citation.el

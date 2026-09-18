@@ -1181,49 +1181,19 @@ Uses the Diogenes Perl module."
 					      author))))
     (diogenes--dump-work `(:type ,type) (list author work))))
 
-;;; The citation layer, moved
-;; It is `classicist-citation.el' now: eleven of this file's twelve
-;; consumers wanted how a passage is named and not how it is fetched.
-;; Aliased here, so that anything asking Diogenes still finds them.
-
-(define-obsolete-variable-alias 'diogenes--browser-author
-                                'classicist--browser-author "0.1")
-(define-obsolete-variable-alias 'diogenes--browser-corpus
-                                'classicist--browser-corpus "0.1")
-(define-obsolete-function-alias 'diogenes--browser-format-citation
-                                'classicist--browser-format-citation "0.1")
-(define-obsolete-variable-alias 'diogenes--browser-labels
-                                'classicist--browser-labels "0.1")
-(define-obsolete-variable-alias 'diogenes--browser-passage
-                                'classicist--browser-passage "0.1")
-(define-obsolete-variable-alias 'diogenes--browser-work
-                                'classicist--browser-work "0.1")
-(define-obsolete-function-alias 'diogenes--citation-runs-on-p
-                                'classicist--citation-runs-on-p "0.1")
-(define-obsolete-variable-alias 'diogenes-abbreviation-overrides
-                                'classicist-abbreviation-overrides "0.1")
-(define-obsolete-function-alias 'diogenes-browser-citation-at
-                                'classicist-browser-citation-at "0.1")
-(define-obsolete-function-alias 'diogenes-browser-citation-interval
-                                'classicist-browser-citation-interval "0.1")
-(define-obsolete-function-alias 'diogenes-browser-reference
-                                'classicist-browser-reference "0.1")
-(define-obsolete-function-alias 'diogenes-citation-abbreviation
-                                'classicist-citation-abbreviation "0.1")
-(define-obsolete-function-alias 'diogenes-citation-from-key
-                                'classicist-citation-from-key "0.1")
-(define-obsolete-function-alias 'diogenes-citation-interval-from-key
-                                'classicist-citation-interval-from-key "0.1")
-(define-obsolete-variable-alias 'diogenes-citation-run-on-labels
-                                'classicist-citation-run-on-labels "0.1")
-(define-obsolete-function-alias 'diogenes-citation-to-key
-                                'classicist-citation-to-key "0.1")
-(define-obsolete-function-alias 'diogenes-citation-to-string
-                                'classicist-citation-to-string "0.1")
-(define-obsolete-function-alias 'diogenes-open-reference
-                                'classicist-open-reference "0.1")
-(define-obsolete-function-alias 'diogenes-reference-to-string
-                                'classicist-reference-to-string "0.1")
+;; The names that moved are answered in `diogenes-browser-compat.el' and in
+;; `classicist-obsolete.el', and not here: a rename of this
+;; file's own code is a `sed' over this file, and a `sed'
+;; that reaches an alias makes it point at itself.
+;;
+;; BOTH REQUIRED FROM HERE, and that is temporary.  The
+;; public names want loading by the suite's entry point, and
+;; `classicist.el' does not exist yet; until it does, a
+;; reader who has set `diogenes-window-behaviour' needs
+;; something to load the alias, and this is the only file
+;; they are certain to have loaded.
+(require 'diogenes-browser-compat)
+(require 'classicist-obsolete)
 
 (provide 'diogenes-browser)
 

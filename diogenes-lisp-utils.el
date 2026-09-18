@@ -355,124 +355,19 @@ When supplied, the keyword arguments add additional strings with a special meani
 (defsubst diogenes--tr--callback () (plist-get (transient-scope) :callback))
 (defsubst diogenes--tr--no-ask () (plist-get (transient-scope) :no-ask))
 
-;;; The window layer, moved
-;; It is `classicist-windows.el' now: the layer places buffers for
-;; every family in the suite and not for Diogenes alone.  Aliased
-;; here rather than there, so that a file requiring Diogenes and not
-;; the suite still finds the old names -- nine files in this package
-;; call the displayer, `tei-diorisis.el' is the tenth, and
-;; `diogenes-window-behaviour' is a defcustom a reader may have set.
-(require 'classicist-windows)
-
-(define-obsolete-function-alias 'diogenes--behaviour-action
-                               'classicist--behaviour-action "suite")
-(define-obsolete-function-alias 'diogenes--behaviour-for
-                               'classicist--behaviour-for "suite")
-(define-obsolete-function-alias 'diogenes--buffer-role
-                               'classicist--buffer-role "suite")
-(define-obsolete-function-alias 'diogenes--claim-buffer
-                               'classicist--claim-buffer "suite")
-(define-obsolete-function-alias 'diogenes--companion-role
-                               'classicist--companion-role "suite")
-(define-obsolete-function-alias 'diogenes--display-action
-                               'classicist--display-action "suite")
-(define-obsolete-function-alias 'diogenes--display-buffer
-                               'classicist-display-buffer "suite")
-(define-obsolete-function-alias 'diogenes--display-log
-                               'classicist--display-log "suite")
-(define-obsolete-variable-alias 'diogenes--display-log-before
-                               'classicist--display-log-before "suite")
-(define-obsolete-variable-alias 'diogenes--display-log-branch
-                               'classicist--display-log-branch "suite")
-(define-obsolete-variable-alias 'diogenes--display-log-detail
-                               'classicist--display-log-detail "suite")
-(define-obsolete-function-alias 'diogenes--display-split-anyway
-                               'classicist--display-split-anyway "suite")
-(define-obsolete-function-alias 'diogenes--gathering-action
-                               'classicist--gathering-action "suite")
-(define-obsolete-function-alias 'diogenes--gathering-p
-                               'classicist--gathering-p "suite")
-(define-obsolete-function-alias 'diogenes--home-buffer-p
-                               'classicist--home-buffer-p "suite")
-(define-obsolete-function-alias 'diogenes--remember-role
-                               'classicist--remember-role "suite")
-(define-obsolete-variable-alias 'diogenes--role-modes
-                               'classicist--role-modes "suite")
-(define-obsolete-function-alias 'diogenes--sole-home-window-p
-                               'classicist--sole-home-window-p "suite")
-(define-obsolete-function-alias 'diogenes--split-alist
-                               'classicist--split-alist "suite")
-(define-obsolete-function-alias 'diogenes--split-functions
-                               'classicist--split-functions "suite")
-(define-obsolete-function-alias 'diogenes--split-size-for
-                               'classicist--split-size-for "suite")
-(define-obsolete-function-alias 'diogenes--window-of-role
-                               'classicist--window-of-role "suite")
-(define-obsolete-function-alias 'diogenes--window-that-held
-                               'classicist--window-that-held "suite")
-(define-obsolete-function-alias 'diogenes--windows-of-role
-                               'classicist--windows-of-role "suite")
-;; diogenes--with-our-answer: a macro, and internal -- not aliased
-(define-obsolete-variable-alias 'diogenes-browser-display-action
-                               'classicist-browser-display-action "suite")
-(define-obsolete-variable-alias 'diogenes-claim-buffer-function
-                               'classicist-claim-buffer-function "suite")
-(define-obsolete-variable-alias 'diogenes-claim-buffers
-                               'classicist-claim-buffers "suite")
-(define-obsolete-variable-alias 'diogenes-companion-direction
-                               'classicist-companion-direction "suite")
-(define-obsolete-variable-alias 'diogenes-companion-roles
-                               'classicist-companion-roles "suite")
-(define-obsolete-variable-alias 'diogenes-dictionary-display-action
-                               'classicist-dictionary-display-action "suite")
-(define-obsolete-function-alias 'diogenes-display-beside-companion
-                               'classicist-display-beside-companion "suite")
-(define-obsolete-variable-alias 'diogenes-display-debug
-                               'classicist-display-debug "suite")
-(define-obsolete-function-alias 'diogenes-display-in-role-frame
-                               'classicist-display-in-role-frame "suite")
-(define-obsolete-variable-alias 'diogenes-frame-parameters
-                               'classicist-frame-parameters "suite")
-(define-obsolete-variable-alias 'diogenes-gather-frames
-                               'classicist-gather-frames "suite")
-(define-obsolete-variable-alias 'diogenes-home-buffer-names
-                               'classicist-home-buffer-names "suite")
-(define-obsolete-variable-alias 'diogenes-lookup-display-action
-                               'classicist-lookup-display-action "suite")
-(define-obsolete-variable-alias 'diogenes-morphology-display-action
-                               'classicist-morphology-display-action "suite")
-(define-obsolete-variable-alias 'diogenes-role-regexps
-                               'classicist-role-regexps "suite")
-(define-obsolete-variable-alias 'diogenes-split-direction
-                               'classicist-split-direction "suite")
-(define-obsolete-variable-alias 'diogenes-split-from
-                               'classicist-split-from "suite")
-(define-obsolete-variable-alias 'diogenes-split-size
-                               'classicist-split-size "suite")
-(define-obsolete-variable-alias 'diogenes-window-behaviour
-                               'classicist-window-behaviour "suite")
-
-;;; The focus commands, moved
-;; `classicist-windows.el' holds them now.  Aliased here so that a
-;; reader who bound `diogenes-focus-browser' keeps their key, and so
-;; that `diogenes-focus-keys' keeps its value.
-
-(define-obsolete-variable-alias 'diogenes--focus-maps
-                                'classicist--focus-maps "0.1")
-(define-obsolete-function-alias 'diogenes--focus-role
-                                'classicist--focus-role "0.1")
-(define-obsolete-function-alias 'diogenes-focus-browser
-                                'classicist-focus-browser "0.1")
-(define-obsolete-function-alias 'diogenes-focus-dictionary
-                                'classicist-focus-dictionary "0.1")
-(define-obsolete-variable-alias 'diogenes-focus-keys
-                                'classicist-focus-keys "0.1")
-(define-obsolete-function-alias 'diogenes-focus-lookup
-                                'classicist-focus-lookup "0.1")
-(define-obsolete-function-alias 'diogenes-focus-morphology
-                                'classicist-focus-morphology "0.1")
-(define-obsolete-function-alias 'diogenes-install-focus-keys
-                                'classicist-install-focus-keys "0.1")
+;; The names that moved are answered in `diogenes-lisp-utils-compat.el' and in
+;; `classicist-obsolete.el', and not here: a rename of this
+;; file's own code is a `sed' over this file, and a `sed'
+;; that reaches an alias makes it point at itself.
+;;
+;; BOTH REQUIRED FROM HERE, and that is temporary.  The
+;; public names want loading by the suite's entry point, and
+;; `classicist.el' does not exist yet; until it does, a
+;; reader who has set `diogenes-window-behaviour' needs
+;; something to load the alias, and this is the only file
+;; they are certain to have loaded.
+(require 'diogenes-lisp-utils-compat)
+(require 'classicist-obsolete)
 
 (provide 'diogenes-lisp-utils)
 
