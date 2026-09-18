@@ -1,7 +1,7 @@
 14 classicist-browser.el
-13 diogenes-tgl.el
 12 diogenes-archive.el
 12 classicist-morphology.el
+9 diogenes-tgl.el
 9 diogenes-org.el
 5 classicist-lookup.el
 3 diogenes-user-interface.el

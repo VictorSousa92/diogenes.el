@@ -204,6 +204,83 @@
                   (expected dict-name))
 (declare-function pdf-info-outline "pdf-info" (&optional file-or-buffer))
 
+;;; The constants, where they can be seen
+
+;; ALL FOUR WERE DEFINED BELOW THEIR FIRST READER, three of them by hundreds
+;; of lines -- what a file grown by appending looks like, each new constant
+;; going at the end regardless of where it was wanted.  The compiler reported
+;; every one as a reference to a free variable.
+
+(defconst diogenes-tgl--index-marker "INDEX IN"
+  "Substring marking the start of the index in volume V's OCR.")
+
+(defconst diogenes-tgl--greek-capital-class
+  (concat "\u0391-\u03a9"          ; base capitals Α–Ω
+          "\u1f08-\u1f0f"          ; Ἀ.. (alpha with breathings)
+          "\u1f18-\u1f1d"          ; Ἐ..
+          "\u1f28-\u1f2f"          ; Ἠ..
+          "\u1f38-\u1f3f"          ; Ἰ..
+          "\u1f48-\u1f4d"          ; Ὀ..
+          "\u1f59\u1f5b\u1f5d\u1f5f" ; Ὑ.. (only odd points are capital)
+          "\u1f68-\u1f6f"          ; Ὠ..
+          "\u1fb8-\u1fbc"          ; Ᾰ Ᾱ Ὰ Ά ᾼ
+          "\u1fc8-\u1fcc"          ; Ὲ Έ Ὴ Ή ῌ
+          "\u1fd8-\u1fdb"          ; Ῐ Ῑ Ὶ Ί
+          "\u1fe8-\u1fec"          ; Ῠ Ῡ Ὺ Ύ Ῥ
+          "\u1ff8-\u1ffc")         ; Ὸ Ό Ὼ Ώ ῼ
+  "Character-class body (for use inside \"[...]\") of Greek CAPITAL letters.
+Covers the base block Α–Ω plus ONLY the capital code points of the
+Greek Extended block.  The naive range \\u1f08-\\u1fdb must NOT be used:
+Greek Extended interleaves case, so that range wrongly admits ~100
+LOWERCASE letters (ἐ ἠ ἰ ἵ …); capturing those made
+`diogenes-tgl--all-caps-p' reject every headword and left the caps map
+empty.  This class contains capitals only, so a captured headword is
+genuinely all-caps.")
+
+(defconst diogenes-tgl--prepositional-prefixes
+  '("\u03b1\u03bc\u03c6\u03b9"          ; αμφι
+    "\u03b1\u03bd\u03c4\u03b9"          ; αντι
+    "\u03ba\u03b1\u03c4\u03b1"          ; κατα
+    "\u03bc\u03b5\u03c4\u03b1"          ; μετα
+    "\u03c0\u03b1\u03c1\u03b1"          ; παρα
+    "\u03c0\u03b5\u03c1\u03b9"          ; περι
+    "\u03c0\u03c1\u03bf\u03c3"          ; προς
+    "\u03c5\u03c0\u03b5\u03c1"          ; υπερ
+    "\u03b5\u03bd\u03b4\u03bf"          ; ενδο
+    "\u03b1\u03bd\u03b1"                ; ανα
+    "\u03b1\u03c0\u03bf"                ; απο
+    "\u03b4\u03b9\u03b1"                ; δια
+    "\u03b5\u03b9\u03c3"                ; εισ
+    "\u03b5\u03c0\u03b9"                ; επι
+    "\u03c0\u03c1\u03bf"                ; προ
+    "\u03c3\u03c5\u03bd"                ; συν
+    "\u03c3\u03c5\u03bc"                ; συμ
+    "\u03c3\u03c5\u03bb"                ; συλ
+    "\u03c5\u03c0\u03bf"                ; υπο
+    "\u03b5\u03be\u03c9"                ; εξω
+    "\u03b5\u03ba"                      ; εκ
+    "\u03b5\u03be"                      ; εξ
+    "\u03b5\u03bd")                     ; εν
+  "The PREPOSITIONAL prefixes (Smyth Section 884), longest first.
+A subset of `diogenes-tgl--prefixes': the true prepositions/adverbs
+used as preverbs, where a compound splits unambiguously into prefix +
+root, so the root's initial letter is certain.  The inseparable and
+intensive prefixes (Section 885: alpha-privative, alpha-copulative, νη,
+δυσ, ευ, ημι, αρι, ερι, αγα, ζα, δα, αν) are deliberately EXCLUDED --
+their residual root letter is not reliable enough to constrain a match
+by (an alpha-word need not be an alpha-privative compound).  Used by
+`diogenes-tgl--prepositional-root-initials'.")
+
+(defcustom diogenes-tgl-index-entry-agree-window 40
+  "How near, in pages, a harvested index entry/reference must be to the estimate.
+The `i' key estimates a word's alphabetical place in the volume-V
+index; a supplementary entry or a t.5 reference for the word is only
+preferred over that estimate when within this many pages of it.
+Farther away it is treated as an incidental mention (a gloss or a
+`vide' printed under another lemma) and ignored."
+  :type 'integer
+  :group 'diogenes-tgl)
+
 ;;;; --------------------------------------------------------------------
 ;;;; CUSTOMIZATION
 ;;;; --------------------------------------------------------------------
@@ -782,8 +859,6 @@ Returns an integer PDF page, or nil if MODEL is empty."
 ;; in a variety of OCR spellings.  We attribute each reference to the
 ;; nearest Greek word preceding it on the line.
 
-(defconst diogenes-tgl--index-marker "INDEX IN"
-  "Substring marking the start of the index in volume V's OCR.")
 
 (defconst diogenes-tgl--gword-regexp
   "['\u2019\u1ffe\u1fbf\u02bc\u0384`\u1fef]?\\([\u0386-\u03ce\u1f00-\u1fff]\\{2,\\}\\)"
@@ -1327,28 +1402,6 @@ single sweep.")
 ;; column ~11 pages past ΕΧΩ's opening).  We therefore record, per
 ;; volume, the first PDF page on which each all-caps headword appears,
 ;; and consult it before the index.
-(defconst diogenes-tgl--greek-capital-class
-  (concat "\u0391-\u03a9"          ; base capitals Α–Ω
-          "\u1f08-\u1f0f"          ; Ἀ.. (alpha with breathings)
-          "\u1f18-\u1f1d"          ; Ἐ..
-          "\u1f28-\u1f2f"          ; Ἠ..
-          "\u1f38-\u1f3f"          ; Ἰ..
-          "\u1f48-\u1f4d"          ; Ὀ..
-          "\u1f59\u1f5b\u1f5d\u1f5f" ; Ὑ.. (only odd points are capital)
-          "\u1f68-\u1f6f"          ; Ὠ..
-          "\u1fb8-\u1fbc"          ; Ᾰ Ᾱ Ὰ Ά ᾼ
-          "\u1fc8-\u1fcc"          ; Ὲ Έ Ὴ Ή ῌ
-          "\u1fd8-\u1fdb"          ; Ῐ Ῑ Ὶ Ί
-          "\u1fe8-\u1fec"          ; Ῠ Ῡ Ὺ Ύ Ῥ
-          "\u1ff8-\u1ffc")         ; Ὸ Ό Ὼ Ώ ῼ
-  "Character-class body (for use inside \"[...]\") of Greek CAPITAL letters.
-Covers the base block Α–Ω plus ONLY the capital code points of the
-Greek Extended block.  The naive range \\u1f08-\\u1fdb must NOT be used:
-Greek Extended interleaves case, so that range wrongly admits ~100
-LOWERCASE letters (ἐ ἠ ἰ ἵ …); capturing those made
-`diogenes-tgl--all-caps-p' reject every headword and left the caps map
-empty.  This class contains capitals only, so a captured headword is
-genuinely all-caps.")
 
 (defconst diogenes-tgl--caps-entry-regexp
   (concat "\\`['\u2019\u1ffe\u1fbf\u02bc\u0384`]?"
@@ -2765,39 +2818,6 @@ prefixes).  Used only by `diogenes-tgl--root-candidates'.")
 (defconst diogenes-tgl--greek-vowels "\u03b1\u03b5\u03b7\u03b9\u03bf\u03c5\u03c9"
   "Lowercase Greek vowels (alpha epsilon eta iota omicron upsilon omega), for seam detection.")
 
-(defconst diogenes-tgl--prepositional-prefixes
-  '("\u03b1\u03bc\u03c6\u03b9"          ; αμφι
-    "\u03b1\u03bd\u03c4\u03b9"          ; αντι
-    "\u03ba\u03b1\u03c4\u03b1"          ; κατα
-    "\u03bc\u03b5\u03c4\u03b1"          ; μετα
-    "\u03c0\u03b1\u03c1\u03b1"          ; παρα
-    "\u03c0\u03b5\u03c1\u03b9"          ; περι
-    "\u03c0\u03c1\u03bf\u03c3"          ; προς
-    "\u03c5\u03c0\u03b5\u03c1"          ; υπερ
-    "\u03b5\u03bd\u03b4\u03bf"          ; ενδο
-    "\u03b1\u03bd\u03b1"                ; ανα
-    "\u03b1\u03c0\u03bf"                ; απο
-    "\u03b4\u03b9\u03b1"                ; δια
-    "\u03b5\u03b9\u03c3"                ; εισ
-    "\u03b5\u03c0\u03b9"                ; επι
-    "\u03c0\u03c1\u03bf"                ; προ
-    "\u03c3\u03c5\u03bd"                ; συν
-    "\u03c3\u03c5\u03bc"                ; συμ
-    "\u03c3\u03c5\u03bb"                ; συλ
-    "\u03c5\u03c0\u03bf"                ; υπο
-    "\u03b5\u03be\u03c9"                ; εξω
-    "\u03b5\u03ba"                      ; εκ
-    "\u03b5\u03be"                      ; εξ
-    "\u03b5\u03bd")                     ; εν
-  "The PREPOSITIONAL prefixes (Smyth Section 884), longest first.
-A subset of `diogenes-tgl--prefixes': the true prepositions/adverbs
-used as preverbs, where a compound splits unambiguously into prefix +
-root, so the root's initial letter is certain.  The inseparable and
-intensive prefixes (Section 885: alpha-privative, alpha-copulative, νη,
-δυσ, ευ, ημι, αρι, ερι, αγα, ζα, δα, αν) are deliberately EXCLUDED --
-their residual root letter is not reliable enough to constrain a match
-by (an alpha-word need not be an alpha-privative compound).  Used by
-`diogenes-tgl--prepositional-root-initials'.")
 
 (defun diogenes-tgl--prepositional-root-initials (key)
   "Return the set of possible root INITIAL letters if KEY is a prepositional compound.
@@ -3455,15 +3475,6 @@ resolver."
          (candidate-any (cons 5 candidate-any))
          (t nil))))))
 
-(defcustom diogenes-tgl-index-entry-agree-window 40
-  "How near, in pages, a harvested index entry/reference must be to the estimate.
-The `i' key estimates a word's alphabetical place in the volume-V
-index; a supplementary entry or a t.5 reference for the word is only
-preferred over that estimate when within this many pages of it.
-Farther away it is treated as an incidental mention (a gloss or a
-`vide' printed under another lemma) and ignored."
-  :type 'integer
-  :group 'diogenes-tgl)
 
 (defun diogenes-tgl--index-coarse-page (key seq)
   "Coarse step: return the vicinity PAGE for KEY from SEQ, or nil.
