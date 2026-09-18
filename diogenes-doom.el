@@ -176,21 +176,21 @@ are the mode hooks that claimed a buffer for the workspace."
   "Raise and select the frame holding a buffer of role ROLE.
 WHAT names the kind, for the message when there is none.
 
-Kept for anyone who bound it: the work is `diogenes--focus-role\=' in the core
+Kept for anyone who bound it: the work is `classicist--focus-role\=' in the core
 now, nothing about going from one window to another being particular to Doom."
-  (diogenes--focus-role role what))
+  (classicist--focus-role role what))
 
 ;;;###autoload
-(defalias 'diogenes-doom-focus-lookup-frame #'diogenes-focus-lookup
-  "Renamed: `diogenes-focus-lookup\=', and available in any Emacs.")
+(defalias 'diogenes-doom-focus-lookup-frame #'classicist-focus-lookup
+  "Renamed: `classicist-focus-lookup\=', and available in any Emacs.")
 
 ;;;###autoload
-(defalias 'diogenes-doom-focus-browser-frame #'diogenes-focus-browser
-  "Renamed: `diogenes-focus-browser\=', and available in any Emacs.")
+(defalias 'diogenes-doom-focus-browser-frame #'classicist-focus-browser
+  "Renamed: `classicist-focus-browser\=', and available in any Emacs.")
 
 ;;;###autoload
-(defalias 'diogenes-doom-focus-dictionary-frame #'diogenes-focus-dictionary
-  "Renamed: `diogenes-focus-dictionary\=', and available in any Emacs.")
+(defalias 'diogenes-doom-focus-dictionary-frame #'classicist-focus-dictionary
+  "Renamed: `classicist-focus-dictionary\=', and available in any Emacs.")
 
 (defun diogenes-doom-delete-frames ()
   "Close every frame whose buffer is a Diogenes buffer.

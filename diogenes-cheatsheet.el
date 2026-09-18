@@ -62,7 +62,7 @@
 
 (defcustom diogenes-cheatsheet-command-prefixes
   '("diogenes-lookup-open-" "diogenes-lookup-" "diogenes-browser-"
-    "diogenes-focus-" "diogenes-old-" "diogenes-tgl-" "diogenes-pdf-"
+    "classicist-focus-" "diogenes-old-" "diogenes-tgl-" "diogenes-pdf-"
     "diogenes-purpose-focus-" "diogenes-purpose-" "diogenes--" "diogenes-")
   "Prefixes stripped from a command name to label it, longest first.
 `diogenes-lookup-open-montanari' becomes \"montanari\"."
@@ -107,10 +107,10 @@ governs the shape of the panel more than how much of it you see."
 
 (defcustom diogenes-cheatsheet-labels
   '((diogenes-old-visit-dictionary . "the scanned page")
-    (diogenes-focus-browser        . "the text")
-    (diogenes-focus-lookup         . "the entry")
-    (diogenes-focus-morphology     . "the analysis")
-    (diogenes-focus-dictionary     . "the scanned page")
+    (classicist-focus-browser        . "the text")
+    (classicist-focus-lookup         . "the entry")
+    (classicist-focus-morphology     . "the analysis")
+    (classicist-focus-dictionary     . "the scanned page")
     (diogenes-pdf-search           . "look a word up")
     (diogenes-tgl-open-index-here  . "the index, around this word")
     (diogenes-browser-remove-hyphenation  . "join divided words")
@@ -360,7 +360,7 @@ does."
 	       ;; `diogenes-focus-*\=' is where these live now, and
 	       ;; `diogenes-purpose-focus-*\=' is what they were called when only
 	       ;; window-purpose had them -- a reader may still have one bound.
-	       ((or (string-prefix-p "diogenes-focus-" name)
+	       ((or (string-prefix-p "classicist-focus-" name)
 		    (string-prefix-p "diogenes-purpose-focus-" name)
 		    (eq command 'diogenes-old-visit-dictionary))
 		"Going between the windows and frames")

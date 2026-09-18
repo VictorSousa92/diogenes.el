@@ -47,7 +47,7 @@
 ;; not depend on any convention.
 ;;
 ;; REQUIRES the fork at https://github.com/VictorSousa92/diogenes.el, branch
-;; `org-integration'.  `diogenes-browser-reference', `diogenes-open-passage' and
+;; `org-integration'.  `classicist-browser-reference', `diogenes-open-passage' and
 ;; the abbreviation table are not in the upstream package; this is built on
 ;; them, and on nothing private -- `diogenes--browse-work' has two hyphens and
 ;; is none of our business.
@@ -71,11 +71,11 @@
 ;; Diogenes' own, called at run time.  Declared rather than required, so this
 ;; file compiles without a configured Diogenes and fails only where it should:
 ;; at the point a reader asks for something Diogenes has to answer.
-(declare-function diogenes-browser-reference "diogenes-browser" ())
-(declare-function diogenes-reference-to-string "diogenes-browser" (reference))
+(declare-function classicist-browser-reference "diogenes-browser" ())
+(declare-function classicist-reference-to-string "diogenes-browser" (reference))
 (declare-function diogenes-open-passage "diogenes-browser"
                   (corpus author work &optional passage))
-(declare-function diogenes-citation-interval-from-key "diogenes-browser" (key))
+(declare-function classicist-citation-interval-from-key "diogenes-browser" (key))
 (declare-function diogenes-lookup-greek "diogenes-perseus" (word))
 (declare-function diogenes-lookup-latin "diogenes-perseus" (word))
 
@@ -133,7 +133,7 @@ its own punctuation."
 
 (defun diogenes-org--store-passage ()
   "A link to the passage in this browser buffer, or nil."
-  (let ((reference (diogenes-browser-reference)))
+  (let ((reference (classicist-browser-reference)))
     (when (and reference (plist-get reference :key))
       (org-link-store-props
        :type diogenes-org-link-type
@@ -144,7 +144,7 @@ its own punctuation."
                             (plist-get reference :author)
                             (plist-get reference :work)
                             (plist-get reference :key))))
-       :description (diogenes-reference-to-string reference))
+       :description (classicist-reference-to-string reference))
       t)))
 
 (defun diogenes-org--store-entry ()
@@ -315,7 +315,7 @@ line is meant.
 Matched against the `cit\=' property, which every line of a passage carries and
 which holds a list of numbers and symbols -- `(1053a 15)\=' -- where a link holds
 strings.  So the comparison is of printed forms: `(format \"%s\" ...)\=' on each
-element, which is what `diogenes-citation-to-key\=' does when it writes the link
+element, which is what `classicist-citation-to-key\=' does when it writes the link
 in the first place."
   (let ((wanted (lambda (citation)
                   (and citation
@@ -423,14 +423,14 @@ again."
 
 (defun diogenes-org--browser-showing (corpus author work)
   "A browser buffer already reading WORK of AUTHOR in CORPUS, or nil.
-Asked through `diogenes-browser-reference\=', which is public, rather than by
-reading `diogenes--browser-corpus\=' and its fellows.  Those have two hyphens: a
+Asked through `classicist-browser-reference\=', which is public, rather than by
+reading `classicist--browser-corpus\=' and its fellows.  Those have two hyphens: a
 package outside Diogenes reading them would break on a rename as surely as one
 calling a private function, and the boundary is worth keeping on both sides."
   (seq-find (lambda (buffer)
               (with-current-buffer buffer
                 (and (derived-mode-p 'diogenes-browser-mode)
-                     (let ((reference (diogenes-browser-reference)))
+                     (let ((reference (classicist-browser-reference)))
                        (and reference
                             (equal (plist-get reference :corpus) corpus)
                             (equal (plist-get reference :author) author)
@@ -443,7 +443,7 @@ calling a private function, and the boundary is worth keeping on both sides."
          (author (nth 1 parts))
          (work (nth 2 parts))
          (key (nth 3 parts))
-         (interval (and key (diogenes-citation-interval-from-key key)))
+         (interval (and key (classicist-citation-interval-from-key key)))
          (existing (and diogenes-org-reuse-browser
                         (diogenes-org--browser-showing corpus author work))))
     (if existing
@@ -559,9 +559,9 @@ Called at load; called again after changing `diogenes-org-link-type\\='."
 (declare-function org-roam-node-create "org-roam-node" (&rest args))
 (declare-function org-roam-capture- "org-roam-capture"
                   (&key goto keys node info props templates))
-(declare-function diogenes-browser-citation-at "diogenes-browser"
+(declare-function classicist-browser-citation-at "diogenes-browser"
                   (&optional position))
-(declare-function diogenes-citation-to-key "diogenes-utils" (citation))
+(declare-function classicist-citation-to-key "diogenes-utils" (citation))
 (declare-function diogenes--get-works-list "diogenes-perl-interface"
                   (options author))
 (declare-function diogenes--assoc-cadr "diogenes-lisp-utils" (key alist))
@@ -586,7 +586,7 @@ Non-nil asks the corpus what the work is called: `Metaphysica 1048a27'.  The
 corpora give the Latin titles the editions use -- Metaphysica, Ethica Eudemia,
 De Anima -- which is how a classicist refers to them.
 
-Nil uses `diogenes-reference-to-string', which gives the dictionaries' own
+Nil uses `classicist-reference-to-string', which gives the dictionaries' own
 abbreviations: `Arist. Metaph. 1048a27'.  Shorter, and what one writes in a
 footnote.
 
@@ -703,7 +703,7 @@ inside it, and a reader turning to the page wants both."
 
 (defun diogenes-org--reference-string (&optional it)
   "The passage in hand as a link path, or nil."
-  (let ((it (or it (diogenes-browser-reference))))
+  (let ((it (or it (classicist-browser-reference))))
     (when (and it (plist-get it :key))
       (diogenes-org--encode
        (list "passage"
@@ -724,20 +724,20 @@ business -- but every line carries its citation as a text property, so the
 extent is read off the first and last lines of the text itself.
 
 FORWARD for the first, backward for the last.
-`diogenes-browser-citation-at' searches backward where the line it is given
+`classicist-browser-citation-at' searches backward where the line it is given
 has none of its own, a citation belonging to the lines that follow it; asked
 at the very first line it had nothing behind it and answered nil, which is
 every browser buffer there is."
   (when (derived-mode-p 'diogenes-browser-mode)
-    (let* ((it (diogenes-browser-reference))
+    (let* ((it (classicist-browser-reference))
            (first (save-excursion
                     (goto-char (point-min))
-                    (or (diogenes-browser-citation-at)
+                    (or (classicist-browser-citation-at)
                         (let ((match (text-property-search-forward 'cit)))
                           (and match (prop-match-value match))))))
            (last (save-excursion
                    (goto-char (max (point-min) (1- (point-max))))
-                   (diogenes-browser-citation-at))))
+                   (classicist-browser-citation-at))))
       (when (and it first)
         (let ((make (lambda (citation)
                       (diogenes-org--encode
@@ -745,7 +745,7 @@ every browser buffer there is."
                              (plist-get it :corpus)
                              (plist-get it :author)
                              (plist-get it :work)
-                             (diogenes-citation-to-key citation))))))
+                             (classicist-citation-to-key citation))))))
           (cons (funcall make first)
                 (funcall make (or last first))))))))
 
@@ -785,8 +785,8 @@ the database files it under."
                         (plist-get it :work)))
                  (text (plist-get it :text)))
              (and name text (format "%s %s" name text))))
-      (let ((said (and (fboundp 'diogenes-reference-to-string)
-                       (diogenes-reference-to-string it))))
+      (let ((said (and (fboundp 'classicist-reference-to-string)
+                       (classicist-reference-to-string it))))
         (and said (not (string-empty-p said)) said))
       (plist-get it :text)
       "a passage"))
@@ -856,7 +856,7 @@ wants on arriving at a dialogue rather than at a line."
       (if (null found)
           (message "No notes on %s%s"
                    (if all
-                       (or (plist-get (diogenes-browser-reference) :work)
+                       (or (plist-get (classicist-browser-reference) :work)
                            "this work")
                      (diogenes-org--where (car span)))
                    (if all "" " -- C-u for the whole work"))
@@ -904,7 +904,7 @@ how the note is found again and how it leads back."
   (interactive)
   (unless (require 'org-roam nil t)
     (user-error "This wants org-roam"))
-  (let* ((it (diogenes-browser-reference))
+  (let* ((it (classicist-browser-reference))
          (path (diogenes-org--reference-string it)))
     (unless path
       (user-error "Not in a browser, so there is no passage to note"))

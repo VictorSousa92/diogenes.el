@@ -54,7 +54,7 @@
 (declare-function diogenes--dump-work "diogenes-browser" (options passage))
 (declare-function diogenes-open-passage "diogenes-browser"
                   (corpus author work &optional passage))
-(declare-function diogenes-browser-reference "diogenes-browser" ())
+(declare-function classicist-browser-reference "diogenes-browser" ())
 (declare-function diogenes--get-author-list "diogenes-perl-interface"
                   (options))
 (declare-function diogenes--get-works-list "diogenes-perl-interface"
@@ -450,7 +450,7 @@ them -- Aristotle is cited by Bekker page and line and by nothing else -- and
 are remembered afterwards in `diogenes-books-cache-file\\='."
   (interactive)
   (let* ((reference (and (derived-mode-p 'diogenes-browser-mode)
-                         (diogenes-browser-reference)))
+                         (classicist-browser-reference)))
          (corpus (or (plist-get reference :corpus) "tlg"))
          (author (plist-get reference :author))
          (work (plist-get reference :work)))

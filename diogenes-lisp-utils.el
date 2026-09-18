@@ -132,186 +132,16 @@ answer is about the moment the file is read.  See
   (not (bound-and-true-p diogenes--loading-bundle)))
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-(defun diogenes--focus-role (role what)
-  "Go to a window holding a buffer of role ROLE, raising its frame if need be.
-WHAT names the kind, for the message when there is none.
-
-With ONE such window this simply goes there.  With several -- which `frames\='
-makes ordinary, a scan of the OLD beside a scan of the TLL -- pressing the key
-again goes to the next, and past the last comes back to the first.  So a reader
-who wants a particular one presses until they arrive, and a reader with only one
-of a kind never notices there was a choice.
-
-Where point is already in a window of that role, the NEXT one is chosen; where
-it is not, the first.  A reader pressing the key means `take me there\=', and
-answering `you are there\=' would be true and useless."
-  (let ((windows (classicist--windows-of-role role)))
-    (cond
-     ((null windows) (message "No %s window open" what))
-     (t
-      (let* ((here (selected-window))
-             (position (cl-position here windows))
-             (target (if position
-                         (nth (mod (1+ position) (length windows)) windows)
-                       (car windows))))
-        (unless (eq (window-frame target) (selected-frame))
-          (select-frame-set-input-focus (window-frame target)))
-        (select-window target)
-        (when (and position (> (length windows) 1))
-          (message "%s %d of %d" (capitalize what)
-                   (1+ (mod (1+ position) (length windows)))
-                   (length windows))))))))
+;;;###autoload
 
 ;;;###autoload
-(defun diogenes-focus-lookup ()
-  "Go to the entry -- raising its frame if it is in one."
-  (interactive)
-  (diogenes--focus-role 'lookup "lookup"))
 
 ;;;###autoload
-(defun diogenes-focus-browser ()
-  "Go to the corpus browser -- raising its frame if it is in one."
-  (interactive)
-  (diogenes--focus-role 'browser "browser"))
 
 ;;;###autoload
-(defun diogenes-focus-dictionary ()
-  "Go to the scanned dictionary -- raising its frame if it is in one.
-Bound to nothing by default, and that is deliberate: `C-c C-e\=' reaches the
-scans, `diogenes-old-visit-dictionary\=' preferring the page opened from the
-entry one is reading and calling this when there is none.  One key for the whole
-of it.  Bind this where the plain behaviour is wanted, or call it from a
-function of your own."
-  (interactive)
-  (diogenes--focus-role 'dictionary "dictionary"))
+
 
 ;;;###autoload
-(defun diogenes-focus-morphology ()
-  "Go to the analysis -- raising its frame if it is in one."
-  (interactive)
-  (diogenes--focus-role 'morphology "analysis"))
-
-(defcustom diogenes-focus-keys
-  '((diogenes-focus-browser    . "C-c C-b")
-    (diogenes-focus-lookup     . "C-c C-l")
-    (diogenes-focus-morphology . "C-c C-a")
-    ;; The scanned page has no key here: `C-c C-e' is
-    ;; `diogenes-old-visit-dictionary', which prefers the page opened from the
-    ;; entry one is reading, falls back on this command, and cycles through this
-    ;; command when pressed inside a scan.  One key doing the whole of it beats
-    ;; two that differ in a way nobody can remember.  Give this command a key of
-    ;; its own if the plain behaviour is wanted.
-    (diogenes-focus-dictionary . nil))
-  "Keys for going from one Diogenes window to another, as (COMMAND . KEY).
-Bound in the Diogenes buffers themselves -- an entry, a passage, an analysis, a
-scanned page -- since going from one to another is something one does while in
-one of them.  Nil for a key binds nothing.
-
-`C-c\=' and a letter is reserved for the user by the Emacs conventions, and
-`C-c C-<letter>\=' belongs to the major mode; these are major-mode maps, so
-these are ours to take.  Under evil the read-only buffers are in Emacs state,
-so the chords work there without further arrangement.
-
-The SCANNED page is reached by `C-c C-e\=', which is
-`diogenes-old-visit-dictionary-key\=' and not set here: that command prefers the
-page opened from the entry one is reading, falls back on
-`diogenes-focus-dictionary\=', and CYCLES through it when pressed inside a scan.
-So one key does the whole of it, and this table leaves that command unbound
-rather than offering a second key that differs in a way nobody can remember.
-
-`diogenes-purpose\=' bound `C-c C-b\=' and `C-c C-l\=' to commands of its own
-before these existed.  It no longer does: the keys are the same and the commands
-are in the core, so they work whether purpose is loaded or not.
-
-These matter most when the kinds are in FRAMES, where there is no window to move
-to with `C-x o\=' -- but they work within a frame as well, which is why they are
-bound whatever `diogenes-window-behaviour\=' says.
-
-Set to nil to bind none of them.  The commands remain, and the `diogenes\='
-menu offers them under `w\='."
-  :type '(choice (const :tag "Bind none" nil)
-                 (alist :key-type function
-                        :value-type (choice key-sequence
-                                            (const :tag "Unbound" nil))))
-  :group 'diogenes)
-
-(defvar diogenes--focus-maps
-  '(diogenes-lookup-mode-map
-    diogenes-analysis-mode-map
-    diogenes-browser-mode-map
-    diogenes-search-mode-map
-    diogenes-select-forms-mode-map
-    diogenes-corpus-mode-map
-    ;; A minor mode of OURS for the scanned pages, and not
-    ;; `pdf-view-mode-map': that map belongs to pdf-tools, and binding into it
-    ;; would take these keys from every PDF a reader opens.
-    ;; `diogenes-pdf-search-mode' is enabled on the configured dictionaries and
-    ;; nowhere else, which is the same reasoning that gave `L' a minor mode
-    ;; rather than a viewer binding.
-    diogenes-pdf-search-mode-map)
-  "The maps the focus keys are bound in.
-Every buffer one might be reading FROM: our own modes, and the scanned pages
-through our own minor mode -- a scan being where one is most likely to want the
-entry back.")
-
-;;;###autoload
-(defun diogenes-install-focus-keys ()
-  "Bind `diogenes-focus-keys\=' in the Diogenes buffers.
-Called for its effect at load, and again after changing the option.  A key the
-option no longer names is left alone rather than hunted down: unbinding by hand
-is `keymap-unset\=', and guessing at what a reader may have bound themselves is
-worse than leaving one key too many."
-  (interactive)
-  (dolist (map-symbol diogenes--focus-maps)
-    (when (boundp map-symbol)
-      (let ((map (symbol-value map-symbol)))
-        (dolist (cell diogenes-focus-keys)
-          (when (and (cdr cell) (keymapp map))
-            (condition-case nil
-                (keymap-set map (cdr cell) (car cell))
-              ;; A viewer may have made its map something `keymap-set' will not
-              ;; take; that is its business, and one map refusing is no reason
-              ;; to leave the others unbound.
-              (error nil))))))))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 (defun diogenes--path-set-p (value)
@@ -331,8 +161,6 @@ take a file, a directory of files, or a list of either."
   (cond
    ((consp value) (seq-some #'diogenes--source-set-p value))
    (t (diogenes--path-set-p value))))
-
-
 
 
 (defun diogenes--path-usable-p (value kind)
@@ -623,6 +451,28 @@ When supplied, the keyword arguments add additional strings with a special meani
                                'classicist-split-size "suite")
 (define-obsolete-variable-alias 'diogenes-window-behaviour
                                'classicist-window-behaviour "suite")
+
+;;; The focus commands, moved
+;; `classicist-windows.el' holds them now.  Aliased here so that a
+;; reader who bound `diogenes-focus-browser' keeps their key, and so
+;; that `diogenes-focus-keys' keeps its value.
+
+(define-obsolete-variable-alias 'diogenes--focus-maps
+                                'classicist--focus-maps "0.1")
+(define-obsolete-function-alias 'diogenes--focus-role
+                                'classicist--focus-role "0.1")
+(define-obsolete-function-alias 'diogenes-focus-browser
+                                'classicist-focus-browser "0.1")
+(define-obsolete-function-alias 'diogenes-focus-dictionary
+                                'classicist-focus-dictionary "0.1")
+(define-obsolete-variable-alias 'diogenes-focus-keys
+                                'classicist-focus-keys "0.1")
+(define-obsolete-function-alias 'diogenes-focus-lookup
+                                'classicist-focus-lookup "0.1")
+(define-obsolete-function-alias 'diogenes-focus-morphology
+                                'classicist-focus-morphology "0.1")
+(define-obsolete-function-alias 'diogenes-install-focus-keys
+                                'classicist-install-focus-keys "0.1")
 
 (provide 'diogenes-lisp-utils)
 

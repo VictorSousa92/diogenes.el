@@ -1035,6 +1035,171 @@ is a window here, and what it holds is not worth keeping."
   (and (one-window-p)
        (classicist--home-buffer-p (buffer-name (window-buffer (selected-window))))))
 
+;;; Going from one window to another
+
+;; LEFT BEHIND BY THE FIRST EXTRACTION, on the strength of a closure walk that
+;; reported `--focus-role' reaching every dictionary module.  It does not: the
+;; reach was through `diogenes-old-visit-dictionary', named in the DOCSTRING of
+;; the dictionary command.  Prose, not a call.
+;;
+;; Asked for the direct edge instead, this group calls one thing outside
+;; itself -- `classicist--windows-of-role', which is here -- so here is where
+;; it belongs.
+
+(defun classicist--focus-role (role what)
+  "Go to a window holding a buffer of role ROLE, raising its frame if need be.
+WHAT names the kind, for the message when there is none.
+
+With ONE such window this simply goes there.  With several -- which `frames\='
+makes ordinary, a scan of the OLD beside a scan of the TLL -- pressing the key
+again goes to the next, and past the last comes back to the first.  So a reader
+who wants a particular one presses until they arrive, and a reader with only one
+of a kind never notices there was a choice.
+
+Where point is already in a window of that role, the NEXT one is chosen; where
+it is not, the first.  A reader pressing the key means `take me there\=', and
+answering `you are there\=' would be true and useless."
+  (let ((windows (classicist--windows-of-role role)))
+    (cond
+     ((null windows) (message "No %s window open" what))
+     (t
+      (let* ((here (selected-window))
+             (position (cl-position here windows))
+             (target (if position
+                         (nth (mod (1+ position) (length windows)) windows)
+                       (car windows))))
+        (unless (eq (window-frame target) (selected-frame))
+          (select-frame-set-input-focus (window-frame target)))
+        (select-window target)
+        (when (and position (> (length windows) 1))
+          (message "%s %d of %d" (capitalize what)
+                   (1+ (mod (1+ position) (length windows)))
+                   (length windows))))))))
+
+(defun classicist-focus-lookup ()
+  "Go to the entry -- raising its frame if it is in one."
+  (interactive)
+  (classicist--focus-role 'lookup "lookup"))
+
+(defun classicist-focus-browser ()
+  "Go to the corpus browser -- raising its frame if it is in one."
+  (interactive)
+  (classicist--focus-role 'browser "browser"))
+
+(defun classicist-focus-dictionary ()
+  "Go to the scanned dictionary -- raising its frame if it is in one.
+Bound to nothing by default, and that is deliberate: `C-c C-e\=' reaches the
+scans, `diogenes-old-visit-dictionary\=' preferring the page opened from the
+entry one is reading and calling this when there is none.  One key for the whole
+of it.  Bind this where the plain behaviour is wanted, or call it from a
+function of your own."
+  (interactive)
+  (classicist--focus-role 'dictionary "dictionary"))
+
+(defun classicist-focus-morphology ()
+  "Go to the analysis -- raising its frame if it is in one."
+  (interactive)
+  (classicist--focus-role 'morphology "analysis"))
+
+(defcustom classicist-focus-keys
+  '((classicist-focus-browser    . "C-c C-b")
+    (classicist-focus-lookup     . "C-c C-l")
+    (classicist-focus-morphology . "C-c C-a")
+    ;; The scanned page has no key here: `C-c C-e' is
+    ;; `diogenes-old-visit-dictionary', which prefers the page opened from the
+    ;; entry one is reading, falls back on this command, and cycles through this
+    ;; command when pressed inside a scan.  One key doing the whole of it beats
+    ;; two that differ in a way nobody can remember.  Give this command a key of
+    ;; its own if the plain behaviour is wanted.
+    (classicist-focus-dictionary . nil))
+  "Keys for going from one Diogenes window to another, as (COMMAND . KEY).
+Bound in the Diogenes buffers themselves -- an entry, a passage, an analysis, a
+scanned page -- since going from one to another is something one does while in
+one of them.  Nil for a key binds nothing.
+
+`C-c\=' and a letter is reserved for the user by the Emacs conventions, and
+`C-c C-<letter>\=' belongs to the major mode; these are major-mode maps, so
+these are ours to take.  Under evil the read-only buffers are in Emacs state,
+so the chords work there without further arrangement.
+
+The SCANNED page is reached by `C-c C-e\=', which is
+`diogenes-old-visit-dictionary-key\=' and not set here: that command prefers the
+page opened from the entry one is reading, falls back on
+`classicist-focus-dictionary\=', and CYCLES through it when pressed inside a
+scan.
+So one key does the whole of it, and this table leaves that command unbound
+rather than offering a second key that differs in a way nobody can remember.
+
+`diogenes-purpose\=' bound `C-c C-b\=' and `C-c C-l\=' to commands of its own
+before these existed.  It no longer does: the keys are the same and the commands
+are in the core, so they work whether purpose is loaded or not.
+
+These matter most when the kinds are in FRAMES, where there is no window to move
+to with `C-x o\=' -- but they work within a frame as well, which is why they are
+bound whatever `diogenes-window-behaviour\=' says.
+
+Set to nil to bind none of them.  The commands remain, and the `diogenes\='
+menu offers them under `w\='."
+  :type '(choice (const :tag "Bind none" nil)
+                 (alist :key-type function
+                        :value-type (choice key-sequence
+                                            (const :tag "Unbound" nil))))
+  :group 'diogenes)
+
+(defvar classicist--focus-maps
+  '(diogenes-lookup-mode-map
+    diogenes-analysis-mode-map
+    diogenes-browser-mode-map
+    diogenes-search-mode-map
+    diogenes-select-forms-mode-map
+    diogenes-corpus-mode-map
+    ;; A minor mode of OURS for the scanned pages, and not
+    ;; `pdf-view-mode-map': that map belongs to pdf-tools, and binding into it
+    ;; would take these keys from every PDF a reader opens.
+    ;; `diogenes-pdf-search-mode' is enabled on the configured dictionaries and
+    ;; nowhere else, which is the same reasoning that gave `L' a minor mode
+    ;; rather than a viewer binding.
+    diogenes-pdf-search-mode-map)
+  "The maps the focus keys are bound in.
+Every buffer one might be reading FROM: our own modes, and the scanned pages
+through our own minor mode -- a scan being where one is most likely to want the
+entry back.")
+
+(defun classicist-install-focus-keys ()
+  "Bind `classicist-focus-keys\=' in the Diogenes buffers.
+Called for its effect at load, and again after changing the option.  A key the
+option no longer names is left alone rather than hunted down: unbinding by hand
+is `keymap-unset\=', and guessing at what a reader may have bound themselves is
+worse than leaving one key too many."
+  (interactive)
+  (dolist (map-symbol classicist--focus-maps)
+    (when (boundp map-symbol)
+      (let ((map (symbol-value map-symbol)))
+        (dolist (cell classicist-focus-keys)
+          (when (and (cdr cell) (keymapp map))
+            (condition-case nil
+                (keymap-set map (cdr cell) (car cell))
+              ;; A viewer may have made its map something `keymap-set' will not
+              ;; take; that is its business, and one map refusing is no reason
+              ;; to leave the others unbound.
+              (error nil))))))))
+
+;;;###autoload
+(defun classicist-focus (role)
+  "Go to a window holding a buffer of ROLE.
+FOR ANY ROLE, including one a module registered.  The four commands above
+are the roles Diogenes ships and the ones with keys; a Diorisis hit list or a
+treebank tree has a role too -- see `classicist-role-modes\=' -- and had no
+way to be reached until this existed.
+
+Interactively, completes on the roles `classicist-role-modes\=' knows."
+  (interactive
+   (list (intern (completing-read
+                  "Role: "
+                  (delete-dups (mapcar #'cdr classicist-role-modes))
+                  nil t))))
+  (classicist--focus-role role (symbol-name role)))
+
 (provide 'classicist-windows)
 
 ;;; classicist-windows.el ends here
