@@ -56,6 +56,20 @@
   (interactive "NLines to display: ")
   (diogenes--send-cmd-to-browser (number-to-string height)))
 
+;; HERE, AND NOT IN `diogenes.el'.  A buffer-local option of the browser's,
+;; defined in the entry point and read and set only in this file -- so this
+;; file called up into the one that requires it, and got away with it because
+;; the reads happen at run time.
+;;
+;; The same shape as `diogenes--perseus-path', the two Perl variables and the
+;; two `-I' builders, and the last of them: afterwards this file's only
+;; references into `diogenes.el' are a customize group and a docstring.
+(defcustom diogenes-browser-show-citations t
+  "Whether to show embedded citations in the browser by default."
+  :type 'boolean
+  :group 'diogenes
+  :local t)
+
 (defcustom diogenes-browser-page-lines nil
   "How many lines a page shows, and so when a page is turned.
 Nil for as many as the first page Diogenes sent, which it sized to the window --

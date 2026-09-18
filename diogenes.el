@@ -135,11 +135,6 @@
 (defconst diogenes-perl-min-version 5.10
   "Minimal required verson of perl.")
 
-(defcustom diogenes-browser-show-citations t
-  "Whether to show embedded citations in the browser by default."
-  :type 'boolean
-  :group 'diogenes
-  :local t)
 
 (defcustom diogenes-preferred-lsj-file "grc.lsj.logeion.xml"
   "Filename of the preferred version of the LSJ dictionary."
@@ -275,8 +270,6 @@ Uses the Diogenes Perl module."
   (diogenes--search-database "cop" options-or-pattern author-plist prefix))
 
 
-
-
 ;;; DUMP
 ;;;###autoload
 (defun diogenes-dump-tlg (&optional author work)
@@ -328,8 +321,6 @@ Uses the Diogenes Perl module."
   (diogenes--dump-from-database "cop" author work))
 
 
-
-
 ;;; BROWSE
 ;;;###autoload
 (defun diogenes-browse-tlg (&optional author work)
@@ -379,8 +370,6 @@ Uses the Diogenes Perl module."
 Uses the Diogenes Perl module."
   (interactive)
   (diogenes--browse-database "cop" author work))
-
-
 
 
 ;;; DICTIONARY LOOKUP
@@ -488,7 +477,6 @@ QUERY is interpreted as a regular expression which must match the forms."
   (diogenes--show-all-lemmata query "latin"))
 
 
-
 ;;; UTILITIES
 ;;;###autoload
 (defun diogenes-utf8-to-beta (str)
@@ -549,7 +537,6 @@ otherwise, prompt the user for input."
   (let ((year (+ ad (if (< ad 0) 780 779))))
     (message "Ol. %d/%d" (/ year 4)
 	     (1+ (mod year 4)))))
-
 
 
 ;;; DISPATCHER
