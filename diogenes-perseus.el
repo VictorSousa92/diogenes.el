@@ -32,6 +32,24 @@
 
 (declare-function diogenes-perseus-action nil)
 
+;; DEFINED IN THIS FILE, and the compiler still does not know it.  Each of
+;; these sits inside a top-level `let' that closes over its cache, and a
+;; `defun' nested in a `let' is not a definition the compiler counts -- so
+;; every call to one from elsewhere in the file is reported as a call to
+;; something undefined.
+;;
+;; It went unreported until now only by accident: `diogenes-forms.el' used to
+;; `require' this file, and being compiled first it LOADED this one as source,
+;; so everything was already defined by the time the compiler reached it.
+;; With the word lists in `diogenes-lemmata.el' that require is gone, the
+;; accident with it, and the warnings are what was always true.
+(declare-function diogenes--lookup-insert-xml "diogenes-perseus"
+                  (xml start end buffer))
+(declare-function diogenes--get-all-analyses "diogenes-perseus" (lang))
+(declare-function diogenes--get-analyses-index "diogenes-perseus" (lang))
+(declare-function diogenes--all-matches-in-hashtable "diogenes-perseus"
+                  (query hash-table filter ignore-case no-diacritics))
+
 ;;;; --------------------------------------------------------------------
 ;;;; UTILITIES
 ;;;; --------------------------------------------------------------------
