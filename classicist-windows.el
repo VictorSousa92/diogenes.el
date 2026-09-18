@@ -49,6 +49,12 @@
 (require 'seq)
 (require 'subr-x)
 
+;;; The options
+
+;; BEFORE THE FUNCTIONS THAT READ THEM, which source order did not
+;; manage: two of these were defined below their readers and the
+;; compiler said so -- quietly, and only when nothing happened to
+;; load this file before compiling it.
 
 (defcustom classicist-lookup-display-action nil
   "Where a dictionary entry or an analysis appears.
@@ -76,7 +82,6 @@ entry rather than a request about layout.  See `classicist-display-buffer\='."
   :type 'sexp
   :group 'diogenes)
 
-
 (defcustom classicist-browser-display-action nil
   "Where a passage from the corpora appears.
 A `display-buffer\=' ACTION, or nil for Emacs\='s own choice.  A browser buffer
@@ -86,7 +91,6 @@ this being the other half of that arrangement."
   :type 'sexp
   :group 'diogenes)
 
-
 (defcustom classicist-dictionary-display-action nil
   "Where a scanned dictionary\='s page appears.
 A `display-buffer\=' ACTION, or nil for Emacs\='s own choice.  Distinct from
@@ -95,7 +99,6 @@ read: `diogenes-old-pdf-display-action\=' is the value the print dictionaries
 use today, and this is where it is heading."
   :type 'sexp
   :group 'diogenes)
-
 
 (defcustom classicist-gather-frames 'auto
   "Whether Diogenes buffers of a kind share a frame.
@@ -123,7 +126,6 @@ precedence: an answer given there is given first refusal."
                  (const :tag "Never" nil))
   :group 'diogenes)
 
-
 (defcustom classicist-frame-parameters
   '((name . "Diogenes"))
   "Parameters for a frame made to hold a Diogenes buffer.
@@ -133,7 +135,6 @@ place these frames by rule.  A width and a height are deliberately NOT here
 cannot have leaves part of its tile empty."
   :type '(alist :key-type symbol :value-type sexp)
   :group 'diogenes)
-
 
 (defcustom classicist-role-regexps
   '(("\\`\\*diogenes-lookup" . lookup)
@@ -153,6 +154,252 @@ what they are called:
     (add-to-list \='classicist-role-regexps
                  \='(\\\\`Oxford Latin Dictionary\\\\.pdf . dictionary))"
   :type '(alist :key-type regexp :value-type symbol)
+  :group 'diogenes)
+
+(defcustom classicist-companion-roles
+  '((morphology . lookup))
+  "Which role a kind should be shown beside, rather than beside the reader.
+An alist of (KIND . ROLE): a buffer of KIND is displayed by splitting a window
+already showing a buffer of ROLE, wherever the reader happens to be.
+
+`morphology\=' is beside `lookup\=' because the two are the same sort of
+consultation and belong in one column.  NOT because an analysis is of the entry
+showing there: one may analyse a form while another word\='s entry is open, and
+the pairing says where they go rather than what they are about.
+
+And it is the LOOKUP window rather than the selected one: `ml\=' may be pressed
+while reading a passage in the browser, and splitting the browser would put the
+analysis in the middle of the text.  With no lookup window on the screen there
+is nothing to be beside, and the ordinary rules apply.
+
+Read in BOTH directions.  One pair answers for two arrangements: an analysis
+divides the entry\='s window, and -- where an analysis is on the screen and no
+entry is -- an entry divides the analysis\='s.  Whichever of the two arrives
+second joins the first, which is what belonging together means.
+
+The value may also be `selected\=', which is not a role: it means the window the
+command was given from, whatever is in it.
+
+    (setq classicist-companion-roles \='((morphology . selected)))
+
+That is the arrangement for a reader who wants an analysis under whatever they
+are looking at rather than beside the entry -- and it is deliberately not the
+default, since `ml\=' from a passage would then divide the passage.  Being
+`selected\=' rather than a role, it is not read in reverse: an entry is not put
+beside `selected\=' by it.
+
+Other roles work as well: `(morphology . browser)\=' puts an analysis beside the
+text, and `(morphology . dictionary)\=' beside a scanned page.  Set it to nil and
+an analysis takes a window by the ordinary rules."
+  :type '(alist :key-type symbol
+                :value-type (choice (const :tag "The entry" lookup)
+                                    (const :tag "The text" browser)
+                                    (const :tag "A scanned page" dictionary)
+                                    (const :tag "An analysis" morphology)
+                                    (const :tag "Whichever window I am in" selected)))
+  :group 'diogenes)
+
+(defcustom classicist-companion-direction 'below
+  "Which way the companion window is divided; see
+`classicist-display-beside-companion\='.
+`below\=' puts the analysis under the entry, which is what reading one against
+the other wants: they share the column the entry had, and the frame gains no
+third column."
+  :type '(choice (const :tag "Below" below) (const :tag "Above" above)
+                 (const :tag "To the right" right) (const :tag "To the left" left))
+  :group 'diogenes)
+
+(defcustom classicist-window-behaviour 'defer
+  "Where Diogenes buffers go, said in one word.
+A shorthand for the three actions below, and consulted only where the action
+for a kind of buffer is nil -- so setting
+`classicist-lookup-display-action\=' keeps its own answer for lookups while the
+browser and the dictionaries follow this.
+
+  `defer\='   -- the default, and what the package did before this existed:
+             whatever is installed decides.  `window-purpose\=' where it is
+             loaded, a popup manager under Doom, plain `display-buffer\='
+             elsewhere.  A reader who has arranged their windows to their
+             liking wants this.
+
+  `reuse\='   -- one window for entries, each replacing the last.  Nothing is
+             split and nothing is covered but the previous entry.
+
+  `split\='   -- an entry gets a window of its own beside the text, and later
+             entries share it.  A window the first time, reuse after that:
+             the alternative -- splitting again for every entry -- fills the
+             frame with the same word.
+
+  `frames\='  -- each kind of buffer in a frame of its own, entries gathered
+             into the lookup frame.  This sets the gathering; whether a new
+             buffer gets a frame at all is `pop-up-frames\=', which is yours
+             to set, since it governs the whole of Emacs and not just this.
+
+MIXED, by giving an alist rather than a word.  The three kinds are different
+things and there is no reason they should agree:
+
+    ;; the text stays where it is, entries share a window beside it,
+    ;; and a scan gets a frame of its own
+    (setq classicist-window-behaviour
+          \='((browser . defer) (lookup . split)
+            (dictionary . frames) (morphology . split)))
+
+A kind the alist does not mention falls back to `defer\='.  `frames\=' for any
+kind switches the gathering on for all of them, the gathering being about
+which frame a buffer joins rather than about one kind.
+
+None of the four can override two things, both being statements about what
+was asked rather than about layout: a `C-c C-c\=' chain stays in the window it
+was pressed in, and a frame holding only a startup page yields its window."
+  :type '(choice
+          (const :tag "Let what is installed decide" defer)
+          (const :tag "One window, entries replacing each other" reuse)
+          (const :tag "A window of its own, then shared" split)
+          (const :tag "A frame of its own, gathered" frames)
+          (alist :tag "A different answer for each kind"
+                 :key-type (choice (const lookup) (const browser)
+                                   (const dictionary))
+                 :value-type (choice (const defer) (const reuse)
+                                     (const split) (const frames))))
+  :group 'diogenes)
+
+(defcustom classicist-split-direction nil
+  "Which way `split\=' and the window fallbacks divide a window.
+Nil lets Emacs choose, which means `split-window-sensibly\=' and its
+thresholds -- below if the window is tall enough, beside it if it is wide
+enough, and neither if a distribution has set the thresholds against you.
+
+  `below\=', `above\=', `right\=', `left\=' say which, and say it regardless of the
+thresholds: an entry beside a text reads better on a wide screen, and under
+it on a tall one, and that is a judgement about the screen rather than
+something Emacs can infer."
+  :type '(choice (const :tag "Let Emacs choose" nil)
+                 (const :tag "Below the text" below)
+                 (const :tag "Above the text" above)
+                 (const :tag "To the right" right)
+                 (const :tag "To the left" left))
+  :group 'diogenes)
+
+(defcustom classicist-split-size nil
+  "How much of the divided window the new one takes, or nil for half.
+A number of lines or columns, or a float between 0 and 1 for a fraction of
+what is being divided.  Applied in whichever direction the split went.
+
+An ALIST answers per kind, as `classicist-window-behaviour\=' does:
+
+    (setq classicist-split-size \='((lookup . 0.4) (dictionary . 0.55)))
+
+A kind the alist does not mention gets half, which is what Emacs does unasked.
+
+It governs the split that MAKES a window and nothing after.  Where a kind
+REUSES another\='s window -- a scanned page taking the entry\='s, a second entry
+taking the first\='s -- there is no split and no size of its own: one window has
+one size, and the buffer that arrives second inherits it.  So a size for a
+kind that never gets a window of its own has nothing to act on."
+  :type '(choice (const :tag "Half" nil)
+                 (number :tag "Lines, columns, or a fraction")
+                 (alist :key-type symbol :value-type number))
+  :group 'diogenes)
+
+(defcustom classicist-split-from 'selected
+  "Which window is divided when a new one is wanted.
+  `selected\=' -- the one you are in, which is where you were looking;
+  `main\=' -- the frame\='s main window, ignoring side windows a popup manager
+  or a file tree may have put at the edges;
+  `root\=' -- the frame as a whole, so the new window spans its full width or
+  height rather than dividing whichever window happens to be selected;
+  `largest\=' -- whichever has the most room, which is the least surprising
+  choice when the frame is already divided several ways."
+  :type '(choice (const :tag "The window I am in" selected)
+                 (const :tag "The frame's main window" main)
+                 (const :tag "The whole frame" root)
+                 (const :tag "Whichever is largest" largest))
+  :group 'diogenes)
+
+(defcustom classicist-morphology-display-action nil
+  "Where an analysis or a list of forms appears, or nil for the shorthand.
+A `display-buffer\=' action, as `classicist-lookup-display-action\=' is.
+
+These buffers -- `*Diogenes Analysis*\=' and `*Diogenes Forms*\=' -- used to be
+displayed as lookups, and so replaced whatever entry one was reading.  They are
+a different thing: an entry is what a dictionary says about a word, and an
+analysis is what the morphology says about a form, and a reader consulting one
+about the other wants both on the screen at once."
+  :type '(choice (const :tag "Follow classicist-window-behaviour" nil)
+                 (sexp :tag "A display-buffer action"))
+  :group 'diogenes)
+
+(defcustom classicist-claim-buffers t
+  "Whether a Diogenes buffer is claimed by the perspective it appears in.
+Non-nil adds it, so that `previous-buffer\=', `next-buffer\=' and the
+perspective\='s own buffer list can reach it.  Nil leaves it out, where
+`switch-to-buffer\=' by name is the only way back to it.
+
+Wanted because these buffers are made rather than visited.  persp-mode and
+perspective.el both decide what a perspective contains by watching
+`find-file\=' and `switch-to-buffer\='; a buffer created by a program and
+displayed by `display-buffer\=' is seen by neither, so it exists, is on the
+window\='s own history, and is still invisible to the keys that walk it --
+which is a confusing state, and was reported as a buffer being killed."
+  :type 'boolean
+  :group 'diogenes)
+
+(defcustom classicist-claim-buffer-function 'auto
+  "How a Diogenes buffer is claimed by the current perspective.
+  `auto\=' -- the default -- looks for what is installed and uses it, or does
+nothing where nothing is.  persp-mode and perspective.el are both found this
+way: they share the name `persp-add-buffer\=' and both accept a buffer, which
+is all that is wanted here.
+
+A function of one argument to do it yourself, for a workspace package this
+does not know -- eyebrowse, bufler, something local.  Nil never claims, the
+same as `classicist-claim-buffers\=' nil.
+
+Tab-bar tabs need nothing: a tab holds a window configuration rather than a
+set of buffers, so a buffer is reachable from any of them."
+  :type '(choice (const :tag "Detect what is installed" auto)
+                 (const :tag "Never" nil)
+                 function)
+  :group 'diogenes)
+
+(defcustom classicist-display-debug nil
+  "When non-nil, record every decision `classicist-display-buffer\=' makes.
+Each call appends a paragraph to `*diogenes-display-log*\=': which of the four
+branches was taken, what was in force when it was taken, the windows before
+and after, and the window returned.
+
+Here because one symptom -- a lookup taking the window of the text it was
+looked up from, on one configuration and not the others -- took a day of
+probing and was not explained.  Every component measured correctly in
+isolation while the whole measured wrong, which is the signature of a
+decision being made where nobody is looking.  A log of the decision itself
+answers in one keypress what the probing did not.
+
+    (setq classicist-display-debug t)
+
+then do the thing that misbehaves, and read the buffer."
+  :type 'boolean
+  :group 'diogenes)
+
+(defcustom classicist-home-buffer-names
+  '("*spacemacs*" "*doom*" "*doom-dashboard*" "*dashboard*"
+    "*GNU Emacs*" "*About GNU Emacs*")
+  "Buffer names treated as a startup or home page.
+A frame showing one of these and nothing else is a frame with nothing in
+it: splitting it, or opening another frame beside it, wastes the screen
+where reusing the window is what a reader wants.  Every distribution has
+its own -- `*spacemacs*\=', Doom\='s `*doom*\=' (and `*doom-dashboard*\=', which
+some configurations use instead), the dashboard package\='s `*dashboard*\=', and
+Emacs\='s own splash -- and the name is looked for at the moment of display, so
+nothing here depends on which is installed.
+
+These names have a second use, in
+`diogenes--word-at-point-for-lookup\=': a word at point in a startup page is not
+a word to look up, a dashboard being prose about Emacs.  `*scratch*\=' is
+deliberately NOT here -- it would be reasonable for that second purpose and
+wrong for this one, since a frame showing scratch is a frame the reader may be
+using."
+  :type '(repeat string)
   :group 'diogenes)
 
 
@@ -244,61 +491,6 @@ put a buffer rather than somewhere to go."
   (car (classicist--windows-of-role role)))
 
 
-(defcustom classicist-companion-roles
-  '((morphology . lookup))
-  "Which role a kind should be shown beside, rather than beside the reader.
-An alist of (KIND . ROLE): a buffer of KIND is displayed by splitting a window
-already showing a buffer of ROLE, wherever the reader happens to be.
-
-`morphology\=' is beside `lookup\=' because the two are the same sort of
-consultation and belong in one column.  NOT because an analysis is of the entry
-showing there: one may analyse a form while another word\='s entry is open, and
-the pairing says where they go rather than what they are about.
-
-And it is the LOOKUP window rather than the selected one: `ml\=' may be pressed
-while reading a passage in the browser, and splitting the browser would put the
-analysis in the middle of the text.  With no lookup window on the screen there
-is nothing to be beside, and the ordinary rules apply.
-
-Read in BOTH directions.  One pair answers for two arrangements: an analysis
-divides the entry\='s window, and -- where an analysis is on the screen and no
-entry is -- an entry divides the analysis\='s.  Whichever of the two arrives
-second joins the first, which is what belonging together means.
-
-The value may also be `selected\=', which is not a role: it means the window the
-command was given from, whatever is in it.
-
-    (setq classicist-companion-roles \='((morphology . selected)))
-
-That is the arrangement for a reader who wants an analysis under whatever they
-are looking at rather than beside the entry -- and it is deliberately not the
-default, since `ml\=' from a passage would then divide the passage.  Being
-`selected\=' rather than a role, it is not read in reverse: an entry is not put
-beside `selected\=' by it.
-
-Other roles work as well: `(morphology . browser)\=' puts an analysis beside the
-text, and `(morphology . dictionary)\=' beside a scanned page.  Set it to nil and
-an analysis takes a window by the ordinary rules."
-  :type '(alist :key-type symbol
-                :value-type (choice (const :tag "The entry" lookup)
-                                    (const :tag "The text" browser)
-                                    (const :tag "A scanned page" dictionary)
-                                    (const :tag "An analysis" morphology)
-                                    (const :tag "Whichever window I am in" selected)))
-  :group 'diogenes)
-
-
-(defcustom classicist-companion-direction 'below
-  "Which way the companion window is divided; see
-`classicist-display-beside-companion\='.
-`below\=' puts the analysis under the entry, which is what reading one against
-the other wants: they share the column the entry had, and the frame gains no
-third column."
-  :type '(choice (const :tag "Below" below) (const :tag "Above" above)
-                 (const :tag "To the right" right) (const :tag "To the left" left))
-  :group 'diogenes)
-
-
 (defun classicist--companion-role (kind)
   "The role KIND belongs beside, from `classicist-companion-roles\=', or nil.
 Read in BOTH directions, the relation being between the two and not from one to
@@ -378,123 +570,12 @@ Emacs and the answer changes with it."
     (pop-up-frame-parameters . ,classicist-frame-parameters)))
 
 
-(defcustom classicist-window-behaviour 'defer
-  "Where Diogenes buffers go, said in one word.
-A shorthand for the three actions below, and consulted only where the action
-for a kind of buffer is nil -- so setting
-`classicist-lookup-display-action\=' keeps its own answer for lookups while the
-browser and the dictionaries follow this.
-
-  `defer\='   -- the default, and what the package did before this existed:
-             whatever is installed decides.  `window-purpose\=' where it is
-             loaded, a popup manager under Doom, plain `display-buffer\='
-             elsewhere.  A reader who has arranged their windows to their
-             liking wants this.
-
-  `reuse\='   -- one window for entries, each replacing the last.  Nothing is
-             split and nothing is covered but the previous entry.
-
-  `split\='   -- an entry gets a window of its own beside the text, and later
-             entries share it.  A window the first time, reuse after that:
-             the alternative -- splitting again for every entry -- fills the
-             frame with the same word.
-
-  `frames\='  -- each kind of buffer in a frame of its own, entries gathered
-             into the lookup frame.  This sets the gathering; whether a new
-             buffer gets a frame at all is `pop-up-frames\=', which is yours
-             to set, since it governs the whole of Emacs and not just this.
-
-MIXED, by giving an alist rather than a word.  The three kinds are different
-things and there is no reason they should agree:
-
-    ;; the text stays where it is, entries share a window beside it,
-    ;; and a scan gets a frame of its own
-    (setq classicist-window-behaviour
-          \='((browser . defer) (lookup . split)
-            (dictionary . frames) (morphology . split)))
-
-A kind the alist does not mention falls back to `defer\='.  `frames\=' for any
-kind switches the gathering on for all of them, the gathering being about
-which frame a buffer joins rather than about one kind.
-
-None of the four can override two things, both being statements about what
-was asked rather than about layout: a `C-c C-c\=' chain stays in the window it
-was pressed in, and a frame holding only a startup page yields its window."
-  :type '(choice
-          (const :tag "Let what is installed decide" defer)
-          (const :tag "One window, entries replacing each other" reuse)
-          (const :tag "A window of its own, then shared" split)
-          (const :tag "A frame of its own, gathered" frames)
-          (alist :tag "A different answer for each kind"
-                 :key-type (choice (const lookup) (const browser)
-                                   (const dictionary))
-                 :value-type (choice (const defer) (const reuse)
-                                     (const split) (const frames))))
-  :group 'diogenes)
-
-
-(defcustom classicist-split-direction nil
-  "Which way `split\=' and the window fallbacks divide a window.
-Nil lets Emacs choose, which means `split-window-sensibly\=' and its
-thresholds -- below if the window is tall enough, beside it if it is wide
-enough, and neither if a distribution has set the thresholds against you.
-
-  `below\=', `above\=', `right\=', `left\=' say which, and say it regardless of the
-thresholds: an entry beside a text reads better on a wide screen, and under
-it on a tall one, and that is a judgement about the screen rather than
-something Emacs can infer."
-  :type '(choice (const :tag "Let Emacs choose" nil)
-                 (const :tag "Below the text" below)
-                 (const :tag "Above the text" above)
-                 (const :tag "To the right" right)
-                 (const :tag "To the left" left))
-  :group 'diogenes)
-
-
-(defcustom classicist-split-size nil
-  "How much of the divided window the new one takes, or nil for half.
-A number of lines or columns, or a float between 0 and 1 for a fraction of
-what is being divided.  Applied in whichever direction the split went.
-
-An ALIST answers per kind, as `classicist-window-behaviour\=' does:
-
-    (setq classicist-split-size \='((lookup . 0.4) (dictionary . 0.55)))
-
-A kind the alist does not mention gets half, which is what Emacs does unasked.
-
-It governs the split that MAKES a window and nothing after.  Where a kind
-REUSES another\='s window -- a scanned page taking the entry\='s, a second entry
-taking the first\='s -- there is no split and no size of its own: one window has
-one size, and the buffer that arrives second inherits it.  So a size for a
-kind that never gets a window of its own has nothing to act on."
-  :type '(choice (const :tag "Half" nil)
-                 (number :tag "Lines, columns, or a fraction")
-                 (alist :key-type symbol :value-type number))
-  :group 'diogenes)
-
-
 (defun classicist--split-size-for (kind)
   "What `classicist-split-size\=' says about KIND, or nil for half."
   (if (and (consp classicist-split-size)
            (consp (car classicist-split-size)))
       (cdr (assq kind classicist-split-size))
     classicist-split-size))
-
-
-(defcustom classicist-split-from 'selected
-  "Which window is divided when a new one is wanted.
-  `selected\=' -- the one you are in, which is where you were looking;
-  `main\=' -- the frame\='s main window, ignoring side windows a popup manager
-  or a file tree may have put at the edges;
-  `root\=' -- the frame as a whole, so the new window spans its full width or
-  height rather than dividing whichever window happens to be selected;
-  `largest\=' -- whichever has the most room, which is the least surprising
-  choice when the frame is already divided several ways."
-  :type '(choice (const :tag "The window I am in" selected)
-                 (const :tag "The frame's main window" main)
-                 (const :tag "The whole frame" root)
-                 (const :tag "Whichever is largest" largest))
-  :group 'diogenes)
 
 
 (defun classicist--split-alist (&optional kind)
@@ -643,55 +724,6 @@ the other two."
       (classicist--behaviour-action (classicist--behaviour-for kind) kind)))
 
 
-(defcustom classicist-morphology-display-action nil
-  "Where an analysis or a list of forms appears, or nil for the shorthand.
-A `display-buffer\=' action, as `classicist-lookup-display-action\=' is.
-
-These buffers -- `*Diogenes Analysis*\=' and `*Diogenes Forms*\=' -- used to be
-displayed as lookups, and so replaced whatever entry one was reading.  They are
-a different thing: an entry is what a dictionary says about a word, and an
-analysis is what the morphology says about a form, and a reader consulting one
-about the other wants both on the screen at once."
-  :type '(choice (const :tag "Follow classicist-window-behaviour" nil)
-                 (sexp :tag "A display-buffer action"))
-  :group 'diogenes)
-
-
-(defcustom classicist-claim-buffers t
-  "Whether a Diogenes buffer is claimed by the perspective it appears in.
-Non-nil adds it, so that `previous-buffer\=', `next-buffer\=' and the
-perspective\='s own buffer list can reach it.  Nil leaves it out, where
-`switch-to-buffer\=' by name is the only way back to it.
-
-Wanted because these buffers are made rather than visited.  persp-mode and
-perspective.el both decide what a perspective contains by watching
-`find-file\=' and `switch-to-buffer\='; a buffer created by a program and
-displayed by `display-buffer\=' is seen by neither, so it exists, is on the
-window\='s own history, and is still invisible to the keys that walk it --
-which is a confusing state, and was reported as a buffer being killed."
-  :type 'boolean
-  :group 'diogenes)
-
-
-(defcustom classicist-claim-buffer-function 'auto
-  "How a Diogenes buffer is claimed by the current perspective.
-  `auto\=' -- the default -- looks for what is installed and uses it, or does
-nothing where nothing is.  persp-mode and perspective.el are both found this
-way: they share the name `persp-add-buffer\=' and both accept a buffer, which
-is all that is wanted here.
-
-A function of one argument to do it yourself, for a workspace package this
-does not know -- eyebrowse, bufler, something local.  Nil never claims, the
-same as `classicist-claim-buffers\=' nil.
-
-Tab-bar tabs need nothing: a tab holds a window configuration rather than a
-set of buffers, so a buffer is reachable from any of them."
-  :type '(choice (const :tag "Detect what is installed" auto)
-                 (const :tag "Never" nil)
-                 function)
-  :group 'diogenes)
-
-
 (defun classicist--claim-buffer (buffer)
   "Add BUFFER to the current perspective, if there is one to add it to.
 Called for every Diogenes buffer as it is displayed -- which is one place,
@@ -722,26 +754,6 @@ whatever the perspective package does inside it."
              (ignore-errors (persp-add-buffer buffer))))
           ((and (pred functionp) fn)
            (ignore-errors (funcall fn buffer))))))))
-
-
-(defcustom classicist-display-debug nil
-  "When non-nil, record every decision `classicist-display-buffer\=' makes.
-Each call appends a paragraph to `*diogenes-display-log*\=': which of the four
-branches was taken, what was in force when it was taken, the windows before
-and after, and the window returned.
-
-Here because one symptom -- a lookup taking the window of the text it was
-looked up from, on one configuration and not the others -- took a day of
-probing and was not explained.  Every component measured correctly in
-isolation while the whole measured wrong, which is the signature of a
-decision being made where nobody is looking.  A log of the decision itself
-answers in one keypress what the probing did not.
-
-    (setq classicist-display-debug t)
-
-then do the thing that misbehaves, and read the buffer."
-  :type 'boolean
-  :group 'diogenes)
 
 
 (defvar classicist--display-log-before nil)
@@ -951,28 +963,6 @@ miss and was missed here."
       (classicist--remember-role window kind))
     (classicist--display-log buffer window)
     window))
-
-
-(defcustom classicist-home-buffer-names
-  '("*spacemacs*" "*doom*" "*doom-dashboard*" "*dashboard*"
-    "*GNU Emacs*" "*About GNU Emacs*")
-  "Buffer names treated as a startup or home page.
-A frame showing one of these and nothing else is a frame with nothing in
-it: splitting it, or opening another frame beside it, wastes the screen
-where reusing the window is what a reader wants.  Every distribution has
-its own -- `*spacemacs*\=', Doom\='s `*doom*\=' (and `*doom-dashboard*\=', which
-some configurations use instead), the dashboard package\='s `*dashboard*\=', and
-Emacs\='s own splash -- and the name is looked for at the moment of display, so
-nothing here depends on which is installed.
-
-These names have a second use, in
-`diogenes--word-at-point-for-lookup\=': a word at point in a startup page is not
-a word to look up, a dashboard being prose about Emacs.  `*scratch*\=' is
-deliberately NOT here -- it would be reasonable for that second purpose and
-wrong for this one, since a frame showing scratch is a frame the reader may be
-using."
-  :type '(repeat string)
-  :group 'diogenes)
 
 
 (defun classicist--home-buffer-p (name)
