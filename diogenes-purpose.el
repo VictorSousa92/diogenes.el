@@ -233,13 +233,13 @@ currently showing a dictionary.")
 EMPTY, and that is the point of it now: the mode still exists so that a
 dictionary buffer can be recognised, and the keys it used to carry --
 `C-c C-l', `C-c C-b', `C-c C-e' -- are in the core, bound by
-`diogenes-focus-keys' and `diogenes-old-visit-dictionary-key' in every Diogenes
+`classicist-focus-keys' and `diogenes-old-visit-dictionary-key' in every Diogenes
 buffer including this one.
 
 Leaving them here did more than duplicate: the cheatsheet lifts into
 `Everywhere' the bindings that are the same in every section, comparing the key
 AND the command, and a scan running `diogenes-purpose-focus-browser-window'
-where an entry runs `diogenes-focus-browser' has the same key doing two things.
+where an entry runs `classicist-focus-browser' has the same key doing two things.
 So nothing was common, nothing was lifted, and the four keys went on being
 listed four times over.")
 
@@ -358,7 +358,7 @@ and is writable."
                   (diogenes-browser . diogenes-browser-mode-map)))
     (let ((feature (car spec))
           (map (cdr spec)))
-      ;; The KEYS are no longer bound here.  `diogenes-focus-keys' binds
+      ;; The KEYS are no longer bound here.  `classicist-focus-keys' binds
       ;; `C-c C-b', `C-c C-l', `C-c C-a' and `C-c C-s' in the core, to commands
       ;; that raise a window or a frame whichever this module is doing -- so a
       ;; reader has the same four keys with purpose and without it, which is

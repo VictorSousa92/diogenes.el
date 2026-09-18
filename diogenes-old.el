@@ -38,7 +38,7 @@
 ;; cycle, and -- where the name is one of this package's own caches --
 ;; defined inside a `let', which the compiler does not count as a
 ;; definition at all.
-(declare-function diogenes-focus-dictionary "diogenes-lisp-utils" ())
+(declare-function classicist-focus-dictionary "classicist-windows" ())
 (declare-function reader-open-doc "reader" (file))
 
 (declare-function diogenes--lookup-assert-lang "diogenes-perseus" (expected dict-name))
@@ -1044,7 +1044,7 @@ A page opened FROM this entry is preferred, that being the page for the word
 in front of the reader.  Failing one -- and it fails often, the provenance
 being recorded only where a page REPLACES an entry, which `split\=' and `frames\='
 never do -- this goes to whatever scan is open, cycling where there are
-several.  `diogenes-focus-dictionary\=' on `C-c C-s\=' does the second thing
+several.  `classicist-focus-dictionary\=' on `C-c C-s\=' does the second thing
 always, for a reader who wants the plain behaviour."
   (interactive)
   (let ((page (car (seq-filter
@@ -1059,8 +1059,8 @@ always, for a reader who wants the plain behaviour."
      ;; provenance below would answer instead and pressing the key twice in a
      ;; scan would go nowhere.
      ((and (eq (classicist--buffer-role (current-buffer)) 'dictionary)
-           (fboundp 'diogenes-focus-dictionary))
-      (diogenes-focus-dictionary))
+           (fboundp 'classicist-focus-dictionary))
+      (classicist-focus-dictionary))
      ;; A page opened FROM this entry, which is the best answer where there is
      ;; one: it is the page for the word being read.
      (page (switch-to-buffer page))
@@ -1069,7 +1069,7 @@ always, for a reader who wants the plain behaviour."
      ;; wants the scan and does not care which entry it came from.  It also
      ;; refused almost always, the provenance being recorded only where a page
      ;; REPLACES an entry, which `split' and `frames' never do.
-     ((fboundp 'diogenes-focus-dictionary) (diogenes-focus-dictionary))
+     ((fboundp 'classicist-focus-dictionary) (classicist-focus-dictionary))
      (t (message "No dictionary page open")))))
 
 (defcustom diogenes-old-visit-dictionary-key "C-c C-e"

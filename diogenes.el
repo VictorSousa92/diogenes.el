@@ -111,8 +111,8 @@
 (dolist (feature '(diogenes-perseus diogenes-browser diogenes-search
                    diogenes-corpora diogenes-forms diogenes-pdf-search))
   (with-eval-after-load feature
-    (when (fboundp 'diogenes-install-focus-keys)
-      (diogenes-install-focus-keys))))
+    (when (fboundp 'classicist-install-focus-keys)
+      (classicist-install-focus-keys))))
 (require 'diogenes-pdf-search)
 (diogenes-pdf-search-setup-keys)
 ;(require 'diogenes-window)
