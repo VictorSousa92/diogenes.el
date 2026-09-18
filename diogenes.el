@@ -52,18 +52,12 @@
   "Interface to P. Heslin's Diogenes."
   :group 'tools)
 
-(defcustom diogenes-perl-executable "perl"
-  "Path to perl executable."
-  :type 'string
-  :group 'diogenes)
 
 (defcustom diogenes-path nil
   "Path to the Diogenes installation."
   :type 'directory
   :group 'diogenes)
 
-(defconst diogenes-perl-min-version 5.10
-  "Minimal required verson of perl.")
 
 (defcustom diogenes-browser-show-citations t
   "Whether to show embedded citations in the browser by default."
