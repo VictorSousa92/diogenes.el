@@ -1,6 +1,14 @@
 EMACS   ?= emacs
 PYTHON  ?= python3
-ELS      = $(wildcard *.el)
+## diogenes-archive.el IS NOT COMPILED, and that is deliberate.  It is
+## loaded by nothing, and it has never run: its cl-loop forms would have
+## failed at the first call without cl-lib, and nothing ever made that call.
+## Compiling it produces twelve warnings about functions that no longer
+## exist, which is twelve pieces of noise about a file that does nothing.
+##
+## Left in the tree rather than deleted, because deleting it is a decision
+## about what is worth keeping and git has it either way.
+ELS      = $(filter-out diogenes-archive.el,$(wildcard *.el))
 BASELINE = per-file-baseline.txt
 
 .PHONY: all check compile declare baseline balance duplicates forms clean help

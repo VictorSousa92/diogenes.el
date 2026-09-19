@@ -1,5 +1,4 @@
 14 classicist-browser.el
-12 diogenes-archive.el
 12 classicist-morphology.el
 9 diogenes-tgl.el
 8 diogenes-org.el
