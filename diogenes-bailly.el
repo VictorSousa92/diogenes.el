@@ -166,7 +166,7 @@
 (require 'subr-x)
 (require 'ucs-normalize)
 (require 'diogenes-dict-faces)
-(require 'diogenes-lisp-utils)          ; diogenes--path-usable-p
+(require 'diogenes-lisp-utils)          ; classicist--path-usable-p
 
 (declare-function classicist--search-dict "classicist-lookup"
                   (word lang sort-fn key-fn &optional file))
@@ -177,7 +177,7 @@
 (declare-function classicist--lookup-current-headword "classicist-lookup" ())
 (declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
-(declare-function diogenes--perseus-path "diogenes" ())
+(declare-function diogenes--perseus-path "classicist" ())
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 (declare-function diogenes--perseus-beta-to-utf8 "diogenes-utils" (str))
 (declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
@@ -648,7 +648,7 @@ pressing `B' offers to build it.  Never signals: `diogenes-path' may itself
 be unset, and this is asked while an entry is being drawn."
   (let ((file (ignore-errors (diogenes-bailly--dictionary-file))))
     (or (and file (file-readable-p file))
-        (diogenes--source-set-p diogenes-bailly-source-file))))
+        (classicist--source-set-p diogenes-bailly-source-file))))
 
 ;;;###autoload
 (defun diogenes-bailly-available-p ()
@@ -771,11 +771,11 @@ to the LSJ, `C-u B' looks up another word here"))
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(defconst diogenes-bailly--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-bailly--declared-at-load (classicist--declared-at-load-p)
   "Whether Bailly was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-bailly--register ()
   "Announce Bailly to the lookup banner.  Idempotent.

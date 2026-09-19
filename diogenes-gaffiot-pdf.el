@@ -212,7 +212,7 @@ is it the Gaffiot PDF?" file))
 (defun diogenes-gaffiot-pdf--file ()
   "Return the configured Gaffiot PDF, or signal a user-error."
   (let ((file diogenes-gaffiot-pdf-file))
-    (diogenes--require-path file 'diogenes-gaffiot-pdf-file
+    (classicist--require-path file 'diogenes-gaffiot-pdf-file
                             "The printed Gaffiot" 'file)))
 
 (defun diogenes-gaffiot-pdf--index (&optional file)
@@ -328,13 +328,13 @@ whether there is a PDF at all.  Asked before offering \"[PDF (g)]\" inside a
 Gaffiot entry, where an explicit press is not a fall-through and so is not
 the fallback option's business."
   (and (boundp 'diogenes-gaffiot-pdf-file)
-       (diogenes--path-set-p diogenes-gaffiot-pdf-file)))
+       (classicist--path-set-p diogenes-gaffiot-pdf-file)))
 
-(defconst diogenes-gaffiot-pdf--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-gaffiot-pdf--declared-at-load (classicist--declared-at-load-p)
   "Whether the printed Gaffiot was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-gaffiot-pdf--register ()
   "Announce the printed Gaffiot to the lookup banner.  Idempotent.

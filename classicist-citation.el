@@ -60,7 +60,7 @@
 (declare-function diogenes--get-work-labels "diogenes-perl-interface" (options author-and-work))
 (declare-function diogenes--select-passage "diogenes-user-interface"
                   (options author work))
-(declare-function diogenes-browse-tlg "diogenes" (&optional author work))
+(declare-function diogenes-browse-tlg "classicist" (&optional author work))
 (defvar diogenes-abbreviations)
 
 ;; STAYED IN THE BROWSER, because it opens a passage there, and opening one is

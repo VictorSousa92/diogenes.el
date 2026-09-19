@@ -28,6 +28,7 @@
 (require 'transient)             ; transient-scope
 (require 'seq)
 (require 'ucs-normalize)                ; diogenes--ascii-alpha-only folds NFD
+(require 'classicist-installation)  ; is this set up, and if not what to say
 
 (defmacro diogenes--replace-regexes-in-string (str &rest subst-lists)
   "Apply a list of regex-substitutions to a string in sequence.
@@ -105,32 +106,6 @@ The value is actually the first element of ALIST whose car equals KEY."
 		    (point-min))))
     (list start end)))
 
-(defvar diogenes--loading-bundle nil
-  "Non-nil while `diogenes.el' loads the dictionary modules it ships with.
-This is how a module tells apart the two ways it can come to be loaded:
-
-  the user asked for it -- `(require \\='diogenes-tll)' in an init file --
-  which is a declaration that this dictionary is wanted;
-
-  `diogenes.el' loaded it along with everything else, which says nothing
-  about whether the user has it.
-
-A module reads this AT LOAD TIME, through `diogenes--declared-at-load-p',
-and passes the answer to `diogenes-lookup-register-dictionary' as
-DECLARED.  Read at load time rather than at registration because
-registration is deferred through `with-eval-after-load' and would
-otherwise run inside the bundle's own binding.
-
-`diogenes-declared-dictionaries' is the other way to declare one, and the
-one that does not depend on load order.")
-
-(defun diogenes--declared-at-load-p ()
-  "Whether the file now being loaded was asked for, rather than bundled.
-Call at the top level of a dictionary module, never from a function: the
-answer is about the moment the file is read.  See
-`diogenes--loading-bundle'."
-  (not (bound-and-true-p diogenes--loading-bundle)))
-
 
 ;;;###autoload
 
@@ -143,91 +118,6 @@ answer is about the moment the file is read.  See
 
 ;;;###autoload
 
-
-(defun diogenes--path-set-p (value)
-  "Non-nil if VALUE is a path the user has actually named.
-Set-ness only: whether anything is there is not asked.  A dictionary whose
-path is set is one the user means to have, so its link is offered and the
-command explains what is wrong with the path -- a moved volume or a typo
-being a thing to report rather than a reason to make the dictionary
-disappear.  `diogenes--path-usable-p' is the stricter question, for when
-something is about to be read."
-  (and (stringp value) (not (string-empty-p value)) t))
-
-(defun diogenes--source-set-p (value)
-  "Non-nil if VALUE names TEI source material, without checking it is there.
-As `diogenes--path-set-p', but for the `...-source-file' options, which
-take a file, a directory of files, or a list of either."
-  (cond
-   ((consp value) (seq-some #'diogenes--source-set-p value))
-   (t (diogenes--path-set-p value))))
-
-
-(defun diogenes--path-usable-p (value kind)
-  "Non-nil if VALUE names an existing file or readable directory.
-KIND is `file' or `directory'.  VALUE is what a dictionary's path option
-currently holds: nil, the empty string, or a path that does not exist all
-count as unusable.
-
-This is the half of the pair that ASKS, and it must stay cheap, silent and
-free of side effects: the link banner calls it for every dictionary each
-time it draws itself, so it may neither signal nor prompt.
-`diogenes--require-path' is the half that TELLS -- called by a command once
-the user has actually pressed a key, and which explains what to set."
-  (and (stringp value)
-       (not (string-empty-p value))
-       (if (eq kind 'directory)
-           (file-directory-p value)
-         (file-readable-p value))
-       t))
-
-(defun diogenes--source-usable-p (value)
-  "Non-nil if VALUE names TEI source material that is actually there.
-The `...-source-file' options each take any of three things -- a single XML
-file, a directory of them, or an explicit list -- so this accepts all
-three: a list is usable when any of its members is, a string when it names
-either a readable file or an existing directory.
-
-Asked when deciding whether to offer a dictionary that has not been
-converted yet: a source that is present means \\[diogenes-lookup-pape] and
-its kind can offer to build the dictionary, so the link leads somewhere
-after all.  Like `diogenes--path-usable-p', it neither signals nor
-prompts."
-  (cond
-   ((consp value) (seq-some #'diogenes--source-usable-p value))
-   (t (or (diogenes--path-usable-p value 'file)
-          (diogenes--path-usable-p value 'directory)))))
-
-(defun diogenes--require-path (value variable dictionary kind)
-  "Return VALUE, or explain how to set VARIABLE if it will not serve.
-The dictionaries each need a path from the user, and a missing one should
-say what to set and how rather than failing somewhere downstream.  VALUE is
-what the option currently holds, VARIABLE its symbol, DICTIONARY the name to
-call it by in the message, and KIND either `file' or `directory'.
-
-Set as an ordinary variable, before Diogenes loads, or through Customize;
-either way the value survives the `defcustom'."
-  (let ((name (symbol-name variable)))
-    (cond
-     ((or (null value) (and (stringp value) (string-empty-p value)))
-      (user-error "%s is not set up yet: `%s' must name %s.  \
-Put (setq %s \"/path/to/%s\") in your init file before Diogenes loads, or \
-run M-x customize-variable RET %s RET"
-                  dictionary name
-                  (if (eq kind 'directory) "a directory" "a file")
-                  name
-                  (if (eq kind 'directory) "folder/" "file.pdf")
-                  name))
-     ((eq kind 'directory)
-      (unless (file-directory-p value)
-        (user-error "%s: `%s' is %s, which is not an existing directory"
-                    dictionary name value))
-      value)
-     (t
-      (unless (file-readable-p value)
-        (user-error "%s: `%s' is %s, which cannot be read"
-                    dictionary name value))
-      value))))
 
 (defun diogenes--ascii-alpha-p (letter)
   (or (<= 65 letter 90)

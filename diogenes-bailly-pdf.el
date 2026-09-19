@@ -499,7 +499,7 @@ a genuinely different PDF is still caught."
 (defun diogenes-bailly-pdf--file ()
   "Return the configured Bailly PDF, or signal a user-error."
   (let ((file diogenes-bailly-pdf-file))
-    (diogenes--require-path file 'diogenes-bailly-pdf-file "Bailly" 'file)))
+    (classicist--require-path file 'diogenes-bailly-pdf-file "Bailly" 'file)))
 
 (defun diogenes-bailly-pdf--new-state ()
   "Return an empty state plist."
@@ -1038,17 +1038,17 @@ True when `diogenes-bailly-pdf-file' names a readable PDF.  Asked by
 `diogenes-bailly.el' before offering the \"[PDF (B)]\" link inside an
 entry, so the link appears only when there is a PDF behind it."
   (and (boundp 'diogenes-bailly-pdf-file)
-       (diogenes--path-set-p diogenes-bailly-pdf-file)))
+       (classicist--path-set-p diogenes-bailly-pdf-file)))
 
 ;;;; --------------------------------------------------------------------
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(defconst diogenes-bailly-pdf--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-bailly-pdf--declared-at-load (classicist--declared-at-load-p)
   "Whether the printed Bailly was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-bailly-pdf--register ()
   "Announce the printed Bailly to the lookup banner.  Idempotent.

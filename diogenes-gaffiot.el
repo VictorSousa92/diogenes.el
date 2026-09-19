@@ -100,7 +100,7 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'diogenes-dict-faces)
-(require 'diogenes-lisp-utils)          ; diogenes--path-usable-p
+(require 'diogenes-lisp-utils)          ; classicist--path-usable-p
 (require 'seq)
 (require 'subr-x)
 (require 'ucs-normalize)
@@ -115,7 +115,7 @@
                   (&optional pos))
 (declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
-(declare-function diogenes--perseus-path "diogenes" ())
+(declare-function diogenes--perseus-path "classicist" ())
 (declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 (declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
                   (&optional word))
@@ -432,7 +432,7 @@ Never signals: `diogenes-path' may itself be unset, and this is asked while
 an entry is being drawn."
   (let ((file (ignore-errors (diogenes-gaffiot--dictionary-file))))
     (or (and file (file-readable-p file))
-        (diogenes--source-set-p diogenes-gaffiot-source-file))))
+        (classicist--source-set-p diogenes-gaffiot-source-file))))
 
 ;;;###autoload
 (defun diogenes-gaffiot-available-p ()
@@ -595,11 +595,11 @@ M-x customize-variable"))))))
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(defconst diogenes-gaffiot--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-gaffiot--declared-at-load (classicist--declared-at-load-p)
   "Whether Gaffiot was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-gaffiot--register ()
   "Announce Gaffiot to the lookup banner.  Idempotent.

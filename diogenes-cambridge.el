@@ -191,10 +191,10 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
 FILE defaults to `diogenes-cambridge-pdf-file'."
   (let ((file (or file diogenes-cambridge-pdf-file)))
     (unless file
-      (diogenes--require-path file 'diogenes-cambridge-pdf-file
+      (classicist--require-path file 'diogenes-cambridge-pdf-file
                               "The Cambridge Greek Lexicon" 'file))
     (unless (file-readable-p file)
-      (diogenes--require-path file 'diogenes-cambridge-pdf-file
+      (classicist--require-path file 'diogenes-cambridge-pdf-file
                               "The Cambridge Greek Lexicon" 'file))
     (let ((key (diogenes-cambridge--cache-key file)))
       (or (gethash key diogenes-cambridge--index-cache)
@@ -301,13 +301,13 @@ running."
   "Non-nil if the Cambridge Greek Lexicon can be opened.
 True when `diogenes-cambridge-pdf-file' is set, whether or not the file is
 there."
-  (diogenes--path-set-p diogenes-cambridge-pdf-file))
+  (classicist--path-set-p diogenes-cambridge-pdf-file))
 
-(defconst diogenes-cambridge--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-cambridge--declared-at-load (classicist--declared-at-load-p)
   "Whether the CGL was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-cambridge--register ()
   "Announce the CGL to the lookup banner.  Idempotent."

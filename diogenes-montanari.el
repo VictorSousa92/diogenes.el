@@ -281,10 +281,10 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
 FILE defaults to `diogenes-montanari-pdf-file'."
   (let ((file (or file diogenes-montanari-pdf-file)))
     (unless file
-      (diogenes--require-path file 'diogenes-montanari-pdf-file
+      (classicist--require-path file 'diogenes-montanari-pdf-file
                               "Montanari" 'file))
     (unless (file-readable-p file)
-      (diogenes--require-path file 'diogenes-montanari-pdf-file
+      (classicist--require-path file 'diogenes-montanari-pdf-file
                               "Montanari" 'file))
     (let ((key (diogenes-montanari--cache-key file)))
       (or (gethash key diogenes-montanari--index-cache)
@@ -510,13 +510,13 @@ Emacs is running."
   "Non-nil if Montanari's Brill Dictionary can be opened.
 True when `diogenes-montanari-pdf-file' is set, whether or not the file is
 there."
-  (diogenes--path-set-p diogenes-montanari-pdf-file))
+  (classicist--path-set-p diogenes-montanari-pdf-file))
 
-(defconst diogenes-montanari--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-montanari--declared-at-load (classicist--declared-at-load-p)
   "Whether Montanari was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-montanari--register ()
   "Announce Montanari to the lookup banner.  Idempotent."

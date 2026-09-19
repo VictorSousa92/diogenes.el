@@ -76,8 +76,8 @@
 (declare-function classicist-open-passage "classicist-browser"
                   (corpus author work &optional passage))
 (declare-function classicist-citation-interval-from-key "classicist-citation" (key))
-(declare-function diogenes-lookup-greek "diogenes" (word &optional dictionary))
-(declare-function diogenes-lookup-latin "diogenes" (word &optional dictionary))
+(declare-function diogenes-lookup-greek "classicist" (word &optional dictionary))
+(declare-function diogenes-lookup-latin "classicist" (word &optional dictionary))
 
 (defvar diogenes-browser-mode-hook)
 (defvar diogenes-lookup-mode-hook)
@@ -87,7 +87,7 @@
   :group 'diogenes
   :prefix "diogenes-org-")
 
-(defcustom diogenes-org-link-type "diogenes"
+(defcustom diogenes-org-link-type "classicist"
   "The name of the link type, before the colon.
 One type for all three kinds, the kind being the field after it.  Changing this
 after links are written makes those links unfollowable, org resolving a link by

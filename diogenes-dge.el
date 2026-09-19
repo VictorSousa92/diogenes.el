@@ -253,7 +253,7 @@
 (declare-function classicist--lookup-assert-lang "classicist-lookup"
                   (expected dict-name))
 (declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
-(declare-function diogenes--perseus-path "diogenes" ())
+(declare-function diogenes--perseus-path "classicist" ())
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
 (declare-function diogenes--beta-to-utf8 "diogenes-utils" (str))
 (declare-function diogenes--perseus-beta-to-utf8 "diogenes-utils" (str))
@@ -962,7 +962,7 @@ companion and this is the whole of the DGE's availability.  Never signals:
 being drawn."
   (let ((file (ignore-errors (diogenes-dge--dictionary-file))))
     (or (and file (file-readable-p file))
-        (diogenes--source-set-p diogenes-dge-source-file))))
+        (classicist--source-set-p diogenes-dge-source-file))))
 
 (defun diogenes-dge--file ()
   "Return the converted dictionary file, building it if the user agrees.
@@ -1045,11 +1045,11 @@ Requires a converted dictionary file; see
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(defconst diogenes-dge--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-dge--declared-at-load (classicist--declared-at-load-p)
   "Whether the DGE was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-dge--register ()
   "Announce the DGE to the lookup banner, on \\`d'.  Idempotent.

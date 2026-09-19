@@ -1333,7 +1333,7 @@ ignored.  Signals a user-error if no volume folder is found."
   "Return the (cached) volume table for `diogenes-tgl-directory'."
   (let ((parent diogenes-tgl-directory))
     (unless parent
-      (diogenes--require-path parent 'diogenes-tgl-directory
+      (classicist--require-path parent 'diogenes-tgl-directory
                               "The Thesaurus Graecae Linguae" 'directory))
     (setq parent (file-name-as-directory (expand-file-name parent)))
     (let ((key (diogenes-tgl--dir-signature parent)))
@@ -4272,13 +4272,13 @@ next look-up, so use this only when you know the file is current."
   "Non-nil if Estienne's Thesaurus Graecae Linguae can be opened.
 True when `diogenes-tgl-directory' is set.  Whether it exists, and whether
 every volume is in it, is not asked here."
-  (diogenes--path-set-p diogenes-tgl-directory))
+  (classicist--path-set-p diogenes-tgl-directory))
 
-(defconst diogenes-tgl--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-tgl--declared-at-load (classicist--declared-at-load-p)
   "Whether the TGL was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-tgl--register ()
   "Announce the TGL to the lookup banner.  Idempotent."

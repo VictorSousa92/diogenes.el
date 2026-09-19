@@ -63,7 +63,7 @@ Bound afresh for each entry by the `let' in its caller -- see
 ;; exists to avoid.  Upstream patch 5 moved this one down into a
 ;; diogenes-lemmata.el; it was not ported here because perseus was going to be
 ;; cut, and this is the cut.  It wants a home in one of the four.
-(declare-function diogenes--perseus-path "diogenes" ())
+(declare-function diogenes--perseus-path "classicist" ())
 
 (defgroup classicist-lexicon nil
   "Reading a dictionary file: its index, its offsets, and its XML."

@@ -1,4 +1,4 @@
-;;; diogenes.el --- Interface to diogenes -*- lexical-binding: t -*-
+;;; classicist.el --- Interface to diogenes -*- lexical-binding: t -*-
 
 ;; An interface to Peter Heslin's Diogenes
 ;; Copyright (C) 2024 Michael Neidhart
@@ -65,12 +65,12 @@
 
 ;; The dictionary modules, loaded for everyone so that configuring a
 ;; dictionary is enough to have it.  Loading them here is NOT a declaration
-;; that the user has any of them: `diogenes--loading-bundle' is what lets
+;; that the user has any of them: `classicist--loading-bundle' is what lets
 ;; each module tell this from having been required by the user, which IS a
 ;; declaration.  A module already loaded -- required in an init file before
 ;; this file runs -- is untouched by the `require' below, `require' being a
 ;; no-op once the feature is present, so its own answer stands.
-(let ((diogenes--loading-bundle t))
+(let ((classicist--loading-bundle t))
   (require 'diogenes-old)
   (require 'diogenes-tll)
   (require 'diogenes-montanari)
@@ -611,6 +611,14 @@ user interface."
   (when (fboundp 'classicist-browser-install-turn-keys)
     (classicist-browser-install-turn-keys)))
 
+(provide 'classicist)
+
+;; AND `diogenes' TOO, which is not a shim.  Four `with-eval-after-load
+;; \='diogenes\=' forms ask whether the Diogenes commands are available -- one
+;; in `diogenes-presets.el\=' and three in the tei-browser repository -- and
+;; that question means exactly what it always meant, because the commands
+;; keep their names.  `classicist\=' is for anything that wants the suite;
+;; `diogenes\=' goes on meaning what it meant.
 (provide 'diogenes)
 
-;;; diogenes.el ends here
+;;; classicist.el ends here

@@ -119,7 +119,7 @@
 (declare-function classicist-lookup-lewis "classicist-lookup" (&optional word))
 (declare-function diogenes-lookup-open-gaffiot-pdf "diogenes-gaffiot-pdf"
                   (&optional word))
-(declare-function diogenes--perseus-path "diogenes" ())
+(declare-function diogenes--perseus-path "classicist" ())
 (declare-function diogenes--strip-diacritics "diogenes-utils" (str))
 (declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 (declare-function diogenes--utf8-to-beta "diogenes-utils" (str))
@@ -489,7 +489,7 @@ availability.  Never signals: `diogenes-path' may itself be unset, and this
 is asked while an entry is being drawn."
   (let ((file (ignore-errors (diogenes-pape--dictionary-file))))
     (or (and file (file-readable-p file))
-        (diogenes--source-set-p diogenes-pape-source-file))))
+        (classicist--source-set-p diogenes-pape-source-file))))
 
 (defun diogenes-pape--file ()
   "Return the converted dictionary file, building it if the user agrees.
@@ -646,11 +646,11 @@ one key stand for two unrelated dictionaries.  Pressed on a Latin entry
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(defconst diogenes-pape--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-pape--declared-at-load (classicist--declared-at-load-p)
   "Whether Pape was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-pape--register ()
   "Announce Pape, and the LSJ as the way back, to the lookup banner.

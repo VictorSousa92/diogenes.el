@@ -178,11 +178,11 @@ See `diogenes-tll-interval-regexp'"
   "Return the parsed, cached fascicle list for `diogenes-tll-pdf-directory'."
   (let ((dir diogenes-tll-pdf-directory))
     (unless dir
-      (diogenes--require-path dir 'diogenes-tll-pdf-directory
+      (classicist--require-path dir 'diogenes-tll-pdf-directory
                               "The Thesaurus Linguae Latinae" 'directory))
     (setq dir (expand-file-name dir))
     (unless (file-directory-p dir)
-      (diogenes--require-path dir 'diogenes-tll-pdf-directory
+      (classicist--require-path dir 'diogenes-tll-pdf-directory
                               "The Thesaurus Linguae Latinae" 'directory))
     (let ((key (diogenes-tll--dir-cache-key dir)))
       (or (gethash key diogenes-tll--fascicle-cache)
@@ -332,13 +332,13 @@ True when `diogenes-tll-pdf-directory' is set.  Whether it exists, and
 which fascicles are in it, is not asked here: a path that is set is a
 dictionary the user means to have, so the link is offered and the key
 explains what is wrong with the path."
-  (diogenes--path-set-p diogenes-tll-pdf-directory))
+  (classicist--path-set-p diogenes-tll-pdf-directory))
 
-(defconst diogenes-tll--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-tll--declared-at-load (classicist--declared-at-load-p)
   "Whether the TLL was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-tll--register ()
   "Announce the TLL to the lookup banner.  Idempotent."

@@ -49,7 +49,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'ucs-normalize)
-(require 'diogenes-lisp-utils)          ; diogenes--require-path, --path-usable-p
+(require 'diogenes-lisp-utils)          ; classicist--require-path, --path-usable-p
 
 ;; Called across files that cannot be required from here without a
 ;; cycle, and -- where the name is one of this package's own caches --
@@ -388,10 +388,10 @@ This feature needs an OLD PDF whose bookmarks are the page guide words"
 Uses and populates `diogenes-old--index-cache'."
   (let ((file (or file diogenes-old-pdf-file)))
     (unless file
-      (diogenes--require-path file 'diogenes-old-pdf-file
+      (classicist--require-path file 'diogenes-old-pdf-file
                               "The Oxford Latin Dictionary" 'file))
     (unless (file-readable-p file)
-      (diogenes--require-path file 'diogenes-old-pdf-file
+      (classicist--require-path file 'diogenes-old-pdf-file
                               "The Oxford Latin Dictionary" 'file))
     (let ((key (diogenes-old--cache-key file)))
       (or (gethash key diogenes-old--index-cache)
@@ -452,7 +452,7 @@ swallowing later words that merely share their opening letters.")
                   (dict-file comp-fn key-fn word &optional start stop))
 (declare-function classicist--ascii-sort-function "classicist-lexicon" (a b))
 (declare-function classicist--xml-key-fn "classicist-lexicon" (buf))
-(declare-function diogenes--dict-file "diogenes" (lang))
+(declare-function diogenes--dict-file "classicist" (lang))
 
 (defun diogenes-old--headword-p (guide)
   "Non-nil if GUIDE is a Latin headword in its own right.
@@ -1399,13 +1399,13 @@ True when `diogenes-old-pdf-file' is set -- whether the file is there is
 not asked here, a path being a statement of intent.  Asked by the link
 banner before offering \"[OLD (o)]\", so a user who has said nothing about
 the OLD is not offered it."
-  (diogenes--path-set-p diogenes-old-pdf-file))
+  (classicist--path-set-p diogenes-old-pdf-file))
 
-(defconst diogenes-old--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-old--declared-at-load (classicist--declared-at-load-p)
   "Whether the OLD was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-old--register ()
   "Announce the OLD to the lookup banner.  Idempotent."

@@ -179,9 +179,9 @@ Install pdf-tools (M-x package-install RET pdf-tools) and run M-x pdf-tools-inst
 FILE defaults to `diogenes-bdag-pdf-file'."
   (let ((file (or file diogenes-bdag-pdf-file)))
     (unless file
-      (diogenes--require-path file 'diogenes-bdag-pdf-file "BDAG" 'file))
+      (classicist--require-path file 'diogenes-bdag-pdf-file "BDAG" 'file))
     (unless (file-readable-p file)
-      (diogenes--require-path file 'diogenes-bdag-pdf-file "BDAG" 'file))
+      (classicist--require-path file 'diogenes-bdag-pdf-file "BDAG" 'file))
     (let ((key (diogenes-bdag--cache-key file)))
       (or (gethash key diogenes-bdag--index-cache)
           (setf (gethash key diogenes-bdag--index-cache)
@@ -278,13 +278,13 @@ is running."
   "Non-nil if BDAG (Bauer) can be opened.
 True when `diogenes-bdag-pdf-file' is set, whether or not the file is
 there."
-  (diogenes--path-set-p diogenes-bdag-pdf-file))
+  (classicist--path-set-p diogenes-bdag-pdf-file))
 
-(defconst diogenes-bdag--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-bdag--declared-at-load (classicist--declared-at-load-p)
   "Whether BDAG was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-bdag--register ()
   "Announce BDAG (Bauer) to the lookup banner.  Idempotent."

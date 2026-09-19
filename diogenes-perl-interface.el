@@ -45,7 +45,7 @@
 ;; reads `diogenes-path', the one thing a reader has to set, and where the
 ;; installation lives is properly the entry point's business.  One reference
 ;; up rather than five, and a declaration that says so.
-(declare-function diogenes--path "diogenes" ())
+(declare-function diogenes--path "classicist" ())
 
 (defcustom diogenes-perl-executable "perl"
   "Path to perl executable."

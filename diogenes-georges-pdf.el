@@ -86,7 +86,7 @@
                   (expected dict-name))
 (declare-function classicist--lookup-headword-at-point "classicist-lookup"
                   (&optional pos))
-(declare-function diogenes--require-path "diogenes-lisp-utils" (value variable dictionary kind))
+(declare-function classicist--require-path "classicist-installation" (value variable dictionary kind))
 (declare-function diogenes-georges-lookup-buffer-p "diogenes-georges" ())
 
 (defvar diogenes--lookup-headword)
@@ -163,7 +163,7 @@ trailing numeral marks a homograph (abactus-2) and is dropped."
 Signals a user-error when `diogenes-georges-directory' is unset, absent,
 or holds no PDF."
   (let ((dir diogenes-georges-directory))
-    (diogenes--require-path dir 'diogenes-georges-directory "Georges" 'directory)
+    (classicist--require-path dir 'diogenes-georges-directory "Georges" 'directory)
     (setq dir (file-name-as-directory (expand-file-name dir)))
     (let ((files (sort (directory-files dir t diogenes-georges-pdf-regexp)
                        #'string<)))
@@ -353,13 +353,13 @@ Call this if you replace or re-bookmark a volume while Emacs is running."
   "Non-nil when the printed Georges can be opened.
 `diogenes-georges-directory' set to a directory that exists: enough for the
 banner to decide whether to offer the link, without reading an outline."
-  (diogenes--path-set-p diogenes-georges-directory))
+  (classicist--path-set-p diogenes-georges-directory))
 
-(defconst diogenes-georges-pdf--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-georges-pdf--declared-at-load (classicist--declared-at-load-p)
   "Whether the printed Georges was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-georges-pdf--register ()
   "Announce the printed Georges to the lookup banner.  Idempotent.

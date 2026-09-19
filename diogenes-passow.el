@@ -509,7 +509,7 @@ Parsing the OCR is thus paid at most once, and with a prebuilt index
 never at lookup time at all."
   (let ((parent (or parent diogenes-passow-directory)))
     (unless parent
-      (diogenes--require-path parent 'diogenes-passow-directory
+      (classicist--require-path parent 'diogenes-passow-directory
                               "Passow" 'directory))
     (setq parent (file-name-as-directory (expand-file-name parent)))
     (let ((key (diogenes-passow--dir-signature parent)))
@@ -803,10 +803,10 @@ it also refreshes the in-memory and mtime caches so the current
 session benefits immediately."
   (interactive)
   (let ((parent (or diogenes-passow-directory
-                    (diogenes--require-path nil 'diogenes-passow-directory
+                    (classicist--require-path nil 'diogenes-passow-directory
                                             "Passow" 'directory))))
     (setq parent (file-name-as-directory (expand-file-name parent)))
-    (diogenes--require-path parent 'diogenes-passow-directory
+    (classicist--require-path parent 'diogenes-passow-directory
                             "Passow" 'directory)
     (let* ((key (diogenes-passow--dir-signature parent))
            (file (diogenes-passow--prebuilt-index-file parent)))
@@ -843,13 +843,13 @@ session benefits immediately."
   "Non-nil if Passow's Handwörterbuch can be opened.
 True when `diogenes-passow-directory' is set.  Whether it exists, and
 whether every volume is in it, is not asked here."
-  (diogenes--path-set-p diogenes-passow-directory))
+  (classicist--path-set-p diogenes-passow-directory))
 
-(defconst diogenes-passow--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-passow--declared-at-load (classicist--declared-at-load-p)
   "Whether Passow was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-passow--register ()
   "Announce Passow to the lookup banner.  Idempotent."

@@ -36,9 +36,9 @@
 ;; required.  `classicist-browser-lookup' calls whichever of the two the
 ;; passage's language names; both were assembled with `intern' until now, and
 ;; a declaration cannot cover a name that does not exist until it is called.
-(declare-function diogenes-parse-and-lookup-greek "diogenes"
+(declare-function diogenes-parse-and-lookup-greek "classicist"
                   (word &optional dictionary))
-(declare-function diogenes-parse-and-lookup-latin "diogenes"
+(declare-function diogenes-parse-and-lookup-latin "classicist"
                   (word &optional dictionary))
 
 ;; Called across files that cannot be required from here without a

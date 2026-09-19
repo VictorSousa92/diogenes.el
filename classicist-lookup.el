@@ -72,8 +72,8 @@
 ;; into a `diogenes-lemmata.el'; it was not ported here because perseus was
 ;; going to be cut, and now that it has been it wants a home in one of the
 ;; four.
-(declare-function diogenes--perseus-path "diogenes" ())
-(declare-function diogenes--dict-file "diogenes" (lang))
+(declare-function diogenes--perseus-path "classicist" ())
+(declare-function diogenes--dict-file "classicist" (lang))
 
 ;; OPTIONAL, from `rng-valid', and called only when a reader has just tried to
 ;; submit invalid XML.  `check-declare' reports "file not found" for it and the
@@ -532,7 +532,7 @@ dictionary and it appears.
 
 Loading a module yourself declares it too -- `(require \\='diogenes-tll)'
 before `diogenes.el' loads -- and saying it both ways is harmless.  See
-`diogenes--loading-bundle' for why the load-order proviso, and
+`classicist--loading-bundle' for why the load-order proviso, and
 \\[classicist-list-dictionaries] to see which dictionaries are declared, by
 which route, and what their paths are doing."
   :type '(repeat symbol)
@@ -631,7 +631,7 @@ is silently absent from the banner instead of being offered and then
 refusing.  The predicate is asked afresh each time an entry is drawn, so
 setting a path -- or building an XML -- takes effect at once, with no
 reload; it must therefore be cheap, and it must neither signal nor prompt.
-`diogenes--path-usable-p' is the usual way to write one.
+`classicist--path-usable-p' is the usual way to write one.
 
 A dictionary with both an XML and a printed edition, such as Gaffiot,
 Bailly and Georges, is available when EITHER is: its command dispatches on
@@ -642,7 +642,7 @@ when there is a PDF behind it.
 
 DECLARED says the user asked for this dictionary by loading its module,
 rather than receiving it with the bundle `diogenes.el' loads; a module
-computes it at load time with `diogenes--declared-at-load-p'.  A declared
+computes it at load time with `classicist--declared-at-load-p'.  A declared
 dictionary is offered whatever its paths say, AVAILABLE-P not being
 consulted, so that a dictionary you use but have misconfigured explains
 itself instead of disappearing.  `classicist-declared-dictionaries' declares
@@ -812,7 +812,7 @@ Three ways of not having it are all one answer here:
 None of them is an error to report from inside a redisplay, so all three
 mean the same thing: leave that dictionary out of the banner.  The keys
 remain bound, and pressing one still explains what to set -- see
-`diogenes--require-path'."
+`classicist--require-path'."
   (cond
    ((null predicate) t)
    ((not (functionp predicate)) nil)
@@ -827,7 +827,7 @@ Two ways of saying it, either sufficient and both together harmless:
   module recorded at load time as DECLARED.
 
 The first is a set, so the order it is written in means nothing.  The
-second depends on load order -- see `diogenes--loading-bundle' -- which is
+second depends on load order -- see `classicist--loading-bundle' -- which is
 why the variable exists."
   (or (plist-get entry :declared)
       (and (memq (plist-get entry :id) classicist-declared-dictionaries) t)))
@@ -918,7 +918,7 @@ which shows the link and fails on being pressed."
        (lambda (symbol)
          (let ((value (and (boundp symbol) (symbol-value symbol))))
            (cond
-            ((not (diogenes--source-set-p value))
+            ((not (classicist--source-set-p value))
              (format "%s: unset" symbol))
             ((consp value)
              (format "%s: set (%d entries)" symbol (length value)))

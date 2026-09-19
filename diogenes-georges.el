@@ -67,7 +67,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'ucs-normalize)
-(require 'diogenes-lisp-utils)          ; diogenes--path-usable-p
+(require 'diogenes-lisp-utils)          ; classicist--path-usable-p
 
 (declare-function classicist-lookup-register-dictionary "classicist-lookup" t)
 (declare-function classicist--search-dict "classicist-lookup"
@@ -417,7 +417,7 @@ returns nil when neither option is set, which is unavailable too.  Never
 signals: this is asked while an entry is being drawn."
   (let ((file (ignore-errors (diogenes-georges--dictionary-file))))
     (or (and file (file-readable-p file))
-        (diogenes--source-set-p diogenes-georges-source-file))))
+        (classicist--source-set-p diogenes-georges-source-file))))
 
 ;;;###autoload
 (defun diogenes-georges-available-p ()
@@ -536,11 +536,11 @@ returns to Lewis & Short, `C-u G' looks up another word here"))
 ;;;; REGISTRATION
 ;;;; --------------------------------------------------------------------
 
-(defconst diogenes-georges--declared-at-load (diogenes--declared-at-load-p)
+(defconst diogenes-georges--declared-at-load (classicist--declared-at-load-p)
   "Whether Georges was asked for, rather than bundled with the rest.
 Computed when this file is read: a `require' in an init file means the
 user wants this dictionary, and it is then offered whatever its paths
-say.  See `diogenes--loading-bundle'.")
+say.  See `classicist--loading-bundle'.")
 
 (defun diogenes-georges--register ()
   "Announce Georges to the lookup banner.  Idempotent.
