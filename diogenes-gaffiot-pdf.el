@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2026 Victor Gonçalves de Sousa
 ;;
-;; Author: Victor Gonçalves de Sousa <victor.goncalves.sousa@alumni.usp.br>
+;; Author: Victor Gonçalves de Sousa <victor2971@gmail.com>
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
