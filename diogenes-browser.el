@@ -232,14 +232,15 @@
 	      'rear-nonsticky t))
 
 (defface diogenes-browser-citation
-  '((t :height 1.3 :weight bold :inherit variable-pitch))
+  '((t :weight bold))
   "The citation above a passage in the browser.
 IT NAMED info-title-1, which is defined in info.el -- a library nothing here
 loads.  So every redisplay of a header reported Invalid face reference, twice
 over, and a session of browsing produced them in the hundreds.
 
-variable-pitch is built in and cannot be missing, and the numbers are what
-info-title-1 is: larger, bold.  A face of our own is themable besides."
+Bold, and nothing else: what info-title-1 looks like depends on the theme,
+and a face named here should not decide a size nobody asked for.  A face of
+our own is themable besides."
   :group 'diogenes)
 
 (defun diogenes--browser-format-header (header-lines)
