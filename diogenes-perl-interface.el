@@ -177,9 +177,13 @@ If ref is non-nil, make the list into a hash- or an arrayref."
 
 
 ;;; Perl Runners
-(defun diogenes--start-perl (type code &optional filter sentinel)
+(defun diogenes--start-perl (type code &optional filter sentinel no-display)
   "Starts and a perl process named diogenes-type.
-It is associated with a buffer with the same name, in asterisks."
+It is associated with a buffer with the same name, in asterisks.
+
+Displays that buffer and returns the window, unless NO-DISPLAY, in which case
+it returns the buffer and shows nothing -- for a caller that places the buffer
+itself."
   (when diogenes--debug-perl (diogenes--debug-perl code))
   (let ((buffer (diogenes--get-fresh-buffer type)))
     (make-process :name    (format "diogenes-%s" type)
@@ -193,7 +197,17 @@ It is associated with a buffer with the same name, in asterisks."
 		  :noquery t
 		  :filter filter
 		  :sentinel sentinel)
-    (pop-to-buffer buffer)))
+    ;; NO-DISPLAY FOR A CALLER THAT PLACES THE BUFFER ITSELF.  Displaying
+    ;; here means a buffer appears the moment its process is made, before
+    ;; the caller has set a mode or decided anything -- and a caller that
+    ;; wants it somewhere particular gets two windows on one buffer.
+    ;;
+    ;; AN ARGUMENT AND NOT A CHANGE OF CONTRACT, because the four callers
+    ;; here DEPEND on the display: diogenes--browse-work calls this and then
+    ;; diogenes-browser-mode with no with-current-buffer, so it relies on
+    ;; pop-to-buffer having made the buffer current.  Removing the display
+    ;; would set the mode on whatever buffer the reader was in.
+    (if no-display buffer (pop-to-buffer buffer))))
 
 (defun diogenes--get-fresh-buffer (type)
   "Returns a fresh buffer for the mode to use."
