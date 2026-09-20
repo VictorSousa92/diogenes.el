@@ -231,13 +231,24 @@
 	      'font-lock-face 'font-lock-comment-face
 	      'rear-nonsticky t))
 
+(defface diogenes-browser-citation
+  '((t :height 1.3 :weight bold :inherit variable-pitch))
+  "The citation above a passage in the browser.
+IT NAMED info-title-1, which is defined in info.el -- a library nothing here
+loads.  So every redisplay of a header reported Invalid face reference, twice
+over, and a session of browsing produced them in the hundreds.
+
+variable-pitch is built in and cannot be missing, and the numbers are what
+info-title-1 is: larger, bold.  A face of our own is themable besides."
+  :group 'diogenes)
+
 (defun diogenes--browser-format-header (header-lines)
   (propertize (concat (string-join header-lines
 				   "\n")
 		      "\n\n")
 	      'diogenes-header t
-	      'face 'info-title-1
-	      'font-lock-face 'info-title-1
+	      'face 'diogenes-browser-citation
+	      'font-lock-face 'diogenes-browser-citation
 	      ;; 'read-only t
 	      'front-sticky t
 	      'rear-nonsticky t))
