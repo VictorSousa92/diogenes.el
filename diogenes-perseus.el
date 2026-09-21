@@ -130,6 +130,23 @@ If file-length is not supplied, it will be determined."
 	  ((string-greaterp word-b word-a) 'b)
 	  (t nil))))
 
+(defun diogenes--exact-sort-function (a b)
+  "Compare A and B as the analyses and lexicon files are actually sorted.
+
+THE FULL STRING, where `diogenes--ascii-sort-function\=' strips the
+diacritics.  Both are wanted and they are not the same: that one forgives a
+reader who types `muw\=' for `mu/w\=', and this one navigates the file, which
+is sorted by the whole beta string with `|\=' at codepoint 124, above every
+letter.
+
+They agree wherever a diacritic falls where another word has a letter, and
+disagree where an iota subscript does -- `ei)sh/|ei\=' is ninety lines after
+where its stripped form belongs.  See `diogenes--parse-word\=', which tries
+the forgiving one first and this one where that finds nothing."
+  (cond ((string-greaterp a b) 'a)
+        ((string-greaterp b a) 'b)
+        (t nil)))
+
 (defconst diogenes--beta-code-alphabet
   [?0 ?a ?b ?g ?d ?e ?v ?z ?h ?q
       ?i ?k ?l ?m ?n ?c ?o ?p
@@ -674,8 +691,24 @@ lemma, the lemma-number, translation and analysis."
 
 ;;; Parsing functions
 (defun diogenes--parse-word (word lang)
-  "Search the ananlyses file of lang for word using a binary search.
-Returns the nearest hit to the query."
+  "Search the analyses file of LANG for WORD using a binary search.
+Returns the nearest hit to the query.
+
+TWO ORDERS, AND THEY DISAGREE.  The file is sorted by the full beta string,
+where `|\=' is codepoint 124 and sorts above every letter;
+`diogenes--ascii-sort-function\=' compares with the diacritics stripped, which
+is what lets a reader type `muw\=' for `mu/w\='.  The two agree wherever a
+diacritic falls where another word has a letter, and disagree exactly where an
+iota subscript does -- `ei)sh/|ei\=' is ninety lines after where its stripped
+form belongs, so the search converged on `ei)sh/esan\=' and the imperfect of
+`ei)/seimi\=' could not be parsed.
+
+So the forgiving comparison navigates first and, where it converges on no
+exact key and the query carries something the stripping would have removed,
+`diogenes--exact-sort-function\=' is tried: the file\='s own order, which finds
+what is there.  Two passes in the rare case and one in the common one, and
+nothing that worked before can break -- the second search happens only where
+the first found nothing."
   (let* ((normalized (downcase (diogenes--beta-normalize-gravis
 				(diogenes--greek-ensure-beta word))))
 	 (analyses-file (file-name-concat (diogenes--perseus-path)
@@ -686,11 +719,29 @@ Returns the nearest hit to the query."
 		  (if s (- s 2) 0)))
 	 (end (or (cdr (assoc key (plist-get index :index-end)))
 		  (plist-get index :index-max))))
-    (let ((result (diogenes--binary-search analyses-file
-					   #'diogenes--ascii-sort-function
-					   #'diogenes--tab-key-fn
-					   normalized
-					   start end)))
+    (let* ((result (diogenes--binary-search analyses-file
+					    #'diogenes--ascii-sort-function
+					    #'diogenes--tab-key-fn
+					    normalized
+					    start end))
+	   ;; AND AGAIN IN THE FILE'S OWN ORDER, where that found nothing and
+	   ;; the query has a diacritic to lose.  A query that equals its own
+	   ;; stripped form -- `anqrwpos' -- gets no second search, and should
+	   ;; not: the file holds no such line and the nearest entry is the
+	   ;; honest answer.
+	   (result (or (and (nth 3 result) result)
+		       (and (not (equal normalized
+					(downcase
+					 (diogenes--ascii-alpha-only
+					  normalized))))
+			    (let ((exact (diogenes--binary-search
+					  analyses-file
+					  #'diogenes--exact-sort-function
+					  #'diogenes--tab-key-fn
+					  normalized
+					  start end)))
+			      (and (nth 3 exact) exact)))
+		       result)))
       (unless (nth 3 result)
 	(message "No result for %s! Showing nearest entry" word))
       (cons (and (car result)
