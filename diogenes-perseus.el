@@ -172,11 +172,65 @@ If file-length is not supplied, it will be determined."
     (error "Could not find key in str:\n %s" buf)))
 
 ;; The actual search function
+(defcustom diogenes-binary-search-run-limit 50
+  "How many lines of equal key the binary search will walk.
+
+THE COMPARISON STRIPS THE DIACRITICS, the files being sorted that way, so
+several lines can compare equal to one query: `ei)sh/|ei\=' has five
+neighbours whose letters are also `eishei\='.  The search walks them looking
+for an exact key, and this bounds the walk.
+
+Fifty is generous.  A run longer than this returns the nearest entry rather
+than going on, which is what a miss has always returned."
+  :type 'integer
+  :group 'diogenes)
+
+(defun diogenes--binary-search-run (dict-file comp-fn key-fn word
+                                              start-line start stop size)
+  "Look through the lines around START-LINE whose key compares equal to WORD.
+
+WHY A RUN AT ALL.  COMP-FN strips the diacritics, the files being sorted that
+way, so `ei)sh/|ei\=' and every line whose letters are `eishei\=' compare
+equal -- and a binary search lands on whichever of them the halving reached.
+It was returning that one and calling it an exact hit.
+
+Scans back to the first line that still compares equal, then forward over the
+whole run, and answers with the line whose key IS WORD.  Nil where none is,
+the caller then keeping the nearest entry it already had."
+  (let ((first start-line)
+        (walked 0))
+    ;; BACK TO THE START OF THE RUN.  A line before START-LINE may be the one
+    ;; wanted, the bisection having landed in the middle of the equal keys.
+    (cl-loop while (and (> first start) (< walked diogenes-binary-search-run-limit))
+             for (buf buf-start) = (diogenes--get-dict-line dict-file
+                                                            (- first 2) size)
+             while buf
+             for (key) = (funcall key-fn buf)
+             while (and key (null (funcall comp-fn key word)))
+             do (setq first buf-start walked (1+ walked)))
+    ;; AND FORWARD OVER ALL OF IT, looking for the key itself.
+    (cl-loop with pos = first
+             with seen = 0
+             while (and (< pos stop) (< seen diogenes-binary-search-run-limit))
+             for (buf buf-start buf-end) = (diogenes--get-dict-line dict-file
+                                                                    pos size)
+             while buf
+             for (key) = (funcall key-fn buf)
+             unless (and key (null (funcall comp-fn key word))) return nil
+             when (equal key word) return (list buf buf-start buf-end t)
+             do (setq pos (1+ buf-end) seen (1+ seen)))))
+
 (defun diogenes--binary-search (dict-file comp-fn key-fn word &optional start stop)
-  "A binary search for finding entries in the lexicographical files. 
+  "A binary search for finding entries in the lexicographical files.
 Upon success, it returns a list containing the entry, its start
 and end offsets, and the symbol t to indicate success. Otherwise,
-the nearest entry and its offsets are returned."
+the nearest entry and its offsets are returned.
+
+AND AN EQUAL COMPARISON IS NOT YET A HIT.  COMP-FN strips the diacritics --
+the files are sorted that way -- so several lines can compare equal to one
+query, and this returned whichever the halving landed on.  `ei)sh/|ei\=' has
+five such neighbours and was unparseable; the words that worked had none.
+`diogenes--binary-search-run\=' walks the run for the exact key."
   (cl-loop with size = (file-attribute-size (file-attributes dict-file))
 	   with left = (or start 0)
 	   with right = (or stop size)
@@ -186,7 +240,12 @@ the nearest entry and its offsets are returned."
 	   = (diogenes--get-dict-line dict-file mid size)
 	   for (key value) = (funcall key-fn buf)
 	   for comp-result = (funcall comp-fn key word)
-	   unless comp-result return (list buf buf-start buf-end t)
+	   unless comp-result
+	   return (or (and (not (equal key word))
+	                   (diogenes--binary-search-run
+	                    dict-file comp-fn key-fn word
+	                    buf-start (or start 0) (or stop size) size))
+	              (list buf buf-start buf-end t))
 	   do (cond ((eq comp-result 'a) (setq right (1- buf-start)))
 		    ((eq comp-result 'b) (setq left (1+ buf-end))))))
 
