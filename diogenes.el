@@ -70,6 +70,24 @@
   :type 'string
   :group 'diogenes)
 
+(defcustom diogenes-lexicon-files
+  '(("greek" "grc.lsj.logeion.xml" "grc.lsj.xml")
+    ("latin" "lat.ls.perseus-eng1.xml" "lat.ls.xml"))
+  "Filenames to try for each language's lexicon, in order.
+
+MORE THAN ONE NAME, because the same data ships under different ones: the
+build produces grc.lsj.logeion.xml and lat.ls.perseus-eng1.xml, and the macOS
+app bundle carries grc.lsj.xml and lat.ls.xml.  A reader on a Mac was warned
+that the Greek lexicon could not be found while it sat in that directory under
+a shorter name, and the Latin name was not an option at all, being written
+into the code.
+
+The first that exists is used.  `diogenes-preferred-lsj-file' goes before the
+Greek list where it is set, so a reader who named a file themselves is
+obeyed."
+  :type '(alist :key-type string :value-type (repeat string))
+  :group 'diogenes)
+
 (defun diogenes--path ()
   (if diogenes-path
       (expand-file-name diogenes-path)
@@ -78,12 +96,24 @@ Please set it to the root directory of your Diogenes installation!")))
 
 
 (defun diogenes--dict-file (lang)
-  (pcase lang
-    ("greek" (file-name-concat (diogenes--perseus-path)
-			       diogenes-preferred-lsj-file))
-    ("latin" (file-name-concat (diogenes--perseus-path)
-			       "lat.ls.perseus-eng1.xml"))
-    (_ (error "Undefined language %s" lang))))
+  "The lexicon file for LANG: the first name that exists.
+
+THE FIRST THAT EXISTS, from `diogenes-lexicon-files' with
+`diogenes-preferred-lsj-file' before the Greek ones where a reader has set it.
+Falling back to the first name rather than to nil, so that a reader with none
+of them is told which was looked for."
+  (let* ((names (cdr (assoc lang diogenes-lexicon-files)))
+         (names (if (and (equal lang "greek")
+                         diogenes-preferred-lsj-file
+                         (not (member diogenes-preferred-lsj-file names)))
+                    (cons diogenes-preferred-lsj-file names)
+                  names)))
+    (unless names
+      (error "Undefined language %s" lang))
+    (let ((dir (diogenes--perseus-path)))
+      (or (seq-find #'file-exists-p
+                    (mapcar (lambda (n) (file-name-concat dir n)) names))
+          (file-name-concat dir (car names))))))
 
 
 ;;; Validate that all data is present
