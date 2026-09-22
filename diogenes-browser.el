@@ -105,13 +105,20 @@
   (interactive "^P")
   (when (and (not N) (bobp))
     (diogenes-browser-backward))
-  (beginning-of-buffer N))
+  ;; THE COMMAND AND NOT `goto-char', BECAUSE OF N.  With an argument
+  ;; these move to N tenths of the way through the buffer and push the
+  ;; mark, and this whole function exists to forward N -- it is bound
+  ;; on `<remap>' for exactly that.  `(goto-char (point-min))' would
+  ;; silently break `M-3 M-<'.
+  (with-suppressed-warnings ((interactive-only beginning-of-buffer))
+    (beginning-of-buffer N)))
 
 (defun diogenes-browser-end-of-buffer (&optional N)
   (interactive "^P")
   (when (and (not N) (eobp))
     (diogenes-browser-forward))
-  (end-of-buffer N))
+  (with-suppressed-warnings ((interactive-only end-of-buffer))
+    (end-of-buffer N)))
 
 
 
@@ -185,7 +192,7 @@
       (let (line-a line-b)
 	(while (and (setq line-a (text-property-search-forward 'hyphen-start))
 		    (setq line-b (text-property-search-forward 'hyphen-end)))
-	  (let ((word-a (prop-match-value line-a))
+	  (let ((_word-a (prop-match-value line-a))
 		(word-b (prop-match-value line-b))
 		(bol-a (prop-match-beginning line-a))
 		(bol-b (prop-match-beginning line-b))
@@ -296,7 +303,7 @@ If it is incomplete, buffer it and prepend it when called again."
   (when (buffer-live-p (process-buffer proc))
     (when-let* ((data (diogenes--read-browser-output string)))
      (with-current-buffer (process-buffer proc)
-       (seq-let (cit header &rest lines) data
+       (seq-let (_cit header &rest lines) data
 	 (unless lines (error "No input received!"))
 	 (cond ((and (boundp 'diogenes--browser-backwards)
 		     diogenes--browser-backwards)

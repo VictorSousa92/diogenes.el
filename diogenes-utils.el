@@ -175,7 +175,7 @@ breve signs."
 (defun diogenes--greek-ensure-beta (str)
   "Ensures that a greek string is encoded in beta code."
   (save-match-data
-    (let ((latin (string-match "\\cr" str))
+    (let ((_latin (string-match "\\cr" str))
 	  (greek (string-match "\\cg" str)))
       ;; (when (and latin greek)
       ;; 	(error "\"%s\" contains both Latin and Greek characters!" str))
@@ -280,7 +280,13 @@ buffer, or in the active region."
       (when (use-region-p)
         (progn (narrow-to-region start end)
                (goto-char (point-min))))
-      (replace-regexp "\\([[:nonascii:]]+\\)['’]" "\\1᾿"))))
+      ;; `replace-regexp' AND NOT A LOOP.  It consults `case-replace' and
+      ;; pushes the mark, and this command works today -- so the warning is
+      ;; suppressed rather than the behaviour changed.  (The one in
+      ;; `diogenes-legacy.el' was rewritten because that command had never
+      ;; run at all: it called a function that does not exist.)
+      (with-suppressed-warnings ((interactive-only replace-regexp))
+        (replace-regexp "\\([[:nonascii:]]+\\)['’]" "\\1᾿")))))
 
 ;;; Remove line-numbers
 

@@ -106,7 +106,7 @@ Returns a list with the form (lemma raw-lemma lemma-nr &rest analyses)"
 			     (with-temp-buffer
 			       (insert analysis)
 			       (goto-char (point-min))
-			       (cl-loop with substrings
+			       (cl-loop
 					for pos = (scan-sexps (point) 1)
 					if pos
 					collect (buffer-substring (1+ (point))

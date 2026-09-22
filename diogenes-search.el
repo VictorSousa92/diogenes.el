@@ -420,9 +420,15 @@ This function is the generic dispacher for all corpora."
 		(funcall callback (list :authors authors)))
 	       ((y-or-n-p "Search the whole TLG? ")
 		(funcall callback nil))
-	       (t (diogenes--tr--create-user-corpus
-		   (list :type "tlg"
-			 :callback callback))))))
+	       ;; A TRANSIENT SUFFIX, CALLED FROM LISP.  It is interactive-only
+	       ;; and this hands it a scope plist; reaching some inner
+	       ;; non-interactive function instead would change how the corpus
+	       ;; prompt works, so the warning is suppressed and not the code.
+	       (t (with-suppressed-warnings
+		      ((interactive-only diogenes--tr--create-user-corpus))
+		    (diogenes--tr--create-user-corpus
+		     (list :type "tlg"
+			   :callback callback)))))))
       (t (error "Invalid type %s" pattern-or-forms)))))
 
 
@@ -490,9 +496,11 @@ This function is the generic dispacher for all corpora."
 		(funcall callback (list :authors authors)))
 	       ((y-or-n-p (format "Search the whole %s? " type))
 		(funcall callback nil))
-	       (t (diogenes--tr--create-user-corpus
-		   (list :type type
-			 :callback callback))))))
+	       (t (with-suppressed-warnings
+		      ((interactive-only diogenes--tr--create-user-corpus))
+		    (diogenes--tr--create-user-corpus
+		     (list :type type
+			   :callback callback)))))))
       (t (error "Invalid type %s" lemma-or-forms)))))
 
 
@@ -572,7 +580,7 @@ This function is the generic dispacher for all corpora."
 	 (list :author-nums
 	       (diogenes--select-author-nums (list :type type)))))))
 
-(defun diogenes--read-search-term (prompt &optional initial-input history)
+(defun diogenes--read-search-term (prompt &optional _initial-input _history)
   "Read search term for use in transient interface"
   (cl-labels ((reader (prompt)
 		(let ((inp (read-from-minibuffer prompt)))
@@ -655,7 +663,7 @@ the the corpus (TYPE) that is to be searched"
   :choices '("Unicode" "BETA code" "raw")
   :init-value (lambda (o) (oset o value "Unicode")))
 
-(defun diogenes--search--ad-pattern (pattern)
+(defun diogenes--search--ad-pattern (_pattern)
   (interactive "sWith pattern: ")
   (transient-insert-suffix 'diogenes--advanced-search
     '(0 0)
@@ -717,8 +725,10 @@ the the corpus (TYPE) that is to be searched"
 	       (transient-setup 'diogenes--advanced-search nil nil :scope (transient-scope)))
 	      ((y-or-n-p (format "Search the whole %s? " type))
 	       (funcall callback nil))
-	      (t (diogenes--tr--create-user-corpus (list :type type
-							 :callback callback)))))))]
+	      (t (with-suppressed-warnings
+		     ((interactive-only diogenes--tr--create-user-corpus))
+		   (diogenes--tr--create-user-corpus (list :type type
+							   :callback callback))))))))]
   (interactive (list (or (ignore-errors (transient-scope))
 			 (list :type (diogenes--select-database)))
 		     (cl-loop for pat = (diogenes--process-pattern

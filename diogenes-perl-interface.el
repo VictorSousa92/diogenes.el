@@ -309,9 +309,10 @@ contains the arguments for the select_authors method."
 (defun diogenes--indexed-search-script (option-plist word-list &optional authors-plist)
   "Return a perl script that executes an indexed Diogenes search.
 
-option-plist is an plist that will be converted into a perl hash
-accepted by the Diogenes::Indexed constructor, wordlist is the list of words that will be searched.
-authors-plist, when supplied, contains the arguments for the select_authors method."
+OPTION-PLIST is a plist that will be converted into a perl hash
+accepted by the Diogenes::Indexed constructor.  WORD-LIST is the list
+of words that will be searched.  AUTHORS-PLIST, when supplied, holds
+the arguments for the select_authors method."
   (plist-put option-plist :chunk-size "inf")
   (diogenes--perl-script
    "use Diogenes::Search;"
@@ -364,7 +365,7 @@ author in a corpus."
    (format "my @l = $q->browse_location(%s);" (diogenes--list->perl author-and-work))
    "print perl_to_lisp(\\@l);"))
 
-(defun diogenes--get-tlg-categories-script (&rest junk)
+(defun diogenes--get-tlg-categories-script (&rest _junk)
   "Return a perl script that returns a list of all categories in the tlg."
   (diogenes--perl-script
    "use Diogenes::Search;"
@@ -396,7 +397,7 @@ author in a corpus."
    "  print 'nil';"
    "}"))
 
-(defun diogenes--get-filter-file-script (&rest junk)
+(defun diogenes--get-filter-file-script (&rest _junk)
   "Returns a perl script that prints the path of the file where the user defined 
 corpora are saved."
   (diogenes--perl-script

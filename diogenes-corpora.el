@@ -277,7 +277,7 @@ BUFFER defaults to the current buffer."
   (when-let* ((corpus-region (diogenes--get-text-prop-boundaries
 			      pos 'corpus-id))
 	      (corpus-type (get-text-property pos 'corpus-type))
-	      (corpus-id (get-text-property pos 'corpus-id))
+	      (_corpus-id (get-text-property pos 'corpus-id))
 	      (insert-pos
 	       (save-excursion
 		 (save-restriction
@@ -591,8 +591,9 @@ function that will be called when the user submits the corpus."
 (defun diogenes--edit-user-corpus-or-execute (corpus &optional
 						     callback
 						     no-ask)
-  "QUERY if the CORPUS should be modified. If not, either return the
-corpus or, when supplied, call CALLBACK on it. If NO-ASK is not nil, it should be the symbol YES or NO."
+  "QUERY if the CORPUS should be modified.  If not, either return the
+corpus or, when supplied, call CALLBACK on it.  If NO-ASK is not nil,
+it should be the symbol YES or NO."
   (unless corpus
     (error "Corpus must not be empty!"))
   (cond ((or (eq no-ask 'yes)
@@ -729,7 +730,7 @@ corpus or, when supplied, call CALLBACK on it. If NO-ASK is not nil, it should b
 		(when (diogenes--user-corpora-exist-p type)
 		  (cons "saved"  #'diogenes--select-user-corpus))
 		(when (string= type "tlg")
-		  (cons "complex" (lambda (junk)
+		  (cons "complex" (lambda (_junk)
 				    (diogenes--define-complex-tlg-corpus))))))
 	 (answers
 	  (list '("manual" ?m "select authors manually")
@@ -756,7 +757,7 @@ corpus or, when supplied, call CALLBACK on it. If NO-ASK is not nil, it should b
      :always-read t
      :reader
      (let ((previous-selection nil))
-       (lambda (prompt initial-input history)
+       (lambda (prompt _initial-input _history)
 	 (prin1-to-string
 	  (setq previous-selection
 		(diogenes--filter-in-minibuffer

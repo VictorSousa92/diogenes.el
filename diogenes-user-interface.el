@@ -94,7 +94,7 @@ Returns an array."
 		    while (y-or-n-p "Add another author?"))))
 
 ;;; TODO: Selection with transient
-(defun diogenes--select-authors-and-works (options &optional author-regex)
+(defun diogenes--select-authors-and-works (_options &optional _author-regex)
   "Select a list of authors and works from a diogenes database using a prompt.
 Returns a plist."
   ())

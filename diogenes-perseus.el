@@ -235,7 +235,7 @@ the nearest entry and its offsets are returned."
 	   for mid = (floor (+ left right) 2)
 	   for (buf buf-start buf-end)
 	   = (diogenes--get-dict-line dict-file mid size)
-	   for (key value) = (funcall key-fn buf)
+	   for (key _value) = (funcall key-fn buf)
 	   for comp-result = (funcall comp-fn key word)
 	   unless comp-result return (list buf buf-start buf-end t)
 	   do (cond ((eq comp-result 'a) (setq right (1- buf-start)))
@@ -484,7 +484,7 @@ properties."
   (interactive)
   (let* ((id (or (get-text-property (point) 'invalid-xml)
 	         (error "No corrupt XML at point to edit!")))
-	(prop-boundaries (diogenes--get-text-prop-boundaries (point)
+	(_prop-boundaries (diogenes--get-text-prop-boundaries (point)
 							     'invalid-xml))
 	(lookup-buffer (get-text-property (point) 'lookup-buffer))
 	(xml-buffer (current-buffer))
@@ -619,13 +619,20 @@ Returns a list that diogenes--browse-work can be applied to."
   (interactive "^P")
   (when (and (not N) (bobp))
     (diogenes-lookup-previous))
-  (beginning-of-buffer N))
+  ;; THE COMMAND AND NOT `goto-char', BECAUSE OF N.  With an argument
+  ;; these move to N tenths of the way through the buffer and push the
+  ;; mark, and this whole function exists to forward N -- it is bound
+  ;; on `<remap>' for exactly that.  `(goto-char (point-min))' would
+  ;; silently break `M-3 M-<'.
+  (with-suppressed-warnings ((interactive-only beginning-of-buffer))
+    (beginning-of-buffer N)))
 
 (defun diogenes-lookup-end-of-buffer (&optional N)
   (interactive "^P")
   (when (and (not N) (eobp))
     (diogenes-lookup-next))
-  (end-of-buffer N))
+  (with-suppressed-warnings ((interactive-only end-of-buffer))
+    (end-of-buffer N)))
 
 
 (defvar diogenes-lookup-mode-map
@@ -704,7 +711,7 @@ the file only at the first call."
   "Display analysis of search term.")
 
 
-(defun diogenes--process-parse-result (encoded-str lang)
+(defun diogenes--process-parse-result (encoded-str _lang)
   "Split a bytestring as retrieved form the analyses file into a
 list of the corresponding entries. Each entry consists of the headword, the
 lemma, the lemma-number, translation and analysis."
@@ -714,7 +721,7 @@ lemma, the lemma-number, translation and analysis."
 				      "[{}]\\(?:\\[[0-9]+\\]\\)*"
 				      t "\\s-")
 	   for (lemma-str translation analysis) = (split-string entry "\t" nil "\\s-")
-	   for (lemma-nr lemma-cat headword-and-lemma) = (split-string lemma-str)
+	   for (lemma-nr _lemma-cat headword-and-lemma) = (split-string lemma-str)
 	   for (headword lemma) = (split-string headword-and-lemma "," t "\\s-")
 	   collect (list headword
 			 lemma
@@ -815,7 +822,7 @@ Additionally, letter case and diacritics can be ignored."
 			      collect (cons k v)))))
      (if (not (or ignore-case no-diacritics))
 	 results
-       (cl-loop for (q . keys) in results append
+       (cl-loop for (_q . keys) in results append
 		(cl-loop for key in keys collect
 			 (cons key (gethash key hash-table))))))))
 
@@ -849,7 +856,7 @@ Unless specified, filter defaults to string-equal."
 (defun diogenes--parse-and-lookup (word lang)
   "Try to parse a word by looking it up in the morphological files,
 and show the entry for it in the lexica. Dispatcher function."
-  (seq-let (analyses start stop exact-hit) (diogenes--parse-word word lang)
+  (seq-let (analyses _start _stop exact-hit) (diogenes--parse-word word lang)
     (cond
      (exact-hit
       (let* ((lemmata (diogenes--assign-parse-result-to-lemmata analyses))
@@ -859,7 +866,7 @@ and show the entry for it in the lexica. Dispatcher function."
 		(let ((alist
 		       (cl-loop
 			for lemma in lemmata
-			for (word nr translation analyses-entries) = lemma
+			for (word _nr translation analyses-entries) = lemma
 			for analyses = (mapcar #'cdr analyses-entries)
 			collect
 			(list (format "%s (%s)"
@@ -932,9 +939,9 @@ and show the entry for it in the lexica. Dispatcher function."
 
 (defun diogenes--assign-parse-result-to-lemmata (parse-results)
   "Loop through the result of `diogenes--process-parse-result',
-assigning the single results to their respective lemmata. Returns the lemmata as a list,
-where each lemma is itself a list consisting of the LEMMA-NR, the LEMMA-WORD, the TRANSLATION
-and the list on ANALYSES."
+assigning the single results to their respective lemmata.  Returns the
+lemmata as a list, where each lemma is itself a list consisting of the
+LEMMA-NR, the LEMMA-WORD, the TRANSLATION and the list of ANALYSES."
   (cl-loop
    with lemmata
    for (headword lemma-word lemma-nr translation analysis) in parse-results
@@ -951,7 +958,7 @@ and the list on ANALYSES."
    else do (push entry (cl-fourth existent-lemma))
    finally return lemmata))
 
-(defun diogenes--format-parse-results (query lang results)
+(defun diogenes--format-parse-results (_query lang results)
   "Process and format the results of `diogenes--process-parse-result'. 
 Besides the fontification, it also checks for duplicate lemma
 entries and orders them accordingly."
@@ -992,8 +999,8 @@ entries and orders them accordingly."
 
 (defun diogenes--parse-and-show (query lang &optional filter ignore-case no-diacritics)
   "Display all possible morphological analyses for query, with FILTER applied.
- Dispatcher function. IGNORE-CASE and NO-DIACRITICS should be either t or 'ignore; 
-if nil, query interactively for their values"
+Dispatcher function.  IGNORE-CASE and NO-DIACRITICS should be either t
+or \\='ignore; if nil, query interactively for their values."
   (seq-let (filter ignore-case no-diacritics)
       (diogenes--parse-and-show-choose-filter filter ignore-case no-diacritics)
     (let ((results (diogenes--parse-all query lang filter ignore-case no-diacritics)))
@@ -1074,8 +1081,8 @@ if nil, query interactively for their values"
 ;;; Show all lemmata that match query
 (defun diogenes--show-all-lemmata (query lang &optional filter ignore-case no-diacritics)
   "Show all lemmata that match QUERY in lang, with FILTER applied.
-IGNORE-CASE and NO-DIACRITICS should be either t or 'ignore; 
-if nil, query interactively for their values"
+IGNORE-CASE and NO-DIACRITICS should be either t or \\='ignore;
+if nil, query interactively for their values."
  (seq-let (filter ignore-case no-diacritics)
       (diogenes--parse-and-show-choose-filter filter ignore-case no-diacritics)
    (let ((results (diogenes--query-all-lemmata query lang filter ignore-case no-diacritics)))

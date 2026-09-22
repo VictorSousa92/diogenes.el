@@ -131,8 +131,9 @@ The value is actually the first element of ALIST whose car equals KEY."
 					       remove-string
 					       regexp-string
 					       commit-string)
-  "Filter a list interactively in minibuffer, with initial-selection preselected.
-When supplied, the keyword arguments add additional strings with a special meaning:
+  "Filter a list interactively in minibuffer.
+INITIAL-SELECTION is preselected.  When supplied, the keyword
+arguments add further strings with a special meaning:
 
 - :all-string adds all values and toggles the other input mode (add <-> remove)
 - :regexp-string causes the next input to be read in as a regexp
