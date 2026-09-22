@@ -5,7 +5,6 @@
 ;;
 ;; Author: Michael Neidhart <mayhoth@gmail.com>
 ;; Keywords: classics, tools, philology, humanities
-;;
 ;; Version: 0.61
 ;; Package-Requires: (cl-lib thingatpt seq transient)
 
