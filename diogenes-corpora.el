@@ -277,7 +277,7 @@ BUFFER defaults to the current buffer."
   (when-let* ((corpus-region (diogenes--get-text-prop-boundaries
 			      pos 'corpus-id))
 	      (corpus-type (get-text-property pos 'corpus-type))
-	      (_corpus-id (get-text-property pos 'corpus-id))
+	      (corpus-id (get-text-property pos 'corpus-id))
 	      (insert-pos
 	       (save-excursion
 		 (save-restriction
@@ -371,8 +371,10 @@ inside the region."
   (interactive)
   (let* ((corpus-region (diogenes--get-text-prop-boundaries
 			 (point) 'corpus-id))
-	 (corpus-id (or (get-text-property (point) 'corpus-id)
-			(error "No corpus under point!")))
+	 ;; UNDERSCORED AND NOT REMOVED: the `or' is a guard, and this is
+	 ;; the only thing that errors when there is no corpus at point.
+	 (_corpus-id (or (get-text-property (point) 'corpus-id)
+			 (error "No corpus under point!")))
 	 (corpus-name (get-text-property (point) 'corpus-name))
 	 (new-name (read-from-minibuffer (format "Rename %s to: "
 						 (or corpus-name
@@ -783,7 +785,7 @@ it should be the symbol YES or NO."
   :prompt "Select a genre: "
   :always-read t
   :reader
-  (lambda (prompt initial-input history)
+  (lambda (_prompt initial-input history)
     (prin1-to-string
      (let* ((dates (plist-get (diogenes--get-tlg-categories) :date))
 	    (start (completing-read "Select a start date: "
