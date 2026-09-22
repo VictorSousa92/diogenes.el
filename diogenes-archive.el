@@ -1,4 +1,4 @@
-;;; diogenes-archive.el --- older search and lookup helpers -*- lexical-binding: t -*-
+;;; diogenes-archive.el --- older search and lookup helpers -*- lexical-binding: t; no-byte-compile: t -*-
 
 ;; Copyright (C) 2024 Michael Neidhart
 ;;
@@ -22,6 +22,15 @@
 
 ;; Kept for reference: earlier versions of the search and lookup helpers.
 ;; Not loaded by `diogenes.el'.
+
+;; AND NOT COMPILED EITHER, by the `no-byte-compile' cookie above.  Nothing
+;; requires this file, so the deferred native compiler never reaches it --
+;; but `package.el' byte-compiles every .el in a package directory at
+;; install, and this one then contributed eleven warnings to every install
+;; log: eight functions it reaches across boundaries it does not declare,
+;; `diogenes-perl-executable' at line 144, and the empty-bodied `let' at
+;; line 246.  Declaring them would make a reference file look maintained.
+;; If any of this is ever wanted, the cookie comes off with it.
 
 ;;; Code:
 
