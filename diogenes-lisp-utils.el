@@ -25,6 +25,7 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'seq)
+(require 'transient)                     ; transient-scope
 
 (defmacro diogenes--replace-regexes-in-string (str &rest subst-lists)
   "Apply a list of regex-substitutions to a string in sequence.

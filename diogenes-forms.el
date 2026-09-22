@@ -29,6 +29,7 @@
 (require 'transient)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-lemmata)
+(require 'diogenes-perl-interface)       ; diogenes--get-fresh-buffer and c.
 
 (defun diogenes--change-form-entry (pos properties &optional form-string-face mark)
   "Change the form entry at POS in `diogenes--select-forms'.

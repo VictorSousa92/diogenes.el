@@ -29,6 +29,15 @@
 (require 'transient)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-user-interface)
+(require 'diogenes-perl-interface)       ; diogenes--get-filter-file and c.
+
+;; NESTED IN A `let', so no `require' can reach it: the definition at
+;; diogenes-perl-interface.el:257 closes over a cache and is not a
+;; top-level form.  That file declares it for itself at line 64 for the
+;; same reason.
+(declare-function diogenes--get-info "diogenes-perl-interface"
+                  (script &optional options1 options2))
+(declare-function prop-match-value "subr" t t)
 
 ;;; EDIT EXISTING CORPORA
 (defvar diogenes--user-corpora []

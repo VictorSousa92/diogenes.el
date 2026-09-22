@@ -27,6 +27,13 @@
 (require 'seq)
 (require 'diogenes-lisp-utils)
 (require 'diogenes-perl-interface)
+(require 'diogenes-user-interface)       ; diogenes--select-author-num and c.
+
+;; SUBR'S, AND NOT DECLARED WITH AN ARGLIST.  `prop-match-value' is a
+;; `cl-defstruct' accessor, so there is no `defun' for `check-declare' to
+;; find; `t' says the arglist is unspecified rather than asserting one.
+(declare-function text-property-search-backward "subr" t t)
+(declare-function prop-match-value "subr" t t)
 
 ;;;; --------------------------------------------------------------------
 ;;;; BROWSER

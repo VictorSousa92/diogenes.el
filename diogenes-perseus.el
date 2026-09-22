@@ -29,8 +29,23 @@
 (require 'diogenes-utils)
 (require 'diogenes-lemmata)
 (require 'diogenes-perl-interface)
+(require 'diogenes-browser)              ; diogenes--browse-work
 
-(declare-function diogenes-perseus-action nil)
+;; NO FORWARD DECLARATION FOR `diogenes-perseus-action'.  The keymap below
+;; names it and its `defun' is at the foot of this file, which needs no
+;; declaration: `byte-compile-file' gathers the file's definitions and runs
+;; the not-known-to-be-defined check at end of data, so a later `defun'
+;; answers an earlier reference.  A `declare-function' naming THIS file
+;; counts as a definition instead, and the real `defun' then reads as
+;; `defined multiple times' -- which is what the line removed here did,
+;; both as `(declare-function diogenes-perseus-action nil)' and corrected.
+;; `diogenes.el' REQUIRES THIS FILE, so the dependency cannot be a
+;; `require' in this direction.
+(declare-function diogenes--dict-file "diogenes" (lang))
+;; RNG-VALID'S, DECLARED AND NOT REQUIRED: this is the one call, in the
+;; error branch of a dictionary lookup, and requiring it would load the
+;; validation machinery into every session.
+(declare-function rng-first-error "rng-valid" t t)
 
 ;; DEFINED IN THIS FILE, and the compiler still does not know it.  Each of
 ;; these sits inside a top-level `let' that closes over its cache, and a
@@ -845,8 +860,7 @@ and show the entry for it in the lexica. Dispatcher function."
 				alist)
 			       alist))))))
 	(cond (lemma (diogenes--lookup-dict lemma lang))
-	      (t (message "Trying to look %s up in the dictionaries!" wor
-			  d)
+	      (t (message "Trying to look %s up in the dictionaries!" word)
 		 (diogenes--lookup-dict word lang)))))
      (t (message "No results for %s, trying to look it up in the dictionaries!"
 		 word)

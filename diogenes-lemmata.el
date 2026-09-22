@@ -44,6 +44,9 @@
 ;; `diogenes--path' is in `diogenes.el', which requires this file: the call
 ;; happens at run time, so the cycle is only the compiler's problem.
 (declare-function diogenes--path "diogenes" ())
+;; ITS OWN, AND NESTED IN A `let' at line 127 -- so this file warns about
+;; a function it defines itself.
+(declare-function diogenes--get-all-lemmata "diogenes-lemmata" (lang))
 
 (defun diogenes--perseus-path ()
   (directory-file-name (file-name-concat (diogenes--path)

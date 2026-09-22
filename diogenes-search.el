@@ -33,6 +33,8 @@
 
 (require 'diogenes-forms)
 (require 'diogenes-corpora)
+(require 'diogenes-perl-interface)       ; diogenes--start-perl and c.
+(require 'diogenes-browser)              ; diogenes--browse-work
 
 
 

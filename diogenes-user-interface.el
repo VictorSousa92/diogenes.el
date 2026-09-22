@@ -27,6 +27,7 @@
 (require 'seq)
 (require 'subr-x)                       ; string-trim, string-empty-p
 (require 'diogenes-lisp-utils)
+(require 'diogenes-perl-interface)       ; diogenes--get-author-list and c.
 
 ;;; Selectors
 (defun diogenes--select-database ()

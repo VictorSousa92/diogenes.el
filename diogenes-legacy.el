@@ -24,6 +24,7 @@
 
 ;;; Code:
 
+(require 'diogenes-utils)               ; diogenes-remove-hyphenation
 
 ;;;###autoload
 (defun diogenes-delete-line-numbers ()
@@ -56,9 +57,17 @@
   (interactive)
   (save-excursion
     (goto-char (point-min))
-    (diogenes-unhyphen-greek)
+    ;; WAS `diogenes-unhyphen-greek', WHICH IS DEFINED NOWHERE -- so this
+    ;; command was void-function at the keypress.  With no region active
+    ;; `diogenes-remove-hyphenation' runs from point to the end of the
+    ;; buffer, which is what the `goto-char' above asks for.
+    (diogenes-remove-hyphenation)
     (goto-char (point-min))
-    (replace-regexp "->\\([[:alpha:]]*\\)<-\\([[:alpha:]]*\\)" "-> \\1\\2 -<")))
+    ;; `replace-regexp' IS FOR INTERACTIVE USE: it pushes the mark and
+    ;; consults the case-replace machinery.  The loop is the documented
+    ;; equivalent for a program.
+    (while (re-search-forward "->\\([[:alpha:]]*\\)<-\\([[:alpha:]]*\\)" nil t)
+      (replace-match "-> \\1\\2 -<"))))
 
 (provide 'diogenes-legacy)
 
