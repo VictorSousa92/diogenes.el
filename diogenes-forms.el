@@ -31,6 +31,17 @@
 (require 'diogenes-lemmata)
 (require 'diogenes-perl-interface)       ; diogenes--get-fresh-buffer and c.
 
+;; THE BUFFER-LOCAL STATE, DECLARED.  Every one of these was assigned with
+;; `setq' and declared nowhere, so the compiler read each reference as a free
+;; variable -- some forty warnings from this one cause.  `defvar' and not
+;; `defvar-local': the mode calls `make-local-variable' itself, and changing
+;; which of them are buffer-local is a decision about behaviour rather than
+;; about declarations.
+(defvar diogenes--select-forms-lang nil
+  "The language of the forms being selected in this buffer.")
+(defvar diogenes--select-forms-function nil
+  "What to call with the forms selected in this buffer.")
+
 (defun diogenes--change-form-entry (pos properties &optional form-string-face mark)
   "Change the form entry at POS in `diogenes--select-forms'.
 MARK should contain the marker string, FORM-STRING-FACE the face

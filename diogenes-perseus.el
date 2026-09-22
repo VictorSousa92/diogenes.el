@@ -47,6 +47,25 @@
 ;; validation machinery into every session.
 (declare-function rng-first-error "rng-valid" t t)
 
+;; THE BUFFER-LOCAL STATE, DECLARED.  Every one of these was assigned with
+;; `setq' and declared nowhere, so the compiler read each reference as a free
+;; variable -- some forty warnings from this one cause.  `defvar' and not
+;; `defvar-local': the mode calls `make-local-variable' itself, and changing
+;; which of them are buffer-local is a decision about behaviour rather than
+;; about declarations.
+(defvar diogenes--lookup-buffer nil
+  "The buffer a lookup is being shown in.")
+(defvar diogenes--lookup-entry-id nil
+  "The identifier of the entry being shown.")
+(defvar diogenes--lookup-bufstart nil
+  "Where in the dictionary file this buffer's text begins.")
+(defvar diogenes--lookup-bufend nil
+  "Where in the dictionary file this buffer's text ends.")
+(defvar diogenes--lookup-file nil
+  "The dictionary file this buffer is reading.")
+(defvar diogenes--lookup-lang nil
+  "The language of this buffer's dictionary.")
+
 ;; DEFINED IN THIS FILE, and the compiler still does not know it.  Each of
 ;; these sits inside a top-level `let' that closes over its cache, and a
 ;; `defun' nested in a `let' is not a definition the compiler counts -- so

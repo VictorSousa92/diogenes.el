@@ -36,6 +36,19 @@
 (require 'diogenes-perl-interface)       ; diogenes--start-perl and c.
 (require 'diogenes-browser)              ; diogenes--browse-work
 
+;; THE BUFFER-LOCAL STATE, DECLARED.  Every one of these was assigned with
+;; `setq' and declared nowhere, so the compiler read each reference as a free
+;; variable -- some forty warnings from this one cause.  `defvar' and not
+;; `defvar-local': the mode calls `make-local-variable' itself, and changing
+;; which of them are buffer-local is a decision about behaviour rather than
+;; about declarations.
+(defvar diogenes--search-active-block nil
+  "The block of search results being filled in this buffer.")
+(defvar diogenes--search-corpus nil
+  "The corpus this buffer's search ran against.")
+(defvar diogenes--search-language nil
+  "The language of this buffer's search.")
+
 
 
 ;;----------------------------------------------------------------------

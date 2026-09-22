@@ -29,6 +29,9 @@
 (require 'diogenes-lisp-utils)
 (require 'diogenes-perl-interface)       ; diogenes--get-author-list and c.
 
+;; `diogenes.el' DEFINES THIS, and requires this file.
+(defvar diogenes--corpora)
+
 ;;; Selectors
 (defun diogenes--select-database ()
   "Select a Diogenes database using a prompt."

@@ -31,6 +31,18 @@
 (require 'diogenes-user-interface)
 (require 'diogenes-perl-interface)       ; diogenes--get-filter-file and c.
 
+;; `diogenes.el' DEFINES THIS, and requires this file.
+(defvar diogenes--corpora-abbrevs)
+
+;; THE BUFFER-LOCAL STATE, DECLARED.  Every one of these was assigned with
+;; `setq' and declared nowhere, so the compiler read each reference as a free
+;; variable -- some forty warnings from this one cause.  `defvar' and not
+;; `defvar-local': the mode calls `make-local-variable' itself, and changing
+;; which of them are buffer-local is a decision about behaviour rather than
+;; about declarations.
+(defvar diogenes--corpus-edit-callback nil
+  "What to call when the corpus being edited is submitted.")
+
 ;; NESTED IN A `let', so no `require' can reach it: the definition at
 ;; diogenes-perl-interface.el:257 closes over a cache and is not a
 ;; top-level form.  That file declares it for itself at line 64 for the

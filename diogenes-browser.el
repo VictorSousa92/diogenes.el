@@ -29,6 +29,23 @@
 (require 'diogenes-perl-interface)
 (require 'diogenes-user-interface)       ; diogenes--select-author-num and c.
 
+;; `diogenes.el' DEFINES THIS, and requires this file, so the dependency
+;; cannot be a `require' in this direction.
+(defvar diogenes-browser-show-citations)
+
+;; THE BUFFER-LOCAL STATE, DECLARED.  Every one of these was assigned with
+;; `setq' and declared nowhere, so the compiler read each reference as a free
+;; variable -- some forty warnings from this one cause.  `defvar' and not
+;; `defvar-local': the mode calls `make-local-variable' itself, and changing
+;; which of them are buffer-local is a decision about behaviour rather than
+;; about declarations.
+(defvar diogenes--browser-backwards nil
+  "Whether the browser is paging backwards.")
+(defvar diogenes--browser-language nil
+  "The language of the work in this browser buffer.")
+(defvar diogenes--browser-first-insertion nil
+  "Whether nothing has yet been inserted in this browser buffer.")
+
 ;; SUBR'S, AND NOT DECLARED WITH AN ARGLIST.  `prop-match-value' is a
 ;; `cl-defstruct' accessor, so there is no `defun' for `check-declare' to
 ;; find; `t' says the arglist is unspecified rather than asserting one.
@@ -297,8 +314,8 @@ If it is incomplete, buffer it and prepend it when called again."
 	     (insert (propertize (format "%s\n" (cdr alist))
 				 'cit (car alist))))
 	  (set-marker (process-mark proc) (point-max))
-	  (cond (diogenes-browser-first-insertion
-		 (setq diogenes-browser-first-insertion nil)
+	  (cond (diogenes--browser-first-insertion
+		 (setq diogenes--browser-first-insertion nil)
 		 (goto-char pos))
 		(t (recenter -1 t)))))))))
 
@@ -311,7 +328,12 @@ number of the author and the number of the work."
 			(diogenes--browse-interactively-script options passage)
 			#'diogenes--browser-filter)
   (diogenes-browser-mode)
-  (setq diogenes-browser-first-insertion t)
+  ;; TWO DASHES, AS ITS SIBLINGS HAVE.  `diogenes-browser-mode' calls
+  ;; `make-local-variable' on `diogenes--browser-first-insertion' and
+  ;; nothing else in the package mentioned that name, while these three
+  ;; sites used the one-dash spelling -- so the flag the mode meant to
+  ;; keep per buffer was global, and two browser buffers shared it.
+  (setq diogenes--browser-first-insertion t)
   (setq diogenes--browser-language
 	(pcase (plist-get options :type)
 	  ("tlg" "greek")
