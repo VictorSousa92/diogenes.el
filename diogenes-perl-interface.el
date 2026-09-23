@@ -488,34 +488,38 @@ lists of the citations and whose values are the lines.")
 	   (car passage) (cadr passage))
    (format "my $b = Diogenes::Browser::Stateless->new(%s);"
 	   (diogenes--list->perl option-plist))
-   (format "($beg, $end) = $b->seek_passage(%s);"
-	   (diogenes--list->perl passage))
-   ;; A CITATION THE WORK DOES NOT HAVE leaves $beg undefined, and
-   ;; browse_forward with an undefined bound kills the process.  The reader
-   ;; sees only
+   ;; SEEK IN AN eval, BECAUSE IT DIES RATHER THAN RETURNING UNDEF.  A
+   ;; citation the work does not have -- Aristotle\'s Metaphysics at Bekker
+   ;; page `1048b\=' with no line -- kills the process inside seek_passage,
+   ;; and the reader sees only
    ;;     Process diogenes-browser exited abnormally with code 255
-   ;; and the browser is gone.
+   ;; with the browser gone.  255 is Perl\'s exit on an uncaught `die\=', which
+   ;; is how we know: a guard AFTER the call was tried first and never ran,
+   ;; the process being already dead by then.
    ;;
-   ;; REACHED BY NAMING FEWER LEVELS THAN THE WORK IS CITED BY: Aristotle's
-   ;; Metaphysics at Bekker page `1048b\=' with no line.  Which the reader is
-   ;; entitled to do -- a citation may name as few levels as it likes, and
-   ;; the level-by-level prompt ends on an empty answer for exactly that
-   ;; reason -- so this is not bad input to be rejected.
+   ;; AND THE READER IS ENTITLED TO DO IT.  A citation may name as few levels
+   ;; as it likes, and the level-by-level prompt ends on an empty answer for
+   ;; exactly that reason.  This is a case to handle, not input to reject.
+   (format "eval { ($beg, $end) = $b->seek_passage(%s) };"
+	   (diogenes--list->perl passage))
+   ;; A FRESH OBJECT FOR THE RETRY.  What state a died-in seek_passage leaves
+   ;; behind is not documented and not worth assuming; the second seek is on
+   ;; a browser that has not been asked anything yet.
    ;;
-   ;; OPENED AT THE HEAD OF THE WORK INSTEAD, which is what seek_passage
-   ;; with the author and the work alone does: the same call this script
-   ;; makes when the passage is nil, so the fallback is the ordinary path
-   ;; and not a new one.
-   "unless (defined $beg) {"
-   (format "  ($beg, $end) = $b->seek_passage(%s);"
+   ;; THE HEAD OF THE WORK, which is what seek_passage with the author and
+   ;; the work alone does -- the same call this script makes when the passage
+   ;; is nil, so the fallback is the ordinary path and not a new one.
+   "if ($@ or not defined $beg) {"
+   (format "  $b = Diogenes::Browser::Stateless->new(%s);"
+	   (diogenes--list->perl option-plist))
+   (format "  eval { ($beg, $end) = $b->seek_passage(%s) };"
 	   (diogenes--list->perl (list (car passage) (cadr passage))))
    "}"
-   ;; AND STILL NOTHING: the work itself is unreachable, which is a
-   ;; different fault -- a wrong author or work number, or a corpus that is
-   ;; not where it should be.  Exit rather than take undef into
-   ;; browse_forward, so that the reader gets a message and not a 255.
-   "unless (defined $beg) {"
-   "  print STDERR \"Diogenes: cannot open this work at all.\\n\";"
+   ;; AND STILL NOTHING: the work itself is unreachable -- a wrong author or
+   ;; work number, or a corpus that is not where it should be.  Say so and
+   ;; stop, rather than taking undef into browse_forward and dying anyway.
+   "if ($@ or not defined $beg) {"
+   "  print STDERR \"Diogenes: cannot open this work: $@\\n\";"
    "  exit 1;"
    "}"
    "(undef, $end) = $b->browse_forward( $beg, $end, $author, $work );"
