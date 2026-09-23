@@ -490,6 +490,34 @@ lists of the citations and whose values are the lines.")
 	   (diogenes--list->perl option-plist))
    (format "($beg, $end) = $b->seek_passage(%s);"
 	   (diogenes--list->perl passage))
+   ;; A CITATION THE WORK DOES NOT HAVE leaves $beg undefined, and
+   ;; browse_forward with an undefined bound kills the process.  The reader
+   ;; sees only
+   ;;     Process diogenes-browser exited abnormally with code 255
+   ;; and the browser is gone.
+   ;;
+   ;; REACHED BY NAMING FEWER LEVELS THAN THE WORK IS CITED BY: Aristotle's
+   ;; Metaphysics at Bekker page `1048b\=' with no line.  Which the reader is
+   ;; entitled to do -- a citation may name as few levels as it likes, and
+   ;; the level-by-level prompt ends on an empty answer for exactly that
+   ;; reason -- so this is not bad input to be rejected.
+   ;;
+   ;; OPENED AT THE HEAD OF THE WORK INSTEAD, which is what seek_passage
+   ;; with the author and the work alone does: the same call this script
+   ;; makes when the passage is nil, so the fallback is the ordinary path
+   ;; and not a new one.
+   "unless (defined $beg) {"
+   (format "  ($beg, $end) = $b->seek_passage(%s);"
+	   (diogenes--list->perl (list (car passage) (cadr passage))))
+   "}"
+   ;; AND STILL NOTHING: the work itself is unreachable, which is a
+   ;; different fault -- a wrong author or work number, or a corpus that is
+   ;; not where it should be.  Exit rather than take undef into
+   ;; browse_forward, so that the reader gets a message and not a 255.
+   "unless (defined $beg) {"
+   "  print STDERR \"Diogenes: cannot open this work at all.\\n\";"
+   "  exit 1;"
+   "}"
    "(undef, $end) = $b->browse_forward( $beg, $end, $author, $work );"
    "parse_capture;"
    "# When type is `phi', read_phi_biblio resets $/, so we have to correct it"
