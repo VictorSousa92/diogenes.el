@@ -243,12 +243,23 @@ This function makes sure that the full citation remains accessible."
 					    (car header-lines))
 			      (list (match-string-no-properties 1 (car header-lines))
 				    (match-string-no-properties 2 (car header-lines)))
+			    ;; BACK TO THE LAST FULL HEADER, WITH NOERROR.
+			    ;; Diogenes names the author and work once and
+			    ;; the entries after carry a short header, which
+			    ;; is why this looks back.  Without NOERROR it
+			    ;; signalled search-failed with the regexp in the
+			    ;; message, from a command pressed on a line that
+			    ;; looked like any other -- and it happens
+			    ;; wherever no full header is above: the preamble
+			    ;; before the first entry, or a narrowed buffer.
 			    (save-excursion
 			      (if (re-search-backward
-				   "(\\([0-9]+\\): \\([0-9]+\\)) *$")
+				   "(\\([0-9]+\\): \\([0-9]+\\)) *$" nil t)
 				  (list (match-string-no-properties 1)
 					(match-string-no-properties 2))
-				(error "Could not find full citation!"))))))
+				(user-error
+				 (concat "No author and work above here:"
+					 " put point in a result")))))))
     (nconc author-and-work cit)))
 
 ;;; Search mode commands
