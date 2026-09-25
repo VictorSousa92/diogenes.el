@@ -85,6 +85,33 @@
 ;;----------------------------------------------------------------------
 ;;; Diogenes Search Mode
 
+(defcustom diogenes-search-mark-matches 'face
+  "How a match is shown in a search result.
+
+THE DIORISIS WAY BY DEFAULT, and the old way on request.  Diogenes brackets
+what it found with arrows -- `->Eu<-melos\=' -- and this decides what becomes
+of them:
+
+  `face\='     THE DEFAULT.  The arrows go and the words they held are
+             coloured, as a hit in the Diorisis results is -- one way of
+             showing the same thing in both buffers.  A Greek word reads as
+             a Greek word again, which arrows in the middle of one do not.
+  `arrows\='   WHAT THIS PACKAGE DID BEFORE the option existed: left exactly
+             as Diogenes sent them.  For a reader who wants what the program
+             said and not an interpretation of it, and for a terminal or a
+             theme where a face is no help.
+  `both\='     the arrows kept and coloured too.
+
+THE MATCH IS MARKED WHATEVER THIS SAYS.  A `match\=' text property goes on
+what was found in every case, so a command can find the matches in a buffer
+however they are shown.  Nothing used to mark them at all, which is why
+`diogenes--search-active-block\=' has contemplated a `match\=' block all along
+and nothing ever set one."
+  :type '(choice (const :tag "Coloured, as a Diorisis hit is" face)
+                 (const :tag "Between arrows, as Diogenes sends them" arrows)
+                 (const :tag "Both" both))
+  :group 'diogenes)
+
 (defvar diogenes-search-mode-map
   (let ((map (nconc (make-sparse-keymap) text-mode-map)))
     (keymap-set map "RET" #'diogenes-search-browse-passage)
@@ -135,6 +162,37 @@
 			(replace-match (cdr subst)))))
 		  '(("\0" . "")
 		    ("~" . "_")))
+	    ;; THE MATCH, WHICH WAS LEFT AS ARROWS.  Diogenes brackets
+	    ;; what it found -- `->Eu<-melos' -- and nothing here took
+	    ;; the arrows out, so a reader read ASCII in the middle of a
+	    ;; Greek word and no command could find the match, there
+	    ;; being nothing to find it by.  `diogenes--search-active-block'
+	    ;; has contemplated a `match' block all along and nothing ever
+	    ;; set one.
+	    ;;
+	    ;; NON-GREEDY, and within a line: the arrows can fall inside a
+	    ;; word and a line can hold several matches, so `.*' would
+	    ;; swallow from the first arrow to the last.
+	    ;;
+	    ;; THE FACE IS `match\=', which Emacs provides and the Diorisis
+	    ;; results already use for a hit -- one face for the same thing
+	    ;; in two buffers.
+	    (save-excursion
+	      (while (re-search-forward "->\\(.*?\\)<-" nil t)
+		(let* ((found (match-string 1))
+		       (keep-arrows (memq diogenes-search-mark-matches
+					  '(arrows both)))
+		       (colour (memq diogenes-search-mark-matches
+				     '(face both)))
+		       (text (if keep-arrows
+				 (concat "->" found "<-")
+			       found)))
+		  (replace-match
+		   (apply #'propertize text
+			  'match t
+			  (when colour
+			    (list 'face 'match 'font-lock-face 'match)))
+		   t t))))
 	    ;; handle header & body blocks
 	    (save-excursion
 	      (while (not (eobp))
