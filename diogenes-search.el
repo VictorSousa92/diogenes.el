@@ -232,6 +232,64 @@ This function makes sure that the full citation remains accessible."
     (ignore-errors (goto-char (cadr (diogenes--search-get-entry (point)))))))
 
 
+(defun diogenes--search-strip-number (label)
+  "LABEL without the number the corpus puts in brackets after it.
+`Pro Quinctio (001)\=' is how a work is listed and `Pro Quinctio\=' is how a
+result is headed."
+  (string-trim (replace-regexp-in-string " *([0-9]+) *\\'" ""
+					  (or label ""))))
+
+(defun diogenes--search-loosely (s)
+  "S as it is compared: lowercased, and without punctuation."
+  (string-join
+   (split-string
+    (replace-regexp-in-string "[^[:alnum:] ]" " " (downcase (or s ""))))
+   " "))
+
+(defun diogenes--search-citation-by-name (header-lines)
+  "The author and work numbers for HEADER-LINES, found by their names.
+
+FOR A CORPUS THAT PRINTS NO NUMBERS.  A PHI result is headed
+`M. Tullius Cicero, De Republica\=' -- the author, a comma, the work -- and
+nowhere in the buffer is there a `(0474: 005)\=' for the regexp above to
+find.  So the names are looked up instead, against the lists the corpus
+itself gives: `M. Tullius Cicero (0474)\=' and `De Republica (005)\=', the
+number in brackets being what is wanted and the rest being what matches.
+
+COMPARED LOOSELY, on the alphanumeric words alone: a header prints
+`M. Tullius Cicero\=' where the list may punctuate differently, and the stops
+and commas are no part of the name.
+
+Returns (AUTHOR WORK) as strings, or nil where either cannot be found --
+which is not an error here, the caller having a message of its own."
+  (let* ((first-line (car header-lines))
+	 (parts (and first-line (split-string first-line "," t "[ \t]+")))
+	 (author-name (car parts))
+	 ;; THE REST AND NOT THE SECOND, a title being free to hold a comma.
+	 (work-name (and (cdr parts)
+			 (string-join (cdr parts) ", "))))
+    (when (and author-name work-name diogenes--search-corpus)
+      (let* ((options (list :type diogenes--search-corpus))
+	     (wanted-author (diogenes--search-loosely author-name))
+	     (named-p
+	      (lambda (wanted)
+		(lambda (entry)
+		  (equal wanted
+			 (diogenes--search-loosely
+			  (diogenes--search-strip-number (car entry)))))))
+	     (author
+	      (cadr (seq-find (funcall named-p wanted-author)
+			      (ignore-errors
+				(diogenes--get-author-list options))))))
+	(when author
+	  (let* ((wanted-work (diogenes--search-loosely work-name))
+		 (work
+		  (cadr (seq-find (funcall named-p wanted-work)
+				  (ignore-errors
+				    (diogenes--get-works-list options
+							     author))))))
+	    (when work (list author work))))))))
+
 (defun diogenes--search-get-citation (pos)
   "Get the full citation of the entry at point."
   (let* ((header-lines (diogenes--search-get-header-lines pos))
@@ -257,9 +315,23 @@ This function makes sure that the full citation remains accessible."
 				   "(\\([0-9]+\\): \\([0-9]+\\)) *$" nil t)
 				  (list (match-string-no-properties 1)
 					(match-string-no-properties 2))
-				(user-error
-				 (concat "No author and work above here:"
-					 " put point in a result")))))))
+				;; OR BY NAME, THE NUMBERS NOT BEING PRINTED
+				;; AT ALL IN SOME CORPORA.  A PHI search
+				;; heads its results
+				;;
+				;;     M. Tullius Cicero, De Republica
+				;;     book 1, section 27, line 13
+				;;
+				;; with no (0474: 005) anywhere in the
+				;; buffer, so the search above can never
+				;; succeed and every result was unbrowsable.
+				;; The names are there, though, and the
+				;; corpus will say what it numbers them.
+				(or (diogenes--search-citation-by-name
+				     header-lines)
+				    (user-error
+				     (concat "Cannot tell which author and"
+					     " work this result is from"))))))))
     (nconc author-and-work cit)))
 
 ;;; Search mode commands
