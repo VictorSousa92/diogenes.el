@@ -246,6 +246,46 @@ result is headed."
     (replace-regexp-in-string "[^[:alnum:] ]" " " (downcase (or s ""))))
    " "))
 
+(defun diogenes--search-name-match-p (wanted listed)
+  "Whether WANTED names the same thing as LISTED, both already loosened.
+
+EQUALITY WILL NOT DO, and the PHI shows why twice over.  It heads a result
+
+    M. Tullius Cicero, De Finibus
+
+and lists the author as
+
+    Marcus Tullius Cicero Cicero Tully (0474)
+
+-- the praenomen spelled out where the header abbreviates it, and two
+alternative names appended, `Cicero\=' again and `Tully\='.  Neither string is
+the other and no stripping reaches between them.
+
+SO: EVERY WORD OF WANTED, IN ORDER, SOMEWHERE IN LISTED.  A word of one
+letter matches a word beginning with it, which is what an abbreviated
+praenomen is -- `m\=' for `marcus\=' -- and a longer word must match whole, so
+`cicero\=' does not match `ciceronianus\='.  What LISTED has besides is
+ignored, aliases being no reason to fail.
+
+In order, and not as a set: `Marcus Tullius Cicero\=' and
+`Cicero Tullius Marcus\=' are not the same name, and a corpus that listed both
+would want telling apart."
+  (let ((want (split-string (or wanted "")))
+	(have (split-string (or listed ""))))
+    (and want
+	 (catch 'no
+	   (dolist (w want)
+	     (let ((found nil))
+	       (while (and have (not found))
+		 (let ((h (car have)))
+		   (setq have (cdr have))
+		   (when (if (= 1 (length w))
+			     (string-prefix-p w h)
+			   (equal w h))
+		     (setq found t))))
+	       (unless found (throw 'no nil))))
+	   t))))
+
 (defun diogenes--search-citation-by-name (header-lines)
   "The author and work numbers for HEADER-LINES, found by their names.
 
@@ -274,9 +314,10 @@ which is not an error here, the caller having a message of its own."
 	     (named-p
 	      (lambda (wanted)
 		(lambda (entry)
-		  (equal wanted
-			 (diogenes--search-loosely
-			  (diogenes--search-strip-number (car entry)))))))
+		  (diogenes--search-name-match-p
+		   wanted
+		   (diogenes--search-loosely
+		    (diogenes--search-strip-number (car entry)))))))
 	     (author
 	      (cadr (seq-find (funcall named-p wanted-author)
 			      (ignore-errors
