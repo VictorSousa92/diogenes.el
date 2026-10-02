@@ -462,16 +462,25 @@ which is not an error here, the caller having a message of its own."
 ;;; SIMPLE SEARCH
 (defun diogenes--search-sentinel (process event)
   (when (buffer-live-p (process-buffer process))
-   (with-current-buffer (process-buffer process)
-     (pcase event
-       ("finished\n"
-	(save-excursion
-	  (let ((inhibit-read-only t))
-	    (goto-char (point-max))
-	    (re-search-backward "\nPassages found: \\([0-9]+\\).*")
-	    (replace-match (concat "\nPassages found: "
-				   (propertize (match-string-no-properties 1)
-					       'font-lock-face 'success))))))))))
+    (with-current-buffer (process-buffer process)
+      (unless (process-live-p process)
+        (diogenes--search-done))
+      (pcase event
+        ("finished\n"
+         (save-excursion
+           (let ((inhibit-read-only t))
+             (goto-char (point-max))
+             ;; WITH NOERROR, for the reason the indexed sentinel records:
+             ;; a search that was killed has no report to colour, and
+             ;; signalling from a sentinel reports the regexp and nothing
+             ;; a reader can use.
+             (when (re-search-backward
+                    "\nPassages found: \\([0-9]+\\).*" nil t)
+               (replace-match
+                (concat "\nPassages found: "
+                        (propertize (match-string-no-properties 1)
+                                    'font-lock-face 'success)))))))))))
+
 
 (defun diogenes--do-search (options &optional authors)
   "Function that executes a search query in the Diogenes Databases."
@@ -483,7 +492,21 @@ which is not an error here, the caller having a message of its own."
   (setq diogenes--search-active-block 'header)
   (setq diogenes--search-corpus (plist-get options :type))
   (setq diogenes--search-language
-	(diogenes--probable-corpus-language diogenes--search-corpus)))
+	(diogenes--probable-corpus-language diogenes--search-corpus))
+  ;; A PATTERN SEARCH READS THE WHOLE CORPUS and is the slower of the two: it
+  ;; has no index to consult, so a sub-corpus is the only thing that makes it
+  ;; quick.  It prints as it goes, which hides the wait -- until a pattern
+  ;; that matches nothing for a long stretch leaves the buffer as empty as
+  ;; the indexed search did.
+  (diogenes--search-waiting
+   (let ((patterns (or (plist-get options :pattern-list)
+		       (and (plist-get options :pattern)
+			    (list (plist-get options :pattern))))))
+     (format "the %s for %s"
+	     (upcase (or (plist-get options :type) "corpus"))
+	     (if (cdr patterns)
+		 (format "%d patterns" (length patterns))
+	       (or (car patterns) "a pattern"))))))
 
 (defun diogenes--search-select-authors (type &optional simple callback)
   "Select a custom sub-corpus of TYPE.
@@ -544,26 +567,69 @@ This function is the generic dispacher for all corpora."
 
 ;;--------------------------------------------------------------------
 ;;;; WORDLIST SEARCH
+(defun diogenes--search-waiting (what)
+  "Say in the header line that a search is running, and what it is looking for.
+
+BECAUSE A RUNNING SEARCH LOOKED EXACTLY LIKE A FAILED ONE.  An indexed search
+reads the word list and then the text, and prints its report only at the end
+-- so for a lemma of seventy-six forms over a sub-corpus the buffer sits
+EMPTY for a long while, with no process indicator, no message, and nothing to
+distinguish work in progress from a search that found nothing or died.  An
+hour went on diagnosing a search that was merely slow.
+
+IN THE HEADER LINE AND NOT IN THE BUFFER.  The filter inserts at the process
+mark and the entry commands walk text properties: a notice written into the
+text would land in the middle of both, and removing it again would mean
+finding it among results that have since arrived.  A header line is not text.
+
+WITH WHAT IT IS SEARCHING FOR, because `Searching...' answers nothing a
+reader did not know: the count of forms is the reason it is slow, and seeing
+`76 forms' explains the wait rather than merely reporting it."
+  (setq header-line-format
+        (concat (propertize "Searching" 'face 'warning)
+                " " what
+                (propertize "  --  results appear as they are found"
+                            'face 'shadow))))
+
+(defun diogenes--search-done ()
+  "Take the running notice out of the header line."
+  (setq header-line-format nil))
+
 (defun diogenes--indexed-search-sentinel (process event)
   (when (buffer-live-p (process-buffer process))
     (with-current-buffer (process-buffer process)
+      ;; WHATEVER THE EVENT, the notice goes: a search that died is not
+      ;; running either, and a header line still saying `Searching' after
+      ;; the process is gone is worse than none at all.
+      (unless (process-live-p process)
+        (diogenes--search-done))
       (pcase event
-	("finished\n"
-	 (save-excursion
-	   (let ((inhibit-read-only t))
-	     (goto-char (point-max))
-	     (re-search-backward
-	      "\nIncidence of all words as reported by word list: \\([0-9]+\\).*")
-	     (replace-match (concat
-			     "\nIncidence of all words as reported by word list: "
-			     (propertize (match-string-no-properties 1)
-					 'font-lock-face 'success)))
-	     (re-search-forward
-	      "\nPassages containing those words reported by Diogenes: \\([0-9]+\\).*")
-	     (replace-match
-	      (concat "\nPassages containing those words reported by Diogenes: "
-		      (propertize (match-string-no-properties 1)
-				  'font-lock-face 'success))))))))))
+        ("finished\n"
+         (save-excursion
+           (let ((inhibit-read-only t)
+                 (first (concat "\nIncidence of all words as reported by"
+                                " word list: \\([0-9]+\\).*"))
+                 (second (concat "\nPassages containing those words reported"
+                                 " by Diogenes: \\([0-9]+\\).*")))
+             (goto-char (point-max))
+             ;; WITH NOERROR, both of them.  A search killed partway
+             ;; through, or one whose Perl died, has no report in the buffer
+             ;; -- and `re-search-backward' without it signals
+             ;; `search-failed' from a SENTINEL, where the error is printed
+             ;; with no context and the buffer left as it was.
+             (when (re-search-backward first nil t)
+               (replace-match
+                (concat "\nIncidence of all words as reported by word"
+                        " list: "
+                        (propertize (match-string-no-properties 1)
+                                    'font-lock-face 'success)))
+               (when (re-search-forward second nil t)
+                 (replace-match
+                  (concat "\nPassages containing those words reported by"
+                          " Diogenes: "
+                          (propertize (match-string-no-properties 1)
+                                      'font-lock-face 'success))))))))))))
+
 
 (defun diogenes--do-wordlist-search (options words &optional authors)
   "Function that executes an indexed search query in the Diogenes Databases."
@@ -575,7 +641,12 @@ This function is the generic dispacher for all corpora."
   (setq diogenes--search-active-block 'header)
   (setq diogenes--search-corpus (plist-get options :type))
   (setq diogenes--search-language
-	(diogenes--probable-corpus-language diogenes--search-corpus)))
+	(diogenes--probable-corpus-language diogenes--search-corpus))
+  (diogenes--search-waiting
+   (format "the %s for %d form%s"
+	   (upcase (or (plist-get options :type) "corpus"))
+	   (length words)
+	   (if (= 1 (length words)) "" "s"))))
 
 (defun diogenes--tlg-wordlist-search (&optional pattern-or-forms authors)
   (let ((pattern-or-forms
