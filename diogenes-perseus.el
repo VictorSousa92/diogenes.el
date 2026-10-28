@@ -770,8 +770,24 @@ the first found nothing."
 	   ;; stripped form -- `anqrwpos' -- gets no second search, and should
 	   ;; not: the file holds no such line and the nearest entry is the
 	   ;; honest answer.
-	   (result (or (and (nth 3 result) result)
-		       (and (not (equal normalized
+	   ;; THE EXACT SEARCH FIRST, WHERE THE QUERY HAS A DIACRITIC TO LOSE.
+	   ;; It used to run only where the forgiving search found NOTHING, on
+	   ;; the assumption that a forgiving hit is the right entry.  With an
+	   ;; iota subscript it is not: `grafh=s' and `gra/fh|s' strip to the
+	   ;; same letters and are different words, so the forgiving search
+	   ;; converges on whichever sorts first.
+	   ;;
+	   ;; A parse of `grafh=s' therefore answered the present subjunctive
+	   ;; of `gra/fw' and called the hit EXACT, while the real line --
+	   ;; grafeu/s twice and the genitive of grafh/ -- sat in the file
+	   ;; unvisited.  Every accented form that shares its letters with a
+	   ;; neighbour was open to the same.
+	   ;;
+	   ;; ONLY THE ORDER CHANGES.  A query equal to its own stripped form
+	   ;; still gets one search, and a forgiving hit is still the answer
+	   ;; where the exact search finds nothing -- so `muw' for `mu/w'
+	   ;; works as it did.
+	   (result (or (and (not (equal normalized
 					(downcase
 					 (diogenes--ascii-alpha-only
 					  normalized))))
@@ -782,6 +798,7 @@ the first found nothing."
 					  normalized
 					  start end)))
 			      (and (nth 3 exact) exact)))
+		       (and (nth 3 result) result)
 		       result)))
       (unless (nth 3 result)
 	(message "No result for %s! Showing nearest entry" word))
